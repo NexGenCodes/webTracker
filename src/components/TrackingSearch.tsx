@@ -32,7 +32,7 @@ export const TrackingSearch: React.FC<TrackingSearchProps> = ({ onSearch, isLoad
                     type="text"
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    placeholder="e.g. TRK-..."
+                    placeholder="e.g. AWB-..."
                     className="w-full bg-gray-900/50 text-white py-4 pl-6 pr-14 rounded-xl border border-gray-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all placeholder-gray-600 font-mono text-lg"
                     disabled={isLoading}
                 />

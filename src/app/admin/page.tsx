@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { Copy, ChevronLeft, Check } from 'lucide-react';
-import { createShipment } from '../actions/shipment'; // We will create this server action later
-import { parseEmail } from '@/lib/email-parser'; // We will port the parser or keep it inline
+import { createShipment } from '../actions/shipment';
+import { parseEmail } from '@/lib/email-parser';
 
 export default function AdminPage() {
     const [emailText, setEmailText] = useState('');
@@ -11,15 +11,24 @@ export default function AdminPage() {
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [copied, setCopied] = useState(false);
+    const [password, setPassword] = useState('');
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+    const handleLogin = (e: React.FormEvent) => {
+        e.preventDefault();
+        // Securely check password from environment or just a simple hardcoded one for now
+        // Usually you'd use a server action + session, but for this "simple gate" requirement:
+        if (password === 'admin123') {
+            setIsAuthenticated(true);
+        } else {
+            setError('Incorrect password');
+        }
+    };
 
     const handleGenerate = async () => {
         setError(null);
         setLoading(true);
         try {
-            // Logic to parse email - for now assuming simple client-side parse or passing text to server
-            // Let's pass text to server action to keep client light? 
-            // Or parse here. The user said "paste email". 
-            // I'll assume we keep logic consistent: Parse -> Send DTO to server.
             const dto = parseEmail(emailText);
             const result = await createShipment(dto);
             if (result.success) {
@@ -48,8 +57,26 @@ export default function AdminPage() {
         setCopied(false);
     };
 
+    if (!isAuthenticated) {
+        return (
+            <div className="max-w-md mx-auto p-8 mt-20 glass-panel animate-fade-in">
+                <h1 className="text-2xl font-bold text-white mb-6 text-center">Admin Access</h1>
+                <form onSubmit={handleLogin} className="space-y-4">
+                    <input
+                        type="password"
+                        placeholder="Enter admin password"
+                        className="w-full bg-gray-900 border border-gray-700 p-3 rounded-lg text-white"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                    />
+                    {error && <p className="text-red-400 text-sm">{error}</p>}
+                    <button type="submit" className="btn-primary w-full py-3">Login</button>
+                </form>
+            </div>
+        );
+    }
+
     if (trackingId) {
-        // Success View
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] p-4 text-center animate-fade-in space-y-8">
                 <div className="space-y-2">
@@ -84,7 +111,7 @@ export default function AdminPage() {
         );
     }
 
-    // Input View
+
     return (
         <div className="max-w-xl mx-auto p-4 flex flex-col gap-6">
             <h1 className="text-2xl font-bold text-white mb-2">Create New Shipment</h1>

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { APP_NAME, APP_DESCRIPTION } from "@/lib/constants";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -19,8 +20,8 @@ export const viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "WebTracker - Premium Logistics",
-  description: "Real-time shipment tracking with advanced privacy protection.",
+  title: `${APP_NAME} - Premium Logistics`,
+  description: APP_DESCRIPTION,
 };
 
 export default function RootLayout({

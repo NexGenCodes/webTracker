@@ -5,8 +5,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
-// Fix for default marker icon in React Leaflet
-// Check for window to avoid SSR errors
+// Leaflet SSR fix
 if (typeof window !== 'undefined') {
     delete (L.Icon.Default.prototype as any)._getIconUrl;
     L.Icon.Default.mergeOptions({
@@ -20,7 +19,7 @@ interface ShipmentMapProps {
     locationName: string;
 }
 
-// Mock geocoding
+
 const MOCK_COORDS: Record<string, [number, number]> = {
     'USA': [37.0902, -95.7129],
     'China': [35.8617, 104.1954],

@@ -6,8 +6,10 @@ import { TrackingSearch } from '@/components/TrackingSearch';
 import { getTracking } from './actions/shipment';
 import { Package, Truck, CheckCircle, MapPin, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { APP_NAME } from '@/lib/constants';
+import { ShipmentData } from '@/types/shipment';
 
-// Dynamic import for Map to avoid SSR issues
+// SSR-safe Map import
 const ShipmentMap = dynamic(() => import('@/components/ShipmentMap'), {
   ssr: false,
   loading: () => <div className="h-[300px] w-full bg-gray-900/50 animate-pulse rounded-xl mt-8"></div>
@@ -15,7 +17,7 @@ const ShipmentMap = dynamic(() => import('@/components/ShipmentMap'), {
 
 export default function Home() {
   const [loading, setLoading] = useState(false);
-  const [shippingData, setShippingData] = useState<any>(null);
+  const [shippingData, setShippingData] = useState<ShipmentData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const handleSearch = async (trackingNumber: string) => {
@@ -45,7 +47,7 @@ export default function Home() {
         <header className="py-6 flex justify-between items-center mb-8 md:mb-12">
           <div className="flex items-center gap-2 font-bold text-xl text-gradient">
             <Package className="text-blue-400" />
-            WebTracker
+            {APP_NAME}
           </div>
         </header>
 
@@ -161,6 +163,16 @@ export default function Home() {
             </div>
           </div>
         )}
+
+        {/* Footer */}
+        <footer className="mt-auto py-12 border-t border-white/5 text-center text-gray-500 text-sm">
+          <p>&copy; {new Date().getFullYear()} {APP_NAME}. All rights reserved.</p>
+          <div className="flex justify-center gap-6 mt-4">
+            <a href="#" className="hover:text-blue-400 transition-colors">Privacy Policy</a>
+            <a href="#" className="hover:text-blue-400 transition-colors">Terms of Service</a>
+            <a href="#" className="hover:text-blue-400 transition-colors">Support</a>
+          </div>
+        </footer>
       </div>
     </main>
   );
