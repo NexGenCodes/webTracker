@@ -2,6 +2,7 @@
 
 import React, { useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { useI18n } from './I18nContext';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -38,6 +39,7 @@ const MapUpdater: React.FC<{ coords: [number, number] }> = ({ coords }) => {
 };
 
 const ShipmentMap: React.FC<ShipmentMapProps> = ({ locationName }) => {
+    const { dict } = useI18n();
     const coordKey = Object.keys(MOCK_COORDS).find(k => locationName?.includes(k)) || 'Default';
     const coords = MOCK_COORDS[coordKey];
 
@@ -50,7 +52,7 @@ const ShipmentMap: React.FC<ShipmentMapProps> = ({ locationName }) => {
                 />
                 <Marker position={coords}>
                     <Popup>
-                        Current Location: <br /> {locationName}
+                        {dict.shipment.currentLocation} <br /> {locationName}
                     </Popup>
                 </Marker>
                 <MapUpdater coords={coords} />
