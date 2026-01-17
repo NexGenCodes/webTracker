@@ -294,62 +294,30 @@ Tracking status updates and notification retries are handled automatically by th
 
 ## 📦 Deployment
 
-### Frontend (Vercel - Recommended)
+### Frontend (Vercel)
+
+The frontend is configured for zero-config deployment on Vercel.
 
 1. **Push to GitHub**
+2. **Import to Vercel** (Ensure Root Directory is `front`)
+3. **Deploy!**
 
-   ```bash
-   git push origin main
-   ```
+### Backend (AWS EC2)
 
-2. **Import to Vercel**
-   - Connect your GitHub repository
-   - Set root directory to `front`
-   - Add all environment variables from `.env`
-   - Deploy
+The backend is automatically deployed via GitHub Actions when you push to `main`.
 
-3. **Configure custom domain** (optional)
+**Prerequisites:**
+Add these secrets to your GitHub Repository:
 
-### Backend (VPS/Cloud Server)
+- `EC2_HOST`
+- `EC2_USER`
+- `EC2_SSH_KEY`
 
-1. **Build for production**
+**What happens automatically:**
 
-   ```bash
-   GOOS=linux GOARCH=amd64 go build -o bot ./cmd/bot
-   ```
-
-2. **Upload to server**
-
-   ```bash
-   scp bot user@yourserver:/opt/webtracker/
-   scp .env user@yourserver:/opt/webtracker/
-   ```
-
-3. **Set up as systemd service**
-
-   ```ini
-   [Unit]
-   Description=WebTracker WhatsApp Bot
-   After=network.target
-
-   [Service]
-   Type=simple
-   User=webtracker
-   WorkingDirectory=/opt/webtracker
-   ExecStart=/opt/webtracker/bot
-   Restart=always
-   RestartSec=10
-
-   [Install]
-   WantedBy=multi-user.target
-   ```
-
-4. **Start the service**
-
-   ```bash
-   sudo systemctl enable webtracker-bot
-   sudo systemctl start webtracker-bot
-   ```
+- Builds the Go binary.
+- Copies the binary and `webtracker-bot.service` to your server.
+- Sets permissions and restarts the systemd service.
 
 ### Database (Supabase)
 
