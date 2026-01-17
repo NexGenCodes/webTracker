@@ -63,7 +63,7 @@ graph TB
     subgraph "External Services"
         M[Meta WhatsApp API]
         N[Google Gemini API]
-        O[Cron-job.org]
+        N[Google Gemini API]
     end
 
     A -->|HTTPS| C
@@ -85,9 +85,6 @@ graph TB
     
     I -->|Status Updates| K
     I -->|Send Notifications| M
-    
-    O -->|Trigger| F
-    F -->|Process Queue| I
     
     L -->|Read/Write| K
     
@@ -119,7 +116,7 @@ graph TB
 - **WhatsApp Bot**: Built with `whatsmeow` library for Meta WhatsApp Business API
 - **Database**: PostgreSQL connection via `pgx/v5` driver
 - **Logging**: Structured logging with `zerolog` and log rotation via `lumberjack`
-- **Scheduling**: Cron jobs with `robfig/cron` for automated tasks
+- **Scheduling**: Native internal cron scheduler for automated tasks
 - **AI Integration**: Google Gemini API for manifest parsing
 
 #### **Database (PostgreSQL/Supabase)**
@@ -167,9 +164,7 @@ graph TB
 
 ### ⚙️ Automation
 
-- **Hourly Status Checks** - Automatic transition to "Arrived" when shipments reach destination
-- **Notification Queue Processing** - Retry failed WhatsApp notifications every 5 minutes
-- **Scheduled Cleanup** - Archive old shipments automatically
+- **Internal Cron Management** - All recurring tasks are handled internally by the Go bot, removing the need for external triggers.
 
 ---
 
@@ -291,19 +286,9 @@ graph TB
 
    On first run, scan the QR code with WhatsApp to authenticate.
 
-### Cron Job Setup
+### Cron Jobs
 
-Set up automated tasks on [cron-job.org](https://cron-job.org):
-
-1. **Status Transition Job** (Hourly)
-   - URL: `https://yourdomain.com/api/cron/check-transitions`
-   - Schedule: `0 * * * *` (every hour)
-   - Purpose: Update shipments that have arrived at destination
-
-2. **Notification Queue Job** (Every 5 minutes)
-   - URL: `https://yourdomain.com/api/cron/process-notifications`
-   - Schedule: `*/5 * * * *`
-   - Purpose: Retry failed WhatsApp notifications
+Tracking status updates and notification retries are handled automatically by the Go bot's internal scheduler. No external configuration is required.
 
 ---
 
@@ -426,16 +411,6 @@ Create a new shipment.
 
 Delete a shipment by ID.
 
-### Cron Endpoints
-
-#### `GET /api/cron/check-transitions`
-
-Check and update shipment statuses (triggered hourly).
-
-#### `GET /api/cron/process-notifications`
-
-Process notification retry queue (triggered every 5 minutes).
-
 ### Server Actions
 
 #### `createShipment(formData)`
@@ -522,7 +497,7 @@ webTracker/
 
 - **Database**: PostgreSQL (Supabase)
 - **Hosting**: Vercel (Frontend), VPS (Backend)
-- **Cron Jobs**: cron-job.org
+
 - **AI**: Google Gemini API
 - **Version Control**: Git + GitHub
 
