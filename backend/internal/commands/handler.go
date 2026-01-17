@@ -77,13 +77,17 @@ func presentsAsCommand(text string) bool {
 type StatsHandler struct{}
 
 func (h *StatsHandler) Execute(ctx context.Context, db *supabase.Client, args []string) Result {
+	if len(args) > 0 {
+		return Result{Message: "⚠️ *Incorrect Usage*\nPlease send only `!stats` without any extra text."}
+	}
+
 	loc, _ := time.LoadLocation("Africa/Lagos")
 	pending, transit, err := db.GetTodayStats(loc)
 	if err != nil {
-		return Result{Message: "❌ System Error: Could not fetch statistics.", Error: err}
+		return Result{Message: "❌ *System Error*\nCould not fetch statistics.", Error: err}
 	}
 
-	msg := fmt.Sprintf("📊 *Today's Logistics*\n\n• PENDING: %d\n• IN_TRANSIT: %d\n\n_Total Created Today: %d_", pending, transit, pending+transit)
+	msg := fmt.Sprintf("📊 *Today's Logistics*\n\n• PENDING: *%d*\n• IN_TRANSIT: *%d*\n\n_Total Created Today: %d_", pending, transit, pending+transit)
 	return Result{Message: msg}
 }
 
@@ -94,15 +98,20 @@ type InfoHandler struct {
 
 func (h *InfoHandler) Execute(ctx context.Context, db *supabase.Client, args []string) Result {
 	if len(args) < 1 {
-		return Result{Message: "💡 *Usage Guide*\nPlease provide a tracking ID:\n`!INFO [ID]`"}
+		msg := "🚀 *Bot Guide & Commands*\n\n" +
+			"1️⃣ `!stats` - See daily shipping totals\n" +
+			"2️⃣ `!info [ID]` - Get full shipment details\n\n" +
+			"*Example Usage:*\n`!info NEX-12345`"
+		return Result{Message: msg}
 	}
 
 	shipment, err := db.GetShipment(args[0])
 	if err != nil {
-		return Result{Message: "❌ System Error: Database lookup failed.", Error: err}
+		return Result{Message: "❌ *System Error*\nDatabase lookup failed.", Error: err}
 	}
+
 	if shipment == nil {
-		return Result{Message: fmt.Sprintf("⚠️ *Not Found*\nTracking ID *%s* does not exist in our system.", args[0])}
+		return Result{Message: fmt.Sprintf("⚠️ *Not Found*\nTracking ID *%s* does not exist.\n\n*Usage:* `!info TRACKING_ID`", args[0])}
 	}
 
 	wb := utils.GenerateWaybill(*shipment, h.CompanyName)

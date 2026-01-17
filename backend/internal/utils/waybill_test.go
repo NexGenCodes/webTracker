@@ -31,7 +31,7 @@ func TestGenerateWaybill(t *testing.T) {
 	if !strings.Contains(got, "Receiver Person") {
 		t.Errorf("Waybill missing receiver name")
 	}
-	if !strings.Contains(got, "=====") {
-		t.Errorf("Waybill missing borders")
+	if !strings.Contains(got, "━━") {
+		t.Errorf("Waybill missing new block-style borders")
 	}
 }
