@@ -42,7 +42,7 @@ export async function getTracking(trackingNumber: string): Promise<ShipmentData 
  */
 export async function updateShipmentStatus(
     trackingNumber: string,
-    status: 'PENDING' | 'IN_TRANSIT' | 'OUT_FOR_DELIVERY' | 'DELIVERED',
+    status: 'PENDING' | 'IN_TRANSIT' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELED',
     location: string
 ): Promise<ServiceResult<void>> {
     if (!(await isAdmin())) return { success: false, error: 'Unauthorized' };
@@ -55,6 +55,13 @@ export async function updateShipmentStatus(
         revalidatePath('/admin');
     }
     return result;
+}
+
+/**
+ * Admin: Cancel shipment
+ */
+export async function cancelShipment(trackingNumber: string) {
+    return await updateShipmentStatus(trackingNumber, 'CANCELED', 'Canceled via Admin Portal');
 }
 
 /**
@@ -97,7 +104,7 @@ export async function bulkDeleteDelivered() {
  * Admin: Dashboard Stats
  */
 export async function getAdminDashboardData() {
-    if (!(await isAdmin())) return { success: false, error: 'Unauthorized', shipments: [], stats: null };
+    if (!(await isAdmin())) return { success: false, error: 'Unauthorized' };
     return await ShipmentService.getDashboardData();
 }
 

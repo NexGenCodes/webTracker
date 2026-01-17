@@ -39,9 +39,9 @@ export default function AdminPage() {
         setDataLoading(true);
         try {
             const result = await getAdminDashboardData();
-            if (result.success && result.shipments && result.stats) {
-                setShipments(result.shipments);
-                setStats(result.stats);
+            if (result.success && result.data) {
+                setShipments(result.data.shipments);
+                setStats(result.data.stats);
             }
         } finally {
             setDataLoading(false);
@@ -60,7 +60,7 @@ export default function AdminPage() {
         try {
             const result = await createShipment(data);
             if (result.success) {
-                setTrackingId(result.trackingNumber ?? null);
+                setTrackingId(result.data?.trackingNumber ?? null);
                 loadShipments();
             } else {
                 setError(result.error ?? dict.admin.failedCreate);
