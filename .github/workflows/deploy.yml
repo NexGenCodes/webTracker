@@ -23,6 +23,18 @@ jobs:
           go mod download
           GOOS=linux GOARCH=amd64 go build -o bot ./cmd/bot
 
+      - name: Prepare Directory
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          script: |
+            sudo mkdir -p /opt/webtracker
+            sudo chown -R ${{ secrets.EC2_USER }}:${{ secrets.EC2_USER }} /opt/webtracker
+            sudo chmod -R 755 /opt/webtracker
+
       - name: Deploy to EC2
         uses: appleboy/scp-action@master
         with:
