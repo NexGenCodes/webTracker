@@ -35,6 +35,11 @@ jobs:
             sudo mkdir -p /opt/webtracker
             sudo chown -R ${{ secrets.EC2_USER }}:${{ secrets.EC2_USER }} /opt/webtracker
             sudo chmod -R 755 /opt/webtracker
+            
+            # Create log directory with correct permissions
+            sudo mkdir -p /var/log/bot
+            sudo chown -R ${{ secrets.EC2_USER }}:${{ secrets.EC2_USER }} /var/log/bot
+            sudo chmod -R 755 /var/log/bot
 
       - name: Deploy to EC2
         uses: appleboy/scp-action@master
