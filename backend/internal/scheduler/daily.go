@@ -33,8 +33,13 @@ func StartDailySummary(client *whatsmeow.Client, db *supabase.Client, timezone s
 					continue
 				}
 				count := pending + transit
-
-				msg := fmt.Sprintf("📊 *Daily Summary*\nYou processed *%d* packages today.", count)
+				msg := fmt.Sprintf("📊 *DAILY LOGISTICS SUMMARY*\n\n"+
+					"━━━━━━━━━━━━━━━━━━━━━━━\n"+
+					"📦 PENDING:    *%d*\n"+
+					"🚚 IN TRANSIT: *%d*\n"+
+					"📊 TOTAL:      *%d*\n"+
+					"━━━━━━━━━━━━━━━━━━━━━━━\n\n"+
+					"_Total operations recorded today._", pending, transit, count)
 
 				for _, groupID := range allowedGroups {
 					targetJID, _ := types.ParseJID(groupID)

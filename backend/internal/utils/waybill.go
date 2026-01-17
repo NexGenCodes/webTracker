@@ -23,7 +23,7 @@ func GenerateWaybill(s models.Shipment, companyName string) string {
 	b.WriteString(strings.Repeat(" ", padding) + "⚡ " + header + "\n")
 	b.WriteString(border + "\n\n")
 
-	b.WriteString(fmt.Sprintf("🆔 [ID]:     %s\n", s.TrackingNumber))
+	b.WriteString(fmt.Sprintf("🆔 [TRACKING ID]: %s\n", s.TrackingNumber))
 	b.WriteString(fmt.Sprintf("📍 [STATUS]: %s\n", s.Status))
 	b.WriteString(fmt.Sprintf("📅 [DATE]:   %s\n\n", s.CreatedAt.Format("02 Jan 2006, 15:04")))
 

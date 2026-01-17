@@ -69,7 +69,12 @@ func (s *Client) CheckDuplicate(phone string) (bool, string, error) {
 }
 
 func (s *Client) InsertShipment(m models.Manifest, senderPhone string) (string, error) {
-	newID := s.Prefix + "-" + utils.GenerateShortID(9)
+	// Total length should be 9. Prefix + "-" + Random.
+	randomLen := 9 - len(s.Prefix) - 1
+	if randomLen < 3 {
+		randomLen = 3 // Minimum random part for safety
+	}
+	newID := s.Prefix + "-" + utils.GenerateShortID(randomLen)
 	var finalID string
 
 	err := s.withRetry(func() error {

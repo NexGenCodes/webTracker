@@ -42,12 +42,24 @@ func (w *Worker) process(job models.Job) {
 
 	// 1. Check for Commands (Explicit)
 	if reply, ok := w.Cmd.Dispatch(context.Background(), job.Text); ok {
-		w.Sender.Reply(job.ChatJID, job.SenderJID, reply, job.MessageID)
+		w.Sender.Reply(job.ChatJID, job.SenderJID, reply, job.MessageID, job.Text)
 		return
 	}
 
 	// 2. High-Performance Pre-filter
-	if !w.isPotentialManifest(job.Text) {
+	isManifest, isPartial := w.isPotentialManifest(job.Text)
+	if !isManifest {
+		if isPartial {
+			hint := "💡 *IT LOOKS LIKE A SHIPMENT!*\n\n" +
+				"━━━━━━━━━━━━━━━━━━━━━━━\n" +
+				"To register a package, please ensure your message includes:\n" +
+				"• Sender Name\n" +
+				"• Receiver Name\n" +
+				"• Receiver Phone\n" +
+				"━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
+				"_Type `!help` for a full example._"
+			w.Sender.Reply(job.ChatJID, job.SenderJID, hint, job.MessageID, job.Text)
+		}
 		return
 	}
 
@@ -70,7 +82,7 @@ func (w *Worker) process(job models.Job) {
 			"The system could not parse the following required fields:\n" +
 			"• " + strings.Join(m.MissingFields, "\n• ") + "\n" +
 			"━━━━━━━━━━━━━━━━━━━━━━━\n\n_Please provide the missing data to proceed._"
-		w.Sender.Reply(job.ChatJID, job.SenderJID, msg, job.MessageID)
+		w.Sender.Reply(job.ChatJID, job.SenderJID, msg, job.MessageID, job.Text)
 		return
 	}
 	logger.GlobalVitals.IncParseSuccess()
@@ -79,8 +91,8 @@ func (w *Worker) process(job models.Job) {
 	exists, tracking, err := w.DB.CheckDuplicate(m.ReceiverPhone)
 	if err == nil && exists {
 		logger.GlobalVitals.IncDuplicate()
-		msg := fmt.Sprintf("📂 *DUPLICATE RECORD*\n\n━━━━━━━━━━━━━━━━━━━━━━━\nID: *%s*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n_A shipment with this phone number already exists._", tracking)
-		w.Sender.Reply(job.ChatJID, job.SenderJID, msg, job.MessageID)
+		msg := fmt.Sprintf("📂 *DUPLICATE RECORD*\n\n━━━━━━━━━━━━━━━━━━━━━━━\nTracking ID: *%s*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n_A shipment with this phone number already exists._", tracking)
+		w.Sender.Reply(job.ChatJID, job.SenderJID, msg, job.MessageID, job.Text)
 		return
 	}
 
@@ -88,27 +100,67 @@ func (w *Worker) process(job models.Job) {
 	id, err := w.DB.InsertShipment(m, job.SenderPhone)
 	if err != nil {
 		logger.GlobalVitals.IncInsertFailure()
-		w.Sender.Reply(job.ChatJID, job.SenderJID, "❌ *SYSTEM ERROR*\n_Saving failed. Please contact your admin._", job.MessageID)
+		w.Sender.Reply(job.ChatJID, job.SenderJID, "❌ *SYSTEM ERROR*\n_Saving failed. Please contact your admin._", job.MessageID, job.Text)
 		return
 	}
 	logger.GlobalVitals.IncInsertSuccess()
 
 	// 7. Success
-	successMsg := fmt.Sprintf("📦 *MANIFEST CREATED*\n\n━━━━━━━━━━━━━━━━━━━━━━━\nID: *%s*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n_Shipment successfully registered in our system._", id)
+	successMsg := fmt.Sprintf("📦 *PACKAGE SHIPPING CREATED*\n\n━━━━━━━━━━━━━━━━━━━━━━━\nTracking ID: *%s*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n_Shipment successfully registered in our system._", id)
 	if m.IsAI {
 		successMsg += "\n_✨"
 	}
-	w.Sender.Reply(job.ChatJID, job.SenderJID, successMsg, job.MessageID)
+	w.Sender.Reply(job.ChatJID, job.SenderJID, successMsg, job.MessageID, job.Text)
 }
 
-func (w *Worker) isPotentialManifest(text string) bool {
+func (w *Worker) isPotentialManifest(text string) (bool, bool) {
 	lower := strings.ToLower(text)
-	keywords := []string{"sender", "receiver", "destin", "phone", "name", "address", "country", "cargo", "ship"}
-	count := 0
-	for _, kw := range keywords {
+
+	// Sender Check
+	hasSender := strings.Contains(lower, "sender") || strings.Contains(lower, "origin") || strings.Contains(lower, "from")
+
+	// Receiver Variants Check
+	hasReceiver := false
+	receiverKeywords := []string{"receiver", "reciver", "receive", "recieve", "resiver", "recever"}
+	for _, kw := range receiverKeywords {
 		if strings.Contains(lower, kw) {
-			count++
+			hasReceiver = true
+			break
 		}
 	}
-	return count >= 2
+
+	// Phone Variants Check
+	hasPhone := false
+	phoneKeywords := []string{"phone", "mobile", "tel", "num", "contact", "telephone", "mobil", "number"}
+	for _, kw := range phoneKeywords {
+		if strings.Contains(lower, kw) {
+			hasPhone = true
+			break
+		}
+	}
+
+	// Name Check
+	hasName := strings.Contains(lower, "name")
+
+	// Strict: All 4
+	if hasSender && hasReceiver && hasPhone && hasName {
+		return true, false
+	}
+
+	// Partial: At least 3
+	count := 0
+	if hasSender {
+		count++
+	}
+	if hasReceiver {
+		count++
+	}
+	if hasPhone {
+		count++
+	}
+	if hasName {
+		count++
+	}
+
+	return false, count >= 3
 }
