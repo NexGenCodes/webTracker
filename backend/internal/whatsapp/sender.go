@@ -22,7 +22,7 @@ func NewSender(client *whatsmeow.Client) *Sender {
 
 const BotFooter = "\n\n_🤖Bot_"
 
-func (s *Sender) Reply(chat, sender types.JID, text string, quotedID string) {
+func (s *Sender) Reply(chat, sender types.JID, text string, quotedID string, quotedText string) {
 	// Add Footer to all messages
 	text += BotFooter
 
@@ -34,7 +34,7 @@ func (s *Sender) Reply(chat, sender types.JID, text string, quotedID string) {
 			ContextInfo: &waProto.ContextInfo{
 				StanzaID:      models.StrPtr(quotedID),
 				Participant:   models.StrPtr(sender.String()),
-				QuotedMessage: &waProto.Message{Conversation: models.StrPtr("Original Message")},
+				QuotedMessage: &waProto.Message{Conversation: models.StrPtr(quotedText)},
 			},
 		}
 	} else {

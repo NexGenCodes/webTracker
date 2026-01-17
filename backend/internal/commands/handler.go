@@ -43,6 +43,7 @@ func NewDispatcher(db *supabase.Client, awbCmd string, companyName string) *Disp
 func (d *Dispatcher) registerDefaults() {
 	d.handlers["stats"] = &StatsHandler{}
 	d.handlers["info"] = &InfoHandler{}
+	d.handlers["help"] = &HelpHandler{}
 }
 
 func (d *Dispatcher) Dispatch(ctx context.Context, text string) (string, bool) {
@@ -58,10 +59,14 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (string, bool) {
 	args := parts[1:]
 
 	if handler, ok := d.handlers[rawCmd]; ok {
+		// Stats, Info, and Help all need branding
 		switch h := handler.(type) {
 		case *StatsHandler:
 			h.CompanyName = d.CompanyName
 		case *InfoHandler:
+			h.CompanyName = d.CompanyName
+			h.CompanyPrefix = d.AwbCmd
+		case *HelpHandler:
 			h.CompanyName = d.CompanyName
 			h.CompanyPrefix = d.AwbCmd
 		}
@@ -73,7 +78,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (string, bool) {
 }
 
 func presentsAsCommand(text string) bool {
-	return len(text) > 1 && text[0] == '!'
+	return len(text) > 1 && (text[0] == '!' || text[0] == '#')
 }
 
 // StatsHandler handles !stats
@@ -133,4 +138,35 @@ func (h *InfoHandler) Execute(ctx context.Context, db *supabase.Client, args []s
 
 	wb := utils.GenerateWaybill(*shipment, h.CompanyName)
 	return Result{Message: "```\n" + wb + "\n```"}
+}
+
+// HelpHandler handles !help
+type HelpHandler struct {
+	CompanyName   string
+	CompanyPrefix string
+}
+
+func (h *HelpHandler) Execute(ctx context.Context, db *supabase.Client, args []string) Result {
+	company := strings.ToUpper(h.CompanyName)
+	if company == "" {
+		company = "LOGISTICS"
+	}
+
+	msg := fmt.Sprintf("📖 *%s SERVICE MENU*\n\n", company) +
+		"━━━━ COMMANDS ━━━━\n" +
+		"1️⃣ `!stats` - Daily Operations\n" +
+		"2️⃣ `!info [ID]` - Check Status\n" +
+		"3️⃣ `!help` - Show this menu\n" +
+		"━━━━━━━━━━━━━━━━━━━\n\n" +
+		"*📦 HOW TO REGISTER A PACKAGE:*\n" +
+		"_Simply send a message with these details:_\n\n" +
+		"Sender: John Doe\n" +
+		"Receiver Name: Jane Smith\n" +
+		"Receiver Phone: +234 800 123 4567\n" +
+		"Receiver Address: 123 Main St, Lagos\n" +
+		"Receiver Country: Nigeria\n" +
+		"Sender Country: UK\n\n" +
+		"*PRO TIP:* _You can use shortcuts like #stats or #info._"
+
+	return Result{Message: msg}
 }

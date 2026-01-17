@@ -17,7 +17,7 @@ func isReceiver(lower string) bool {
 }
 
 func isSender(lower string) bool {
-	return strings.Contains(lower, "sender")
+	return strings.Contains(lower, "sender") || strings.Contains(lower, "origin") || strings.Contains(lower, "from")
 }
 
 func ParseRegex(text string) models.Manifest {
@@ -123,13 +123,24 @@ func cleanLine(line string, keywords ...string) string {
 	}
 	res := line[bestIdx:]
 	res = strings.TrimLeft(res, " '’s:：") // Clean up apostrophes, colons, and spaces
-	return strings.TrimSpace(res)
+	res = strings.TrimSpace(res)
+
+	// Additional clean for phone numbers: remove common non-numeric chars if it looks like a phone field
+	if strings.Contains(lower, "phone") || strings.Contains(lower, "tel") || strings.Contains(lower, "mobile") || strings.Contains(lower, "num") {
+		// Just a basic sanitize, keep '+', but remove things like '(' ')' '-'
+		res = strings.ReplaceAll(res, "(", "")
+		res = strings.ReplaceAll(res, ")", "")
+		res = strings.ReplaceAll(res, "-", "")
+		res = strings.ReplaceAll(res, " ", "")
+	}
+
+	return res
 }
 
 func ParseAI(text, apiKey string) (models.Manifest, error) {
 	prompt := fmt.Sprintf(`Extract shipment details from this text and return ONLY JSON.
-REQUIRED: receiverName, receiverPhone, receiverCountry, senderName, senderCountry.
-OPTIONAL: receiverAddress, receiverEmail, receiverID.
+REQUIRED: receiverName, receiverPhone, receiverAddress, receiverCountry, senderName, senderCountry.
+OPTIONAL: receiverEmail, receiverID.
 
 Text: "%s"
 
