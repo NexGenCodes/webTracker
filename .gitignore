@@ -90,3 +90,8 @@ backend/*.exe
 *.njsproj
 *.sln
 *.sw?
+
+#nextjs
+next.config.js
+front/next.config.js
+front/.next
