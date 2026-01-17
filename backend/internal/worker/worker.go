@@ -61,6 +61,7 @@ func (w *Worker) process(job models.Job) {
 	if len(m.MissingFields) > 0 {
 		if aiM, err := parser.ParseAI(job.Text, w.GeminiKey); err == nil {
 			m.Merge(aiM)
+			m.IsAI = true
 			m.Validate()
 		}
 	}
@@ -68,7 +69,7 @@ func (w *Worker) process(job models.Job) {
 	// 3. Validation
 	if len(m.MissingFields) > 0 {
 		logger.GlobalVitals.IncParseFailure()
-		msg := "⚠️ *Manifest Incomplete*\nMissing:\n• " + strings.Join(m.MissingFields, "\n• ")
+		msg := "⚠️ *Information Incomplete*\nMissing:\n• " + strings.Join(m.MissingFields, "\n• ")
 		w.sendReply(job.ChatJID, job.SenderJID, msg, job.MessageID)
 		return
 	}
@@ -93,7 +94,11 @@ func (w *Worker) process(job models.Job) {
 	logger.GlobalVitals.IncInsertSuccess()
 
 	// 6. Success
-	w.sendReply(job.ChatJID, job.SenderJID, fmt.Sprintf("✅ *Manifest Created*\nID: *%s*", id), job.MessageID)
+	successMsg := fmt.Sprintf("✅ *Manifest Created*\nID: *%s*", id)
+	if m.IsAI {
+		successMsg += "\n_✨ (AI Enhanced)_"
+	}
+	w.sendReply(job.ChatJID, job.SenderJID, successMsg, job.MessageID)
 }
 
 func (w *Worker) isPotentialManifest(text string) bool {

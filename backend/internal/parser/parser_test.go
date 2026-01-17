@@ -6,11 +6,14 @@ import (
 
 func TestParseRegex(t *testing.T) {
 	tests := []struct {
-		name      string
-		input     string
-		wantName  string
-		wantPhone string
-		wantAddr  string
+		name       string
+		input      string
+		wantName   string
+		wantPhone  string
+		wantAddr   string
+		wantSender string
+		wantEmail  string
+		wantID     string
 	}{
 		{
 			name:      "Standard Format v1",
@@ -26,19 +29,50 @@ func TestParseRegex(t *testing.T) {
 			wantPhone: "+2347012345678",
 			wantAddr:  "Abuja Central",
 		},
+		{
+			name:      "User Variation v1",
+			input:     "Recivers's: name John Smith\nReceiver Phone: 08011122233\nAddress: 123 Street\nEmail: john@example.com\nID: A12345678",
+			wantName:  "John Smith",
+			wantPhone: "08011122233",
+			wantAddr:  "123 Street",
+			wantEmail: "john@example.com",
+			wantID:    "A12345678",
+		},
+		{
+			name:      "User Variation v2",
+			input:     "reciver's name: Alice Cooper\nPhone: 09055566677\nReciver's Email: alice@gmail.com\nPassport: P9876543",
+			wantName:  "Alice Cooper",
+			wantPhone: "09055566677",
+			wantEmail: "alice@gmail.com",
+			wantID:    "P9876543",
+		},
+		{
+			name:       "Sender Variation",
+			input:      "Sender's Name: Bob Marley\nSender Country: Jamaica",
+			wantSender: "Bob Marley",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := ParseRegex(tt.input)
-			if got.ReceiverName != tt.wantName {
+			if tt.wantName != "" && got.ReceiverName != tt.wantName {
 				t.Errorf("ParseRegex() Name = %v, want %v", got.ReceiverName, tt.wantName)
 			}
-			if got.ReceiverPhone != tt.wantPhone {
+			if tt.wantPhone != "" && got.ReceiverPhone != tt.wantPhone {
 				t.Errorf("ParseRegex() Phone = %v, want %v", got.ReceiverPhone, tt.wantPhone)
 			}
-			if got.ReceiverAddress != tt.wantAddr {
+			if tt.wantAddr != "" && got.ReceiverAddress != tt.wantAddr {
 				t.Errorf("ParseRegex() Address = %v, want %v", got.ReceiverAddress, tt.wantAddr)
+			}
+			if tt.wantSender != "" && got.SenderName != tt.wantSender {
+				t.Errorf("ParseRegex() SenderName = %v, want %v", got.SenderName, tt.wantSender)
+			}
+			if tt.wantEmail != "" && got.ReceiverEmail != tt.wantEmail {
+				t.Errorf("ParseRegex() Email = %v, want %v", got.ReceiverEmail, tt.wantEmail)
+			}
+			if tt.wantID != "" && got.ReceiverID != tt.wantID {
+				t.Errorf("ParseRegex() ID = %v, want %v", got.ReceiverID, tt.wantID)
 			}
 		})
 	}
