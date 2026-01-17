@@ -113,7 +113,7 @@ func (s *Client) GetTodayStats(loc *time.Location) (pending, inTransit int, err 
 
 type TransitionResult struct {
 	TrackingNumber string
-	WhatsappFrom   string
+	WhatsappFrom   *string
 }
 
 func (s *Client) TransitionPendingToInTransit() ([]TransitionResult, error) {
