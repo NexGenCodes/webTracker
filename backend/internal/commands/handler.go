@@ -58,9 +58,12 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (string, bool) {
 	args := parts[1:]
 
 	if handler, ok := d.handlers[rawCmd]; ok {
-		// Stats doesn't need info, but Info does
-		if infoH, ok := handler.(*InfoHandler); ok {
-			infoH.CompanyName = d.CompanyName
+		switch h := handler.(type) {
+		case *StatsHandler:
+			h.CompanyName = d.CompanyName
+		case *InfoHandler:
+			h.CompanyName = d.CompanyName
+			h.CompanyPrefix = d.AwbCmd
 		}
 		res := handler.Execute(ctx, d.db, args)
 		return res.Message, true
@@ -74,44 +77,58 @@ func presentsAsCommand(text string) bool {
 }
 
 // StatsHandler handles !stats
-type StatsHandler struct{}
+type StatsHandler struct {
+	CompanyName string
+}
 
 func (h *StatsHandler) Execute(ctx context.Context, db *supabase.Client, args []string) Result {
 	if len(args) > 0 {
-		return Result{Message: "⚠️ *Incorrect Usage*\nPlease send only `!stats` without any extra text."}
+		return Result{Message: "⚠️ *INCORRECT USAGE*\n_Please send only `!stats` without any extra text._"}
 	}
 
 	loc, _ := time.LoadLocation("Africa/Lagos")
 	pending, transit, err := db.GetTodayStats(loc)
 	if err != nil {
-		return Result{Message: "❌ *System Error*\nCould not fetch statistics.", Error: err}
+		return Result{Message: "❌ *SYSTEM ERROR*\n_Could not fetch statistics._", Error: err}
 	}
 
-	msg := fmt.Sprintf("📊 *Today's Logistics*\n\n• PENDING: *%d*\n• IN_TRANSIT: *%d*\n\n_Total Created Today: %d_", pending, transit, pending+transit)
+	company := strings.ToUpper(h.CompanyName)
+	if company == "" {
+		company = "LOGISTICS"
+	}
+	msg := fmt.Sprintf("📊 *%s VITAL STATS*\n\n━━━━━━━━━━━━━━━━━━━━━━━\n📦 PENDING:    *%d*\n🚚 IN TRANSIT: *%d*\n📊 TOTAL:      *%d*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n_Total operations recorded today._", company, pending, transit, pending+transit)
 	return Result{Message: msg}
 }
 
 // InfoHandler handles !info [ID]
 type InfoHandler struct {
-	CompanyName string
+	CompanyName   string
+	CompanyPrefix string
 }
 
 func (h *InfoHandler) Execute(ctx context.Context, db *supabase.Client, args []string) Result {
 	if len(args) < 1 {
-		msg := "🚀 *Bot Guide & Commands*\n\n" +
-			"1️⃣ `!stats` - See daily shipping totals\n" +
-			"2️⃣ `!info [ID]` - Get full shipment details\n\n" +
-			"*Example Usage:*\n`!info NEX-12345`"
+		company := strings.ToUpper(h.CompanyName)
+		if company == "" {
+			company = "COMMAND"
+		}
+		msg := fmt.Sprintf("🚀 *%s COMMAND CENTER*\n\n", company) +
+			"━━━━━━━━━━━━━━━━━━━━━━━\n" +
+			"1️⃣ `!stats` - Daily Operations\n" +
+			"2️⃣ `!info [TrackingID]` - Shipment Tracker\n" +
+			"━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
+			"*PRO TIP:*\n" +
+			fmt.Sprintf("_Use `!info %s-123456789` for full details._", h.CompanyPrefix)
 		return Result{Message: msg}
 	}
 
 	shipment, err := db.GetShipment(args[0])
 	if err != nil {
-		return Result{Message: "❌ *System Error*\nDatabase lookup failed.", Error: err}
+		return Result{Message: "❌ *DATABASE ERROR*\n_Lookup failed. Please try again later._", Error: err}
 	}
 
 	if shipment == nil {
-		return Result{Message: fmt.Sprintf("⚠️ *Not Found*\nTracking ID *%s* does not exist.\n\n*Usage:* `!info TRACKING_ID`", args[0])}
+		return Result{Message: fmt.Sprintf("⚠️ *RECORD NOT FOUND*\n\n━━━━━━━━━━━━━━━━━━━━━━━\nID: *%s*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n_This tracking ID does not exist in our registry._", args[0])}
 	}
 
 	wb := utils.GenerateWaybill(*shipment, h.CompanyName)
