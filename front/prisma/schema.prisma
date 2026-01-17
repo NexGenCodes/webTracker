@@ -1,0 +1,57 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Shipment {
+  id              String   @id @default(cuid())
+  trackingNumber  String   @unique
+  status          String 
+  
+  senderName      String?
+  senderCountry   String?
+  receiverName    String?
+  receiverEmail   String?
+  receiverAddress String?
+  receiverCountry String?
+  receiverPhone   String?
+  whatsappMessageId String?  @unique
+  whatsappFrom    String?
+  
+  // Idempotency fields to prevent duplicate processing
+  lastNotifiedAt   DateTime?
+  lastTransitionAt DateTime?
+
+  events          Event[]
+  
+  isArchived      Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Event {
+  id          String   @id @default(cuid())
+  shipmentId  String
+  shipment    Shipment @relation(fields: [shipmentId], references: [id])
+  status      String
+  location    String
+  timestamp   DateTime @default(now())
+  notes       String?
+}
+
+model NotificationQueue {
+  id                String   @id @default(cuid())
+  trackingNumber    String
+  whatsappMessageId String
+  whatsappFrom      String
+  status            String
+  message           String
+  retryCount        Int      @default(0)
+  lastAttempt       DateTime @default(now())
+  createdAt         DateTime @default(now())
+}

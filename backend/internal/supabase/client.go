@@ -1,0 +1,204 @@
+package supabase
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"time"
+
+	"webtracker-bot/internal/logger"
+	"webtracker-bot/internal/models"
+
+	"github.com/google/uuid"
+	_ "github.com/jackc/pgx/v5/stdlib"
+)
+
+type Client struct {
+	db *sql.DB
+}
+
+func NewClient(dbURL string) (*Client, error) {
+	db, err := sql.Open("pgx", dbURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open pgx connection: %w", err)
+	}
+
+	// Pool Limits
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(5)
+	db.SetConnMaxLifetime(5 * time.Minute)
+
+	// Verify connection
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := db.PingContext(ctx); err != nil {
+		return nil, fmt.Errorf("failed to ping database: %w", err)
+	}
+
+	return &Client{db: db}, nil
+}
+
+// withRetry handles transient network/database errors for write operations
+func (s *Client) withRetry(fn func() error) error {
+	var lastErr error
+	for i := 0; i < 3; i++ {
+		if err := fn(); err != nil {
+			lastErr = err
+			logger.Warn().Err(err).Int("attempt", i+1).Msg("Database write failed, retrying...")
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		return nil
+	}
+	return fmt.Errorf("operation failed after 3 retries: %w", lastErr)
+}
+
+func (s *Client) CheckDuplicate(phone string) (bool, string, error) {
+	query := `SELECT "trackingNumber" FROM "Shipment" WHERE "receiverPhone" = $1 LIMIT 1`
+	var tracking string
+	err := s.db.QueryRow(query, phone).Scan(&tracking)
+	if err == sql.ErrNoRows {
+		return false, "", nil
+	}
+	if err != nil {
+		return false, "", err
+	}
+	return true, tracking, nil
+}
+
+func (s *Client) InsertShipment(m models.Manifest, senderPhone string) (string, error) {
+	newID := "AWB-" + uuid.NewString()
+	var finalID string
+
+	err := s.withRetry(func() error {
+		query := `
+			INSERT INTO "Shipment" (
+				"id", "trackingNumber", "status", "senderName", "senderCountry", 
+				"receiverName", "receiverPhone", "receiverAddress", "receiverCountry", "whatsappFrom", "createdAt", "updatedAt"
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+			RETURNING "trackingNumber"`
+
+		return s.db.QueryRow(
+			query,
+			uuid.NewString(), newID, "PENDING", m.SenderName, m.SenderCountry,
+			m.ReceiverName, m.ReceiverPhone, m.ReceiverAddress, m.ReceiverCountry, senderPhone,
+		).Scan(&finalID)
+	})
+
+	if err != nil {
+		return "", err
+	}
+	return finalID, nil
+}
+
+func (s *Client) GetTodayStats(loc *time.Location) (pending, inTransit int, err error) {
+	now := time.Now().In(loc)
+	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc).UTC()
+
+	pendingQuery := `SELECT COUNT(*) FROM "Shipment" WHERE "status" = 'PENDING' AND "createdAt" >= $1`
+	err = s.db.QueryRow(pendingQuery, midnight).Scan(&pending)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	transitQuery := `SELECT COUNT(*) FROM "Shipment" WHERE "status" = 'IN_TRANSIT' AND "createdAt" >= $1`
+	err = s.db.QueryRow(transitQuery, midnight).Scan(&inTransit)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return pending, inTransit, nil
+}
+
+type TransitionResult struct {
+	TrackingNumber string
+	WhatsappFrom   string
+}
+
+func (s *Client) TransitionPendingToInTransit() ([]TransitionResult, error) {
+	oneHourAgo := time.Now().Add(-1 * time.Hour).UTC()
+
+	// Direct Update with Returning
+	query := `
+		UPDATE "Shipment" 
+		SET "status" = 'IN_TRANSIT', "updatedAt" = NOW()
+		WHERE "status" = 'PENDING' AND "createdAt" < $1
+		RETURNING "trackingNumber", "whatsappFrom"`
+
+	rows, err := s.db.Query(query, oneHourAgo)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []TransitionResult
+	for rows.Next() {
+		var r TransitionResult
+		if err := rows.Scan(&r.TrackingNumber, &r.WhatsappFrom); err != nil {
+			return nil, err
+		}
+		results = append(results, r)
+	}
+	return results, nil
+}
+
+func (s *Client) PruneStaleData() (int, error) {
+	sevenDaysAgo := time.Now().Add(-7 * 24 * time.Hour).UTC()
+	totalPruned := 0
+
+	// Batched Pruning to avoid table locks
+	for {
+		// PostgreSQL doesn't have DELETE ... LIMIT directly without a subquery/CTID
+		query := `
+			DELETE FROM "Shipment" 
+			WHERE "id" IN (
+				SELECT "id" FROM "Shipment" 
+				WHERE "createdAt" < $1 
+				LIMIT 100
+			)`
+
+		res, err := s.db.Exec(query, sevenDaysAgo)
+		if err != nil {
+			return totalPruned, fmt.Errorf("batch prune failed: %w", err)
+		}
+
+		rows, _ := res.RowsAffected()
+		if rows == 0 {
+			break
+		}
+		totalPruned += int(rows)
+		logger.Info().Int("batch_size", int(rows)).Msg("Batch pruned records")
+		time.Sleep(100 * time.Millisecond) // Smal pause between batches
+	}
+
+	return totalPruned, nil
+}
+
+func (s *Client) GetShipment(trackingNumber string) (*models.Shipment, error) {
+	query := `SELECT * FROM "Shipment" WHERE "trackingNumber" = $1 LIMIT 1`
+	rows, err := s.db.Query(query, trackingNumber)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	if rows.Next() {
+		var shipment models.Shipment
+		// Scan all fields. We need to be careful with models.Shipment field order vs SELECT *
+		// Better to list fields explicitly
+		queryFields := `
+			SELECT "id", "trackingNumber", "status", "senderName", "senderCountry", 
+			       "receiverName", "receiverPhone", "receiverAddress", "receiverCountry", "createdAt"
+			FROM "Shipment" WHERE "trackingNumber" = $1 LIMIT 1`
+
+		err := s.db.QueryRow(queryFields, trackingNumber).Scan(
+			&shipment.ID, &shipment.TrackingNumber, &shipment.Status, &shipment.SenderName, &shipment.SenderCountry,
+			&shipment.ReceiverName, &shipment.ReceiverPhone, &shipment.ReceiverAddress, &shipment.ReceiverCountry, &shipment.CreatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		return &shipment, nil
+	}
+	return nil, nil
+}
