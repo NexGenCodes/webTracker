@@ -12,12 +12,12 @@ import (
 )
 
 var (
-	rxReceiverName    = regexp.MustCompile(`(?i)(?:Receiver Name|Receiver|Name):\s*([^\n\r,]+)`)
-	rxReceiverPhone   = regexp.MustCompile(`(?i)(?:Receiver Phone|Phone|Mobile):\s*([^\n\r,]+)`)
-	rxReceiverAddress = regexp.MustCompile(`(?i)(?:Address|Receiver Address):\s*([^\n\r,]+)`)
-	rxReceiverCountry = regexp.MustCompile(`(?i)(?:Receiver Country|Destination|To):\s*([^\n\r,]+)`)
-	rxSenderName      = regexp.MustCompile(`(?i)(?:Sender Name|Sender):\s*([^\n\r,]+)`)
-	rxSenderCountry   = regexp.MustCompile(`(?i)(?:Sender Country|Origin|From):\s*([^\n\r,]+)`)
+	rxReceiverName    = regexp.MustCompile(`(?i)(?:Receiver Name|Receiver|Name):\s*([^\n\r]+)`)
+	rxReceiverPhone   = regexp.MustCompile(`(?i)(?:Receiver Phone|Phone|Mobile|Tel):\s*([^\n\r]+)`)
+	rxReceiverAddress = regexp.MustCompile(`(?i)(?:Address|Receiver Address|Addr):\s*([^\n\r]+)`)
+	rxReceiverCountry = regexp.MustCompile(`(?i)(?:Receiver Country|Destination|To|Country):\s*([^\n\r]+)`)
+	rxSenderName      = regexp.MustCompile(`(?i)(?:Sender Name|Sender):\s*([^\n\r]+)`)
+	rxSenderCountry   = regexp.MustCompile(`(?i)(?:Sender Country|Origin|From):\s*([^\n\r]+)`)
 )
 
 func extract(re *regexp.Regexp, text string) string {

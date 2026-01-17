@@ -37,7 +37,9 @@ func (w *Worker) Start() {
 }
 
 func (w *Worker) process(job models.Job) {
-	// 1. Check for Commands (!stats, !waybill)
+	logger.GlobalVitals.IncJobs()
+
+	// 1. Check for Commands (!stats, !airwaybill)
 	if strings.HasPrefix(job.Text, "!stats") {
 		loc, _ := time.LoadLocation("Africa/Lagos") // Default Admin TZ
 		pending, transit, err := w.DB.GetTodayStats(loc)
@@ -144,14 +146,17 @@ func (w *Worker) process(job models.Job) {
 
 	// 3. Validation
 	if len(m.MissingFields) > 0 {
+		logger.GlobalVitals.IncParseFailure()
 		msg := "⚠️ *Manifest Incomplete*\nMissing:\n• " + strings.Join(m.MissingFields, "\n• ")
 		w.sendReply(job.ChatJID, msg, job.MessageID)
 		return
 	}
+	logger.GlobalVitals.IncParseSuccess()
 
 	// 4. Duplicate Check
 	exists, tracking, err := w.DB.CheckDuplicate(m.ReceiverPhone)
 	if err == nil && exists {
+		logger.GlobalVitals.IncDuplicate()
 		msg := fmt.Sprintf("⚠️ *Duplicate Found*\nID: *%s*", tracking)
 		w.sendReply(job.ChatJID, msg, job.MessageID)
 		return
@@ -160,12 +165,19 @@ func (w *Worker) process(job models.Job) {
 	// 5. Insert
 	id, err := w.DB.InsertShipment(m, job.SenderPhone)
 	if err != nil {
+		logger.GlobalVitals.IncInsertFailure()
 		w.sendReply(job.ChatJID, "❌ System Error: Saving failed", job.MessageID)
 		return
 	}
+	logger.GlobalVitals.IncInsertSuccess()
 
 	// 6. Success
 	w.sendReply(job.ChatJID, fmt.Sprintf("✅ *Manifest Created*\nID: *%s*", id), job.MessageID)
+
+	// Periodically log vitals (e.g., every 10 jobs)
+	if logger.GlobalVitals.JobsProcessed%10 == 0 {
+		logger.Info().Interface("vitals", logger.GlobalVitals.GetSnapshot()).Msg("Worker Vitals Snapshot")
+	}
 }
 
 func (w *Worker) sendReply(jid types.JID, text string, quotedID string) {
