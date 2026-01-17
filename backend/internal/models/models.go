@@ -11,22 +11,35 @@ type Manifest struct {
 	ReceiverAddress string   `json:"receiverAddress"`
 	ReceiverPhone   string   `json:"receiverPhone"`
 	ReceiverCountry string   `json:"receiverCountry"`
+	ReceiverEmail   string   `json:"receiverEmail"`
+	ReceiverID      string   `json:"receiverID"`
 	SenderName      string   `json:"senderName"`
 	SenderCountry   string   `json:"senderCountry"`
 	MissingFields   []string `json:"-"`
 }
 
 type Shipment struct {
-	ID              string    `json:"id"`
-	TrackingNumber  string    `json:"trackingNumber"`
-	Status          string    `json:"status"`
-	SenderName      string    `json:"senderName"`
-	SenderCountry   string    `json:"senderCountry"`
-	ReceiverName    string    `json:"receiverName"`
-	ReceiverPhone   string    `json:"receiverPhone"`
-	ReceiverAddress string    `json:"receiverAddress"`
-	ReceiverCountry string    `json:"receiverCountry"`
-	CreatedAt       time.Time `json:"createdAt"`
+	ID              string     `json:"id"`
+	TrackingNumber  string     `json:"trackingNumber"`
+	Status          string     `json:"status"`
+	SenderName      string     `json:"senderName"`
+	SenderCountry   string     `json:"senderCountry"`
+	ReceiverName    string     `json:"receiverName"`
+	ReceiverPhone   string     `json:"receiverPhone"`
+	ReceiverEmail   string     `json:"receiverEmail"`
+	ReceiverID      string     `json:"receiverID"`
+	ReceiverAddress string     `json:"receiverAddress"`
+	ReceiverCountry string     `json:"receiverCountry"`
+	WhatsappFrom    string     `json:"whatsappFrom"`
+	CreatedAt       time.Time  `json:"createdAt"`
+	UpdatedAt       time.Time  `json:"updatedAt"`
+	LastNotifiedAt  *time.Time `json:"lastNotifiedAt"`
+}
+
+type NotificationJob struct {
+	TrackingNumber string
+	Status         string
+	WhatsappFrom   string
 }
 
 type Job struct {

@@ -20,6 +20,7 @@ model Shipment {
   receiverAddress String?
   receiverCountry String?
   receiverPhone   String?
+  receiverID      String?
   whatsappMessageId String?  @unique
   whatsappFrom    String?
   
@@ -44,14 +45,3 @@ model Event {
   notes       String?
 }
 
-model NotificationQueue {
-  id                String   @id @default(cuid())
-  trackingNumber    String
-  whatsappMessageId String
-  whatsappFrom      String
-  status            String
-  message           String
-  retryCount        Int      @default(0)
-  lastAttempt       DateTime @default(now())
-  createdAt         DateTime @default(now())
-}

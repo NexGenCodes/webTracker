@@ -14,7 +14,7 @@ import (
 	"go.mau.fi/whatsmeow/types"
 )
 
-func StartDailySummary(client *whatsmeow.Client, db *supabase.Client, timezone, groupID string) {
+func StartDailySummary(client *whatsmeow.Client, db *supabase.Client, timezone string, allowedGroups []string) {
 	location, err := time.LoadLocation(timezone)
 	if err != nil {
 		logger.Warn().Str("timezone", timezone).Err(err).Msg("Invalid timezone, using UTC")
@@ -35,7 +35,8 @@ func StartDailySummary(client *whatsmeow.Client, db *supabase.Client, timezone, 
 				count := pending + transit
 
 				msg := fmt.Sprintf("📊 *Daily Summary*\nYou processed *%d* packages today.", count)
-				if groupID != "" {
+
+				for _, groupID := range allowedGroups {
 					targetJID, _ := types.ParseJID(groupID)
 					if targetJID.IsEmpty() {
 						targetJID = types.NewJID(groupID, types.GroupServer)

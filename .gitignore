@@ -63,6 +63,25 @@ supabase/.gitignore
 Thumbs.db
 Desktop.ini
 
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.bin
+
+# Build artifacts
+/dist/
+/bin/
+/out/
+backend/logs/
+
+# Go
+coverage.out
+backend/bot
+backend/*.exe
+
 # Editors
 .idea/
 .vscode/*.log

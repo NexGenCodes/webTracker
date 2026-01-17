@@ -1,24 +1,26 @@
 package config
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
 
 type Config struct {
-	DatabaseURL        string
-	GroupID            string
-	GeminiAPIKey       string
-	AdminTimezone      string
-	AppURL             string
-	ExternalCronSecret string
-	HealthcheckURL     string
-	LogPath            string
-	WorkerPoolSize     int
-	BufferSize         int
+	DatabaseURL    string
+	AllowedGroups  []string
+	CompanyPrefix  string
+	GeminiAPIKey   string
+	AdminTimezone  string
+	HealthcheckURL string
+	LogPath        string
+	CompanyName    string
+	WorkerPoolSize int
+	BufferSize     int
 }
 
 func GetWorkDir() string {
@@ -27,6 +29,29 @@ func GetWorkDir() string {
 		return "."
 	}
 	return filepath.Dir(ex)
+}
+
+func generateAbbreviation(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "AWB"
+	}
+
+	parts := strings.Fields(name)
+	if len(parts) > 1 {
+		abbr := ""
+		for _, p := range parts {
+			if len(p) > 0 {
+				abbr += string(p[0])
+			}
+		}
+		return strings.ToUpper(abbr)
+	}
+
+	if len(name) > 3 {
+		return strings.ToUpper(name[:3])
+	}
+	return strings.ToUpper(name)
 }
 
 func Load() *Config {
@@ -40,17 +65,29 @@ func Load() *Config {
 	_ = godotenv.Load(".env.local")
 	_ = godotenv.Load()
 
+	allowedStr := os.Getenv("WHATSAPP_ALLOWED_GROUPS")
+	var allowedGroups []string
+	if allowedStr != "" {
+		allowedGroups = strings.Split(allowedStr, ",")
+		for i, s := range allowedGroups {
+			allowedGroups[i] = strings.TrimSpace(s)
+		}
+	}
+
+	companyName := os.Getenv("COMPANY_NAME")
+	companyPrefix := generateAbbreviation(companyName)
+
 	cfg := &Config{
-		DatabaseURL:        os.Getenv("DIRECT_URL"),
-		GroupID:            os.Getenv("WHATSAPP_GROUP_ID"),
-		GeminiAPIKey:       os.Getenv("GEMINI_API_KEY"),
-		AdminTimezone:      os.Getenv("ADMIN_TIMEZONE"),
-		AppURL:             os.Getenv("APP_URL"),
-		ExternalCronSecret: os.Getenv("EXTERNAL_CRON_SECRET"),
-		HealthcheckURL:     os.Getenv("HEALTHCHECK_URL"),
-		LogPath:            os.Getenv("LOG_PATH"),
-		WorkerPoolSize:     5,
-		BufferSize:         100,
+		DatabaseURL:    os.Getenv("DIRECT_URL"),
+		AllowedGroups:  allowedGroups,
+		CompanyPrefix:  companyPrefix,
+		GeminiAPIKey:   os.Getenv("GEMINI_API_KEY"),
+		AdminTimezone:  os.Getenv("ADMIN_TIMEZONE"),
+		HealthcheckURL: os.Getenv("HEALTHCHECK_URL"),
+		LogPath:        os.Getenv("LOG_PATH"),
+		CompanyName:    companyName,
+		WorkerPoolSize: 5,
+		BufferSize:     100,
 	}
 
 	if cfg.DatabaseURL == "" {
@@ -66,4 +103,17 @@ func Load() *Config {
 	}
 
 	return cfg
+}
+
+func (cfg *Config) Validate() error {
+	if cfg.DatabaseURL == "" {
+		return fmt.Errorf("DIRECT_URL or DATABASE_URL is missing")
+	}
+	if cfg.GeminiAPIKey == "" {
+		return fmt.Errorf("GEMINI_API_KEY is missing")
+	}
+	if cfg.CompanyPrefix == "" {
+		cfg.CompanyPrefix = "AWB"
+	}
+	return nil
 }

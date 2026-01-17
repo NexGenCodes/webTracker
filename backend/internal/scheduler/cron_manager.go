@@ -48,18 +48,25 @@ func NewManager(cfg *config.Config, db *supabase.Client, wa *whatsmeow.Client) *
 }
 
 func (m *CronManager) Start() {
-	// 1. Every Hour: Native Status Transitions (PENDING -> IN_TRANSIT)
-	// Cron spec for "every hour at minute 0"
-	m.addJob("Status Transitions", "0 0 * * * *", m.handleTransitions)
+	// 1. Every 10 Minutes: Native Status Transitions (PENDING -> IN_TRANSIT)
+	m.addJob("Status Transitions", "0 */10 * * * *", m.handleTransitions)
 
-	// 2. Every Day at Midnight: Native 7-Day Pruning
+	// 2. Every 2 Minutes: Status Change Notifications (Transit Only)
+	m.addJob("Status Notifications", "0 */2 * * * *", m.handleNotifications)
+
+	// 3. Every Day at Midnight: Native 7-Day Pruning
 	m.addJob("Daily Pruning", "0 0 0 * * *", m.handlePruning)
 
-	// 3. Every 5 Minutes: Health Check Heartbeat
+	// 4. Every 5 Minutes: Health Check Heartbeat
 	m.addJob("Health Check", "0 */5 * * * *", m.handleHealthCheck)
 
 	m.scheduler.Start()
 	logger.Info().Msg("[Cron] Native Scheduler started successfully")
+}
+
+func (m *CronManager) Stop() {
+	m.scheduler.Stop()
+	logger.Info().Msg("[Cron] Native Scheduler stopped")
 }
 
 func (m *CronManager) addJob(name, spec string, cmd func()) {
@@ -102,7 +109,23 @@ func (m *CronManager) handleTransitions() {
 	}
 
 	for _, item := range updated {
-		m.sendTransitionAlert(item.WhatsappFrom, item.TrackingNumber)
+		m.sendStatusAlert(item.WhatsappFrom, item.TrackingNumber, "IN_TRANSIT")
+		_ = m.db.MarkAsNotified(item.TrackingNumber)
+	}
+}
+
+func (m *CronManager) handleNotifications() {
+	jobs, err := m.db.GetPendingNotifications()
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to fetch pending notifications")
+		return
+	}
+
+	for _, j := range jobs {
+		m.sendStatusAlert(j.WhatsappFrom, j.TrackingNumber, j.Status)
+		_ = m.db.MarkAsNotified(j.TrackingNumber)
+		// Small delay to avoid burst
+		time.Sleep(500 * time.Millisecond)
 	}
 }
 
@@ -126,18 +149,25 @@ func (m *CronManager) handleHealthCheck() {
 	}
 }
 
-func (m *CronManager) sendTransitionAlert(jidStr, tracking string) {
+func (m *CronManager) sendStatusAlert(jidStr, tracking, status string) {
 	if jidStr == "" {
 		return
 	}
 	jid, err := types.ParseJID(jidStr)
 	if err != nil {
-		logger.Warn().Str("jid", jidStr).Msg("Failed to parse JID for transition alert")
+		logger.Warn().Str("jid", jidStr).Msg("Failed to parse JID for status alert")
 		return
 	}
 
-	msg := fmt.Sprintf("🚚 *Status Update*\nID: *%s*\n\nYour package is now *IN TRANSIT*. Our team is handling it at the origin center.", tracking)
-	content := &waProto.Message{Conversation: models.StrPtr(msg)}
+	var msg string
+	switch status {
+	case "IN_TRANSIT":
+		msg = fmt.Sprintf("🚚 *Status Update*\nID: *%s*\n\nYour package is now *IN TRANSIT*. Our team is handling it at the origin center.", tracking)
+	default:
+		// Per user request: ONLY notify for transit
+		return
+	}
 
+	content := &waProto.Message{Conversation: models.StrPtr(msg)}
 	_, _ = m.wa.SendMessage(context.Background(), jid, content)
 }
