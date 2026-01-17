@@ -57,71 +57,12 @@ func (w *Worker) process(job models.Job) {
 	// 2. Normal Parsing (Regex first)
 	m := parser.ParseRegex(job.Text)
 
-	// AI Fallback
+	// AI Fallback if fields are missing
 	if len(m.MissingFields) > 0 {
-		aiM, err := parser.ParseAI(job.Text, w.GeminiKey)
-		if err == nil {
-			if m.ReceiverName == "" {
-				m.ReceiverName = aiM.ReceiverName
-			}
-			if m.ReceiverAddress == "" {
-				m.ReceiverAddress = aiM.ReceiverAddress
-			}
-			if m.ReceiverPhone == "" {
-				m.ReceiverPhone = aiM.ReceiverPhone
-			}
-			if m.ReceiverCountry == "" {
-				m.ReceiverCountry = aiM.ReceiverCountry
-			}
-			if m.SenderName == "" {
-				m.SenderName = aiM.SenderName
-			}
-			if m.SenderCountry == "" {
-				m.SenderCountry = aiM.SenderCountry
-			}
-
-			// Recalculate missing
-			m.MissingFields = []string{}
-			if m.ReceiverName == "" {
-				m.MissingFields = append(m.MissingFields, "Receiver Name")
-			}
-			if m.ReceiverAddress == "" {
-				m.MissingFields = append(m.MissingFields, "Receiver Address")
-			}
-			if m.ReceiverPhone == "" {
-				m.MissingFields = append(m.MissingFields, "Receiver Phone")
-			}
-			if m.ReceiverCountry == "" {
-				m.MissingFields = append(m.MissingFields, "Receiver Country")
-			}
-			if m.SenderName == "" {
-				m.MissingFields = append(m.MissingFields, "Sender Name")
-			}
-			if m.SenderCountry == "" {
-				m.MissingFields = append(m.MissingFields, "Sender Country")
-			}
+		if aiM, err := parser.ParseAI(job.Text, w.GeminiKey); err == nil {
+			m.Merge(aiM)
+			m.Validate()
 		}
-	}
-
-	// 2. Threshold check (Min 2 fields)
-	found := 0
-	if m.ReceiverName != "" {
-		found++
-	}
-	if m.ReceiverPhone != "" {
-		found++
-	}
-	if m.ReceiverAddress != "" {
-		found++
-	}
-	if m.ReceiverCountry != "" {
-		found++
-	}
-	if m.SenderName != "" {
-		found++
-	}
-	if m.SenderCountry != "" {
-		found++
 	}
 
 	// 3. Validation
@@ -187,5 +128,10 @@ func (w *Worker) sendReply(chat, sender types.JID, text string, quotedID string)
 	jitter := time.Duration(500+rand.Intn(2000)) * time.Millisecond
 	time.Sleep(jitter)
 
-	_, _ = w.Client.SendMessage(context.Background(), chat, content)
+	resp, err := w.Client.SendMessage(context.Background(), chat, content)
+	if err != nil {
+		logger.Error().Err(err).Str("chat", chat.String()).Msg("Failed to send WhatsApp message")
+	} else {
+		logger.Debug().Str("resp_id", resp.ID).Msg("Message sent successfully")
+	}
 }
