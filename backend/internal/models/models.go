@@ -21,53 +21,38 @@ type Manifest struct {
 
 // Merge combines this manifest with another, only filling in empty fields.
 func (m *Manifest) Merge(other Manifest) {
-	if m.ReceiverName == "" {
-		m.ReceiverName = other.ReceiverName
-	}
-	if m.ReceiverAddress == "" {
-		m.ReceiverAddress = other.ReceiverAddress
-	}
-	if m.ReceiverPhone == "" {
-		m.ReceiverPhone = other.ReceiverPhone
-	}
-	if m.ReceiverCountry == "" {
-		m.ReceiverCountry = other.ReceiverCountry
-	}
-	if m.ReceiverEmail == "" {
-		m.ReceiverEmail = other.ReceiverEmail
-	}
-	if m.ReceiverID == "" {
-		m.ReceiverID = other.ReceiverID
-	}
-	if m.SenderName == "" {
-		m.SenderName = other.SenderName
-	}
-	if m.SenderCountry == "" {
-		m.SenderCountry = other.SenderCountry
+	fillIfEmpty(&m.ReceiverName, other.ReceiverName)
+	fillIfEmpty(&m.ReceiverAddress, other.ReceiverAddress)
+	fillIfEmpty(&m.ReceiverPhone, other.ReceiverPhone)
+	fillIfEmpty(&m.ReceiverCountry, other.ReceiverCountry)
+	fillIfEmpty(&m.ReceiverEmail, other.ReceiverEmail)
+	fillIfEmpty(&m.ReceiverID, other.ReceiverID)
+	fillIfEmpty(&m.SenderName, other.SenderName)
+	fillIfEmpty(&m.SenderCountry, other.SenderCountry)
+}
+
+func fillIfEmpty(target *string, val string) {
+	if *target == "" {
+		*target = val
 	}
 }
 
 // Validate checks for required fields and returns a list of missing ones.
 func (m *Manifest) Validate() []string {
 	var missing []string
-	if m.ReceiverName == "" {
-		missing = append(missing, "Receiver Name")
+	check := func(val, name string) {
+		if val == "" {
+			missing = append(missing, name)
+		}
 	}
-	if m.ReceiverPhone == "" {
-		missing = append(missing, "Receiver Phone")
-	}
-	if m.ReceiverAddress == "" {
-		missing = append(missing, "Receiver Address")
-	}
-	if m.ReceiverCountry == "" {
-		missing = append(missing, "Receiver Country")
-	}
-	if m.SenderName == "" {
-		missing = append(missing, "Sender Name")
-	}
-	if m.SenderCountry == "" {
-		missing = append(missing, "Sender Country")
-	}
+
+	check(m.ReceiverName, "Receiver Name")
+	check(m.ReceiverPhone, "Receiver Phone")
+	check(m.ReceiverAddress, "Receiver Address")
+	check(m.ReceiverCountry, "Receiver Country")
+	check(m.SenderName, "Sender Name")
+	check(m.SenderCountry, "Sender Country")
+
 	m.MissingFields = missing
 	return missing
 }
