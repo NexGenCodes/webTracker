@@ -12,14 +12,14 @@ import (
 )
 
 var (
-	rxReceiverName    = regexp.MustCompile(`(?i)(?:Receiver Name|Receiver|Name):\s*([^\n\r]+)`)
-	rxReceiverPhone   = regexp.MustCompile(`(?i)(?:Receiver Phone|Phone|Mobile|Tel):\s*([^\n\r]+)`)
-	rxReceiverAddress = regexp.MustCompile(`(?i)(?:Address|Receiver Address|Addr):\s*([^\n\r]+)`)
-	rxReceiverCountry = regexp.MustCompile(`(?i)(?:Receiver Country|Destination|To|Country):\s*([^\n\r]+)`)
-	rxReceiverEmail   = regexp.MustCompile(`(?i)(?:Email|Receiver Email|Mail):\s*([^\n\r]+)`)
-	rxReceiverID      = regexp.MustCompile(`(?i)(?:ID|Receiver ID|Passport|NIN):\s*([^\n\r]+)`)
-	rxSenderName      = regexp.MustCompile(`(?i)(?:Sender Name|Sender):\s*([^\n\r]+)`)
-	rxSenderCountry   = regexp.MustCompile(`(?i)(?:Sender Country|Origin|From):\s*([^\n\r]+)`)
+	rxReceiverName    = regexp.MustCompile(`(?i)(?:(?:Receivers?|Receive) Name|Name):\s*([^\n\r]+)`)
+	rxReceiverPhone   = regexp.MustCompile(`(?i)(?:(?:Receivers?|Receive) Phone|Phone|Mobile|Tel):\s*([^\n\r]+)`)
+	rxReceiverAddress = regexp.MustCompile(`(?i)(?:(?:Receivers?|Receive) Address|Address|Addr):\s*([^\n\r]+)`)
+	rxReceiverCountry = regexp.MustCompile(`(?i)(?:(?:Receivers?|Receive) Country|Destination|To|Country):\s*([^\n\r]+)`)
+	rxReceiverEmail   = regexp.MustCompile(`(?i)(?:(?:Receivers?|Receive) Email|Email|Mail):\s*([^\n\r]+)`)
+	rxReceiverID      = regexp.MustCompile(`(?i)(?:(?:Receivers?|Receive) ID|ID|Passport|NIN):\s*([^\n\r]+)`)
+	rxSenderName      = regexp.MustCompile(`(?i)(?:(?:Senders?|Send) Name|Sender):\s*([^\n\r]+)`)
+	rxSenderCountry   = regexp.MustCompile(`(?i)(?:(?:Senders?|Send) Country|Origin|From):\s*([^\n\r]+)`)
 )
 
 func extract(re *regexp.Regexp, text string) string {
@@ -42,22 +42,7 @@ func ParseRegex(text string) models.Manifest {
 		SenderCountry:   extract(rxSenderCountry, text),
 	}
 
-	if m.ReceiverName == "" {
-		m.MissingFields = append(m.MissingFields, "Receiver Name")
-	}
-	if m.ReceiverPhone == "" {
-		m.MissingFields = append(m.MissingFields, "Receiver Phone")
-	}
-	if m.ReceiverCountry == "" {
-		m.MissingFields = append(m.MissingFields, "Receiver Country")
-	}
-	if m.SenderName == "" {
-		m.MissingFields = append(m.MissingFields, "Sender Name")
-	}
-	if m.SenderCountry == "" {
-		m.MissingFields = append(m.MissingFields, "Sender Country")
-	}
-
+	m.Validate()
 	return m
 }
 
