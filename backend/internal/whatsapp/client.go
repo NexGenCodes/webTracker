@@ -58,23 +58,11 @@ func HandleEvent(evt interface{}, queue chan<- models.Job, allowedGroups []strin
 			}
 		}
 
-		// Strictly check !INFO Prefix (Case Insensitive)
-		upperText := strings.ToUpper(text)
-		if !strings.HasPrefix(upperText, "!INFO") {
-			return
-		}
-
-		// Clean up prefix (always 5 chars: "!INFO")
-		cleanText := strings.TrimSpace(text[5:])
-		if cleanText == "" {
-			return
-		}
-
 		// Queue job
 		queue <- models.Job{
 			ChatJID:     v.Info.Chat,
 			MessageID:   v.Info.ID,
-			Text:        cleanText,
+			Text:        strings.TrimSpace(text),
 			SenderPhone: v.Info.Sender.User,
 		}
 	}
