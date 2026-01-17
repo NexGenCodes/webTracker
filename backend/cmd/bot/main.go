@@ -17,6 +17,7 @@ import (
 	"webtracker-bot/internal/whatsapp"
 	"webtracker-bot/internal/worker"
 
+	"github.com/mdp/qrterminal/v3"
 	"go.mau.fi/whatsmeow/types/events"
 )
 
@@ -102,7 +103,8 @@ func main() {
 		}
 		for evt := range qrChan {
 			if evt.Event == "code" {
-				fmt.Println("QR Code:", evt.Code)
+				qrterminal.GenerateHalfBlock(evt.Code, qrterminal.L, os.Stdout)
+				fmt.Println("Scan the QR code above to login")
 			} else {
 				fmt.Println("QR Event:", evt.Event)
 			}

@@ -109,7 +109,9 @@ func (m *CronManager) handleTransitions() {
 	}
 
 	for _, item := range updated {
-		m.sendStatusAlert(item.WhatsappFrom, item.TrackingNumber, "IN_TRANSIT")
+		if item.WhatsappFrom != nil {
+			m.sendStatusAlert(*item.WhatsappFrom, item.TrackingNumber, "IN_TRANSIT")
+		}
 		_ = m.db.MarkAsNotified(item.TrackingNumber)
 	}
 }
@@ -122,7 +124,9 @@ func (m *CronManager) handleNotifications() {
 	}
 
 	for _, j := range jobs {
-		m.sendStatusAlert(j.WhatsappFrom, j.TrackingNumber, j.Status)
+		if j.WhatsappFrom != nil {
+			m.sendStatusAlert(*j.WhatsappFrom, j.TrackingNumber, j.Status)
+		}
 		_ = m.db.MarkAsNotified(j.TrackingNumber)
 		// Small delay to avoid burst
 		time.Sleep(500 * time.Millisecond)

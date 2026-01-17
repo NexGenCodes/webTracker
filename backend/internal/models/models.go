@@ -30,7 +30,7 @@ type Shipment struct {
 	ReceiverID      string     `json:"receiverID"`
 	ReceiverAddress string     `json:"receiverAddress"`
 	ReceiverCountry string     `json:"receiverCountry"`
-	WhatsappFrom    string     `json:"whatsappFrom"`
+	WhatsappFrom    *string    `json:"whatsappFrom"`
 	CreatedAt       time.Time  `json:"createdAt"`
 	UpdatedAt       time.Time  `json:"updatedAt"`
 	LastNotifiedAt  *time.Time `json:"lastNotifiedAt"`
@@ -39,7 +39,7 @@ type Shipment struct {
 type NotificationJob struct {
 	TrackingNumber string
 	Status         string
-	WhatsappFrom   string
+	WhatsappFrom   *string
 }
 
 type Job struct {
