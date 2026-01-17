@@ -42,6 +42,14 @@ func extract(re *regexp.Regexp, text string) string {
 	return ""
 }
 
+func isReceiver(lower string) bool {
+	return strings.Contains(lower, "receiver") || strings.Contains(lower, "reciver") || strings.Contains(lower, "receive") || strings.Contains(lower, "recieve")
+}
+
+func isSender(lower string) bool {
+	return strings.Contains(lower, "sender")
+}
+
 func ParseRegex(text string) models.Manifest {
 	m := models.Manifest{}
 	lines := strings.Split(text, "\n")
@@ -52,25 +60,27 @@ func ParseRegex(text string) models.Manifest {
 		}
 
 		lower := strings.ToLower(line)
-		// Receiver's Name variations
-		if (strings.Contains(lower, "receiver") || strings.Contains(lower, "reciver") || strings.Contains(lower, "receive") || strings.Contains(lower, "recieve")) && strings.Contains(lower, "name") {
+
+		// Name
+		if isReceiver(lower) && strings.Contains(lower, "name") {
 			m.ReceiverName = cleanLine(line, "name")
-		} else if strings.Contains(lower, "sender") && strings.Contains(lower, "name") {
+		} else if isSender(lower) && strings.Contains(lower, "name") {
 			m.SenderName = cleanLine(line, "name")
 		} else if strings.HasPrefix(lower, "name:") {
 			if m.ReceiverName == "" {
 				m.ReceiverName = strings.TrimSpace(line[5:])
 			}
-		} else if strings.HasPrefix(lower, "receiver:") && !strings.Contains(lower, "country") && !strings.Contains(lower, "phone") {
+		} else if isReceiver(lower) && !strings.Contains(lower, "country") && !strings.Contains(lower, "phone") && !strings.Contains(lower, "address") && !strings.Contains(lower, "email") && !strings.Contains(lower, "id") {
+			// Case like "Receiver: John Doe" or "Reciver's: John Doe"
 			if m.ReceiverName == "" {
-				m.ReceiverName = strings.TrimSpace(line[9:])
+				m.ReceiverName = cleanLine(line, "receiver", "reciver", "receive", "recieve")
 			}
 		}
 
-		// Phone variations
-		if (strings.Contains(lower, "receiver") || strings.Contains(lower, "reciver") || strings.Contains(lower, "receive") || strings.Contains(lower, "recieve")) && (strings.Contains(lower, "phone") || strings.Contains(lower, "mobile") || strings.Contains(lower, "tel")) {
+		// Phone
+		if isReceiver(lower) && (strings.Contains(lower, "phone") || strings.Contains(lower, "mobile") || strings.Contains(lower, "tel")) {
 			m.ReceiverPhone = cleanLine(line, "phone", "mobile", "tel")
-		} else if strings.HasPrefix(lower, "phone:") || strings.HasPrefix(lower, "tel:") || strings.HasPrefix(lower, "mobile:") {
+		} else if strings.Contains(lower, "phone:") || strings.Contains(lower, "tel:") || strings.Contains(lower, "mobile:") {
 			if m.ReceiverPhone == "" {
 				parts := strings.SplitN(line, ":", 2)
 				if len(parts) > 1 {
@@ -79,10 +89,10 @@ func ParseRegex(text string) models.Manifest {
 			}
 		}
 
-		// Address variations
-		if (strings.Contains(lower, "receiver") || strings.Contains(lower, "reciver") || strings.Contains(lower, "receive") || strings.Contains(lower, "recieve")) && (strings.Contains(lower, "address") || strings.Contains(lower, "addr")) {
+		// Address
+		if isReceiver(lower) && (strings.Contains(lower, "address") || strings.Contains(lower, "addr")) {
 			m.ReceiverAddress = cleanLine(line, "address", "addr")
-		} else if strings.HasPrefix(lower, "address:") || strings.HasPrefix(lower, "addr:") {
+		} else if strings.Contains(lower, "address:") || strings.HasPrefix(lower, "addr:") {
 			if m.ReceiverAddress == "" {
 				parts := strings.SplitN(line, ":", 2)
 				if len(parts) > 1 {
@@ -91,14 +101,14 @@ func ParseRegex(text string) models.Manifest {
 			}
 		}
 
-		// Country variations
-		if (strings.Contains(lower, "receiver") || strings.Contains(lower, "reciver") || strings.Contains(lower, "receive") || strings.Contains(lower, "recieve")) && (strings.Contains(lower, "country") || strings.Contains(lower, "destination") || strings.Contains(lower, "to")) {
+		// Country
+		if isReceiver(lower) && (strings.Contains(lower, "country") || strings.Contains(lower, "destination") || strings.Contains(lower, "to")) {
 			m.ReceiverCountry = cleanLine(line, "country", "destination", "to")
-		} else if strings.Contains(lower, "sender") && (strings.Contains(lower, "country") || strings.Contains(lower, "origin") || strings.Contains(lower, "from")) {
+		} else if isSender(lower) && (strings.Contains(lower, "country") || strings.Contains(lower, "origin") || strings.Contains(lower, "from")) {
 			m.SenderCountry = cleanLine(line, "country", "origin", "from")
-		} else if strings.HasPrefix(lower, "country:") || strings.HasPrefix(lower, "destination:") || strings.HasPrefix(lower, "origin:") {
-			if strings.Contains(lower, "origin") {
-				m.SenderCountry = cleanLine(line, "origin")
+		} else if strings.Contains(lower, "country:") || strings.Contains(lower, "destination:") || strings.Contains(lower, "origin:") {
+			if strings.Contains(lower, "origin") || (isSender(lower) && strings.Contains(lower, "country")) {
+				m.SenderCountry = cleanLine(line, "country", "origin", "from")
 			} else if m.ReceiverCountry == "" {
 				parts := strings.SplitN(line, ":", 2)
 				if len(parts) > 1 {
@@ -107,10 +117,10 @@ func ParseRegex(text string) models.Manifest {
 			}
 		}
 
-		// Email variations
-		if (strings.Contains(lower, "receiver") || strings.Contains(lower, "reciver") || strings.Contains(lower, "receive") || strings.Contains(lower, "recieve")) && (strings.Contains(lower, "email") || strings.Contains(lower, "mail")) {
+		// Email
+		if isReceiver(lower) && (strings.Contains(lower, "email") || strings.Contains(lower, "mail")) {
 			m.ReceiverEmail = cleanLine(line, "email", "mail")
-		} else if strings.HasPrefix(lower, "email:") || strings.HasPrefix(lower, "mail:") {
+		} else if strings.Contains(lower, "email:") || strings.Contains(lower, "mail:") {
 			if m.ReceiverEmail == "" {
 				parts := strings.SplitN(line, ":", 2)
 				if len(parts) > 1 {
@@ -119,10 +129,10 @@ func ParseRegex(text string) models.Manifest {
 			}
 		}
 
-		// ID variations
-		if (strings.Contains(lower, "receiver") || strings.Contains(lower, "reciver") || strings.Contains(lower, "receive") || strings.Contains(lower, "recieve")) && (strings.Contains(lower, "id") || strings.Contains(lower, "passport") || strings.Contains(lower, "nin")) {
+		// ID
+		if isReceiver(lower) && (strings.Contains(lower, "id") || strings.Contains(lower, "passport") || strings.Contains(lower, "nin")) {
 			m.ReceiverID = cleanLine(line, "id", "passport", "nin")
-		} else if strings.HasPrefix(lower, "id:") || strings.HasPrefix(lower, "passport:") || strings.HasPrefix(lower, "nin:") {
+		} else if strings.Contains(lower, "id:") || strings.Contains(lower, "passport:") || strings.Contains(lower, "nin:") {
 			if m.ReceiverID == "" {
 				parts := strings.SplitN(line, ":", 2)
 				if len(parts) > 1 {
