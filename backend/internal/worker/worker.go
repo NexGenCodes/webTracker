@@ -44,7 +44,7 @@ func (w *Worker) process(job models.Job) {
 
 	// 1. Check for Commands (Explicit)
 	if reply, ok := w.Cmd.Dispatch(context.Background(), job.Text); ok {
-		w.sendReply(job.ChatJID, reply, job.MessageID)
+		w.sendReply(job.ChatJID, job.SenderJID, reply, job.MessageID)
 		return
 	}
 
@@ -128,7 +128,7 @@ func (w *Worker) process(job models.Job) {
 	if len(m.MissingFields) > 0 {
 		logger.GlobalVitals.IncParseFailure()
 		msg := "⚠️ *Manifest Incomplete*\nMissing:\n• " + strings.Join(m.MissingFields, "\n• ")
-		w.sendReply(job.ChatJID, msg, job.MessageID)
+		w.sendReply(job.ChatJID, job.SenderJID, msg, job.MessageID)
 		return
 	}
 	logger.GlobalVitals.IncParseSuccess()
@@ -138,7 +138,7 @@ func (w *Worker) process(job models.Job) {
 	if err == nil && exists {
 		logger.GlobalVitals.IncDuplicate()
 		msg := fmt.Sprintf("⚠️ *Duplicate Found*\nID: *%s*", tracking)
-		w.sendReply(job.ChatJID, msg, job.MessageID)
+		w.sendReply(job.ChatJID, job.SenderJID, msg, job.MessageID)
 		return
 	}
 
@@ -146,13 +146,13 @@ func (w *Worker) process(job models.Job) {
 	id, err := w.DB.InsertShipment(m, job.SenderPhone)
 	if err != nil {
 		logger.GlobalVitals.IncInsertFailure()
-		w.sendReply(job.ChatJID, "❌ System Error: Saving failed", job.MessageID)
+		w.sendReply(job.ChatJID, job.SenderJID, "❌ System Error: Saving failed", job.MessageID)
 		return
 	}
 	logger.GlobalVitals.IncInsertSuccess()
 
 	// 6. Success
-	w.sendReply(job.ChatJID, fmt.Sprintf("✅ *Manifest Created*\nID: *%s*", id), job.MessageID)
+	w.sendReply(job.ChatJID, job.SenderJID, fmt.Sprintf("✅ *Manifest Created*\nID: *%s*", id), job.MessageID)
 }
 
 func (w *Worker) isPotentialManifest(text string) bool {
@@ -167,7 +167,7 @@ func (w *Worker) isPotentialManifest(text string) bool {
 	return count >= 2
 }
 
-func (w *Worker) sendReply(jid types.JID, text string, quotedID string) {
+func (w *Worker) sendReply(chat, sender types.JID, text string, quotedID string) {
 	content := &waProto.Message{}
 
 	if quotedID != "" {
@@ -175,7 +175,7 @@ func (w *Worker) sendReply(jid types.JID, text string, quotedID string) {
 			Text: models.StrPtr(text),
 			ContextInfo: &waProto.ContextInfo{
 				StanzaID:      models.StrPtr(quotedID),
-				Participant:   models.StrPtr(jid.String()),
+				Participant:   models.StrPtr(sender.String()),
 				QuotedMessage: &waProto.Message{Conversation: models.StrPtr("Original Message")},
 			},
 		}
@@ -187,5 +187,5 @@ func (w *Worker) sendReply(jid types.JID, text string, quotedID string) {
 	jitter := time.Duration(500+rand.Intn(2000)) * time.Millisecond
 	time.Sleep(jitter)
 
-	_, _ = w.Client.SendMessage(context.Background(), jid, content)
+	_, _ = w.Client.SendMessage(context.Background(), chat, content)
 }

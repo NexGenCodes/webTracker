@@ -61,6 +61,7 @@ func HandleEvent(evt interface{}, queue chan<- models.Job, allowedGroups []strin
 		// Queue job
 		queue <- models.Job{
 			ChatJID:     v.Info.Chat,
+			SenderJID:   v.Info.Sender,
 			MessageID:   v.Info.ID,
 			Text:        strings.TrimSpace(text),
 			SenderPhone: v.Info.Sender.User,
