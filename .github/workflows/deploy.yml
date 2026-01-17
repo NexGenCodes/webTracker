@@ -55,6 +55,9 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
           script: |
+            # Set executable permissions
+            sudo chmod +x /opt/webtracker/bot
+
             # Move service file to systemd directory
             sudo mv /opt/webtracker/webtracker-bot.service /etc/systemd/system/webtracker-bot.service
             
