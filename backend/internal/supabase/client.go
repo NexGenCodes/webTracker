@@ -8,6 +8,7 @@ import (
 
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
+	"webtracker-bot/internal/utils"
 
 	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -68,7 +69,7 @@ func (s *Client) CheckDuplicate(phone string) (bool, string, error) {
 }
 
 func (s *Client) InsertShipment(m models.Manifest, senderPhone string) (string, error) {
-	newID := s.Prefix + "-" + uuid.NewString()
+	newID := s.Prefix + "-" + utils.GenerateShortID(9)
 	var finalID string
 
 	err := s.withRetry(func() error {

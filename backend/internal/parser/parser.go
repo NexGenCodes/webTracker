@@ -11,7 +11,9 @@ import (
 )
 
 func isReceiver(lower string) bool {
-	return strings.Contains(lower, "receiver") || strings.Contains(lower, "reciver") || strings.Contains(lower, "receive") || strings.Contains(lower, "recieve")
+	return strings.Contains(lower, "receiver") || strings.Contains(lower, "reciver") ||
+		strings.Contains(lower, "receive") || strings.Contains(lower, "recieve") ||
+		strings.Contains(lower, "resiver") || strings.Contains(lower, "recever")
 }
 
 func isSender(lower string) bool {
@@ -30,7 +32,7 @@ func ParseRegex(text string) models.Manifest {
 
 	receiverFields := []field{
 		{&m.ReceiverName, []string{"name"}, true},
-		{&m.ReceiverPhone, []string{"phone", "mobile", "tel"}, false},
+		{&m.ReceiverPhone, []string{"phone", "mobile", "tel", "num", "contact", "telephone", "mobil", "number"}, false},
 		{&m.ReceiverAddress, []string{"address", "addr"}, false},
 		{&m.ReceiverCountry, []string{"country", "destination", "to"}, false},
 		{&m.ReceiverEmail, []string{"email", "mail"}, false},
