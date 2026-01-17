@@ -1,0 +1,17 @@
+[Unit]
+Description=WebTracker WhatsApp Bot
+After=network.target
+
+[Service]
+Type=simple
+# User will be replaced during deployment
+User=root
+WorkingDirectory=/opt/webtracker
+ExecStart=/opt/webtracker/bot
+Restart=always
+RestartSec=10
+# Assumes .env is present in the working directory
+EnvironmentFile=/opt/webtracker/.env
+
+[Install]
+WantedBy=multi-user.target

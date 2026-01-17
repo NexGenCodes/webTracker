@@ -42,11 +42,11 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
-          source: "backend/bot"
+          source: "backend/bot,backend/webtracker-bot.service"
           target: "/opt/webtracker"
           strip_components: 1
 
-      - name: Restart Service
+      - name: Setup and Restart Service
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -54,5 +54,14 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
           script: |
+            # Move service file to systemd directory
+            sudo mv /opt/webtracker/webtracker-bot.service /etc/systemd/system/webtracker-bot.service
+            
+            # Set the correct user in the service file (replacing 'User=root' with actual user)
+            sudo sed -i "s/User=root/User=${{ secrets.EC2_USER }}/g" /etc/systemd/system/webtracker-bot.service
+            
+            # Reload systemd and restart
+            sudo systemctl daemon-reload
+            sudo systemctl enable webtracker-bot
             sudo systemctl restart webtracker-bot
             sudo systemctl status webtracker-bot
