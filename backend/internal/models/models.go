@@ -15,6 +15,7 @@ type Manifest struct {
 	ReceiverID      string   `json:"receiverID"`
 	SenderName      string   `json:"senderName"`
 	SenderCountry   string   `json:"senderCountry"`
+	IsAI            bool     `json:"-"`
 	MissingFields   []string `json:"-"`
 }
 
