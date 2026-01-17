@@ -51,6 +51,17 @@ func TestParseRegex(t *testing.T) {
 			input:      "Sender's Name: Bob Marley\nSender Country: Jamaica",
 			wantSender: "Bob Marley",
 		},
+		{
+			name:      "Misspelled Phone",
+			input:     "Recivers's Phone: 08012344321",
+			wantPhone: "08012344321",
+		},
+		{
+			name:      "Recieve Variation",
+			input:     "Recieve name: Charlie Brown\nRecieve's Mobile: 09011122233",
+			wantName:  "Charlie Brown",
+			wantPhone: "09011122233",
+		},
 	}
 
 	for _, tt := range tests {
