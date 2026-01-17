@@ -7,11 +7,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"webtracker-bot/internal/commands"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/parser"
 	"webtracker-bot/internal/supabase"
-	"webtracker-bot/internal/utils"
 
 	"go.mau.fi/whatsmeow"
 	waProto "go.mau.fi/whatsmeow/binary/proto"
@@ -19,12 +19,15 @@ import (
 )
 
 type Worker struct {
-	ID        int
-	Client    *whatsmeow.Client
-	DB        *supabase.Client
-	Jobs      <-chan models.Job
-	WG        *sync.WaitGroup
-	GeminiKey string
+	ID          int
+	Client      *whatsmeow.Client
+	DB          *supabase.Client
+	Jobs        <-chan models.Job
+	WG          *sync.WaitGroup
+	GeminiKey   string
+	AwbCmd      string
+	CompanyName string
+	Cmd         *commands.Dispatcher
 }
 
 func (w *Worker) Start() {
@@ -39,33 +42,15 @@ func (w *Worker) Start() {
 func (w *Worker) process(job models.Job) {
 	logger.GlobalVitals.IncJobs()
 
-	// 1. Check for Commands (!stats, !airwaybill)
-	if strings.HasPrefix(job.Text, "!stats") {
-		loc, _ := time.LoadLocation("Africa/Lagos") // Default Admin TZ
-		pending, transit, err := w.DB.GetTodayStats(loc)
-		if err != nil {
-			w.sendReply(job.ChatJID, "❌ Failed to fetch stats", job.MessageID)
-			return
-		}
-		msg := fmt.Sprintf("📊 *Today's Logistics*\n\n• PENDING: %d\n• IN_TRANSIT: %d\n\n_Total Created Today: %d_", pending, transit, pending+transit)
-		w.sendReply(job.ChatJID, msg, job.MessageID)
+	// 1. Check for Commands (Explicit)
+	if reply, ok := w.Cmd.Dispatch(context.Background(), job.Text); ok {
+		w.sendReply(job.ChatJID, reply, job.MessageID)
 		return
 	}
 
-	if strings.HasPrefix(job.Text, "!airwaybill") {
-		parts := strings.Fields(job.Text)
-		if len(parts) < 2 {
-			w.sendReply(job.ChatJID, "💡 Usage: `!airwaybill AWB-XXXXX`", job.MessageID)
-			return
-		}
-		id := parts[1]
-		shipment, err := w.DB.GetShipment(id)
-		if err != nil || shipment == nil {
-			w.sendReply(job.ChatJID, "❌ Shipment not found", job.MessageID)
-			return
-		}
-		wb := utils.GenerateWaybill(*shipment)
-		w.sendReply(job.ChatJID, "```\n"+wb+"\n```", job.MessageID)
+	// 2. High-Performance Pre-filter
+	// Instantly ignore messages that don't look like manifests/shipping info.
+	if !w.isPotentialManifest(job.Text) {
 		return
 	}
 
@@ -139,11 +124,6 @@ func (w *Worker) process(job models.Job) {
 		found++
 	}
 
-	if found < 2 {
-		logger.Warn().Int("fields_found", found).Msg("Ignoring garbage message")
-		return
-	}
-
 	// 3. Validation
 	if len(m.MissingFields) > 0 {
 		logger.GlobalVitals.IncParseFailure()
@@ -173,11 +153,18 @@ func (w *Worker) process(job models.Job) {
 
 	// 6. Success
 	w.sendReply(job.ChatJID, fmt.Sprintf("✅ *Manifest Created*\nID: *%s*", id), job.MessageID)
+}
 
-	// Periodically log vitals (e.g., every 10 jobs)
-	if logger.GlobalVitals.JobsProcessed%10 == 0 {
-		logger.Info().Interface("vitals", logger.GlobalVitals.GetSnapshot()).Msg("Worker Vitals Snapshot")
+func (w *Worker) isPotentialManifest(text string) bool {
+	lower := strings.ToLower(text)
+	keywords := []string{"sender", "receiver", "destin", "phone", "name", "address", "country", "cargo", "ship"}
+	count := 0
+	for _, kw := range keywords {
+		if strings.Contains(lower, kw) {
+			count++
+		}
 	}
+	return count >= 2
 }
 
 func (w *Worker) sendReply(jid types.JID, text string, quotedID string) {
@@ -202,6 +189,3 @@ func (w *Worker) sendReply(jid types.JID, text string, quotedID string) {
 
 	_, _ = w.Client.SendMessage(context.Background(), jid, content)
 }
-
-// Note: I need to fix the context.Background() issue by passing it or importing it.
-// I'll add the import and use context.Background() for now.

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"syscall"
 
+	"webtracker-bot/internal/commands"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
@@ -20,14 +21,23 @@ import (
 )
 
 func main() {
-	// 1. Load Config (also loads .env into os env)
+	// Load Config
 	cfg := config.Load()
 
-	// 2. Init Logger (reads LOG_PATH from env)
+	// Init Logger
 	logger.Init()
 
-	// 3. Init DB
-	dbClient, err := supabase.NewClient(cfg.DatabaseURL)
+	// Validate Config (Pre-flight)
+	if err := cfg.Validate(); err != nil {
+		logger.Fatal().Err(err).Msg("Configuration validation failed")
+	}
+
+	// Create Root Context
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// 5. Init DB
+	dbClient, err := supabase.NewClient(cfg.DatabaseURL, cfg.CompanyPrefix)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Failed to init Database")
 	}
@@ -38,27 +48,33 @@ func main() {
 		logger.Fatal().Err(err).Msg("Failed to init WhatsApp")
 	}
 
-	// 5. Create Job Queue
+	// 5. Create Command Dispatcher
+	cmdDispatcher := commands.NewDispatcher(dbClient, cfg.CompanyPrefix, cfg.CompanyName)
+
+	// 6. Create Job Queue
 	jobQueue := make(chan models.Job, cfg.BufferSize)
 	var wg sync.WaitGroup
 
-	// 6. Start Workers (Scaled to 5 as requested)
+	// Start Workers
 	for i := 1; i <= 5; i++ {
 		wg.Add(1)
 		w := &worker.Worker{
-			ID:        i,
-			Client:    client,
-			DB:        dbClient,
-			Jobs:      jobQueue,
-			WG:        &wg,
-			GeminiKey: cfg.GeminiAPIKey,
+			ID:          i,
+			Client:      client,
+			DB:          dbClient,
+			Jobs:        jobQueue,
+			WG:          &wg,
+			GeminiKey:   cfg.GeminiAPIKey,
+			AwbCmd:      cfg.CompanyPrefix,
+			CompanyName: cfg.CompanyName,
+			Cmd:         cmdDispatcher,
 		}
 		go w.Start()
 	}
 
 	// 7. Register Event Handler
 	client.AddEventHandler(func(evt interface{}) {
-		whatsapp.HandleEvent(evt, jobQueue, cfg.GroupID)
+		whatsapp.HandleEvent(evt, jobQueue, cfg.AllowedGroups)
 
 		// Handle QR codes and connection events
 		switch evt.(type) {
@@ -66,11 +82,14 @@ func main() {
 			logger.Info().Msg("QR Code received. Please scan.")
 		case *events.Connected:
 			logger.Info().Msg("WhatsApp Connected!")
+		case *events.LoggedOut:
+			logger.Warn().Msg("WhatsApp Logged Out! Please re-scan.")
+			cancel() // Signal shutdown on logout
 		}
 	})
 
 	// 8. Start Scheduler (Native Maintenance + Stats)
-	scheduler.StartDailySummary(client, dbClient, cfg.AdminTimezone, cfg.GroupID)
+	scheduler.StartDailySummary(client, dbClient, cfg.AdminTimezone, cfg.AllowedGroups)
 	cronMgr := scheduler.NewManager(cfg, dbClient, client)
 	cronMgr.Start()
 
@@ -95,15 +114,24 @@ func main() {
 		}
 	}
 
-	// 10. Shutdown Signal
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	// Shutdown Signal Handling
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	logger.Info().Msg("Bot is running. Press CTRL+C to exit.")
-	<-c
 
-	logger.Info().Msg("Shutting down...")
+	select {
+	case sig := <-sigChan:
+		logger.Info().Str("signal", sig.String()).Msg("Received termination signal")
+	case <-ctx.Done():
+		logger.Warn().Msg("Root context cancelled (Logged out or internal failure)")
+	}
+
+	logger.Info().Msg("Graceful shutdown initiated...")
+	cancel() // Cancel context to stop workers/scheduler
+
 	client.Disconnect()
+	cronMgr.Stop()
 	close(jobQueue)
 	wg.Wait()
-	logger.Info().Msg("Shutdown complete.")
+	logger.Info().Msg("Bot shutdown complete.")
 }

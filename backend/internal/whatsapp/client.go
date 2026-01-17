@@ -29,7 +29,7 @@ func NewClient(dbURL string) (*whatsmeow.Client, error) {
 	return client, nil
 }
 
-func HandleEvent(evt interface{}, queue chan<- models.Job, groupID string) {
+func HandleEvent(evt interface{}, queue chan<- models.Job, allowedGroups []string) {
 	switch v := evt.(type) {
 	case *events.Message:
 		text := ""
@@ -43,18 +43,28 @@ func HandleEvent(evt interface{}, queue chan<- models.Job, groupID string) {
 			return
 		}
 
-		// Filter by Group
-		if groupID != "" && v.Info.Chat.String() != groupID {
+		// Filter by Group Allowlist
+		if len(allowedGroups) > 0 {
+			isAllowed := false
+			chatJID := v.Info.Chat.String()
+			for _, g := range allowedGroups {
+				if chatJID == g {
+					isAllowed = true
+					break
+				}
+			}
+			if !isAllowed {
+				return
+			}
+		}
+
+		// Strictly check !INFO Prefix (Case Insensitive)
+		upperText := strings.ToUpper(text)
+		if !strings.HasPrefix(upperText, "!INFO") {
 			return
 		}
 
-		// Check Prefix
-		isInfo := strings.HasPrefix(strings.ToUpper(text), "!INFO") || strings.HasPrefix(strings.ToUpper(text), "#INFO")
-		if !isInfo {
-			return
-		}
-
-		// Clean up prefix
+		// Clean up prefix (always 5 chars: "!INFO")
 		cleanText := strings.TrimSpace(text[5:])
 		if cleanText == "" {
 			return

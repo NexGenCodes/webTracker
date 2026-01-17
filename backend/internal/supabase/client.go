@@ -14,10 +14,11 @@ import (
 )
 
 type Client struct {
-	db *sql.DB
+	db     *sql.DB
+	Prefix string
 }
 
-func NewClient(dbURL string) (*Client, error) {
+func NewClient(dbURL string, prefix string) (*Client, error) {
 	db, err := sql.Open("pgx", dbURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open pgx connection: %w", err)
@@ -35,7 +36,7 @@ func NewClient(dbURL string) (*Client, error) {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	return &Client{db: db}, nil
+	return &Client{db: db, Prefix: prefix}, nil
 }
 
 // withRetry handles transient network/database errors for write operations
@@ -67,21 +68,21 @@ func (s *Client) CheckDuplicate(phone string) (bool, string, error) {
 }
 
 func (s *Client) InsertShipment(m models.Manifest, senderPhone string) (string, error) {
-	newID := "AWB-" + uuid.NewString()
+	newID := s.Prefix + "-" + uuid.NewString()
 	var finalID string
 
 	err := s.withRetry(func() error {
 		query := `
 			INSERT INTO "Shipment" (
 				"id", "trackingNumber", "status", "senderName", "senderCountry", 
-				"receiverName", "receiverPhone", "receiverAddress", "receiverCountry", "whatsappFrom", "createdAt", "updatedAt"
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+				"receiverName", "receiverPhone", "receiverEmail", "receiverID", "receiverAddress", "receiverCountry", "whatsappFrom", "createdAt", "updatedAt"
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW())
 			RETURNING "trackingNumber"`
 
 		return s.db.QueryRow(
 			query,
 			uuid.NewString(), newID, "PENDING", m.SenderName, m.SenderCountry,
-			m.ReceiverName, m.ReceiverPhone, m.ReceiverAddress, m.ReceiverCountry, senderPhone,
+			m.ReceiverName, m.ReceiverPhone, m.ReceiverEmail, m.ReceiverID, m.ReceiverAddress, m.ReceiverCountry, senderPhone,
 		).Scan(&finalID)
 	})
 
@@ -148,7 +149,6 @@ func (s *Client) PruneStaleData() (int, error) {
 
 	// Batched Pruning to avoid table locks
 	for {
-		// PostgreSQL doesn't have DELETE ... LIMIT directly without a subquery/CTID
 		query := `
 			DELETE FROM "Shipment" 
 			WHERE "id" IN (
@@ -168,37 +168,62 @@ func (s *Client) PruneStaleData() (int, error) {
 		}
 		totalPruned += int(rows)
 		logger.Info().Int("batch_size", int(rows)).Msg("Batch pruned records")
-		time.Sleep(100 * time.Millisecond) // Smal pause between batches
+		time.Sleep(100 * time.Millisecond) // Pause between batches
 	}
 
 	return totalPruned, nil
 }
 
 func (s *Client) GetShipment(trackingNumber string) (*models.Shipment, error) {
-	query := `SELECT * FROM "Shipment" WHERE "trackingNumber" = $1 LIMIT 1`
-	rows, err := s.db.Query(query, trackingNumber)
+	queryFields := `
+		SELECT "id", "trackingNumber", "status", "senderName", "senderCountry", 
+			   "receiverName", "receiverPhone", "receiverEmail", "receiverID", "receiverAddress", "receiverCountry", 
+			   "whatsappFrom", "createdAt", "updatedAt", "lastNotifiedAt"
+		FROM "Shipment" WHERE "trackingNumber" = $1 LIMIT 1`
+
+	var shipment models.Shipment
+	err := s.db.QueryRow(queryFields, trackingNumber).Scan(
+		&shipment.ID, &shipment.TrackingNumber, &shipment.Status, &shipment.SenderName, &shipment.SenderCountry,
+		&shipment.ReceiverName, &shipment.ReceiverPhone, &shipment.ReceiverEmail, &shipment.ReceiverID, &shipment.ReceiverAddress, &shipment.ReceiverCountry,
+		&shipment.WhatsappFrom, &shipment.CreatedAt, &shipment.UpdatedAt, &shipment.LastNotifiedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &shipment, nil
+}
+
+func (s *Client) GetPendingNotifications() ([]models.NotificationJob, error) {
+	query := `
+		SELECT "trackingNumber", "status", "whatsappFrom"
+		FROM "Shipment"
+		WHERE ("lastNotifiedAt" IS NULL OR "updatedAt" > "lastNotifiedAt")
+		AND "status" = 'IN_TRANSIT'
+		AND "whatsappFrom" IS NOT NULL
+		LIMIT 50`
+
+	rows, err := s.db.Query(query)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	if rows.Next() {
-		var shipment models.Shipment
-		// Scan all fields. We need to be careful with models.Shipment field order vs SELECT *
-		// Better to list fields explicitly
-		queryFields := `
-			SELECT "id", "trackingNumber", "status", "senderName", "senderCountry", 
-			       "receiverName", "receiverPhone", "receiverAddress", "receiverCountry", "createdAt"
-			FROM "Shipment" WHERE "trackingNumber" = $1 LIMIT 1`
-
-		err := s.db.QueryRow(queryFields, trackingNumber).Scan(
-			&shipment.ID, &shipment.TrackingNumber, &shipment.Status, &shipment.SenderName, &shipment.SenderCountry,
-			&shipment.ReceiverName, &shipment.ReceiverPhone, &shipment.ReceiverAddress, &shipment.ReceiverCountry, &shipment.CreatedAt,
-		)
-		if err != nil {
+	var jobs []models.NotificationJob
+	for rows.Next() {
+		var j models.NotificationJob
+		if err := rows.Scan(&j.TrackingNumber, &j.Status, &j.WhatsappFrom); err != nil {
 			return nil, err
 		}
-		return &shipment, nil
+		jobs = append(jobs, j)
 	}
-	return nil, nil
+	return jobs, nil
+}
+
+func (s *Client) MarkAsNotified(tracking string) error {
+	query := `UPDATE "Shipment" SET "lastNotifiedAt" = NOW() WHERE "trackingNumber" = $1`
+	_, err := s.db.Exec(query, tracking)
+	return err
 }

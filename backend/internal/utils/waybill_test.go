@@ -19,7 +19,7 @@ func TestGenerateWaybill(t *testing.T) {
 		CreatedAt:       time.Now(),
 	}
 
-	got := GenerateWaybill(shipment)
+	got := GenerateWaybill(shipment, "TEST LOGISTICS")
 
 	// Check for key elements
 	if !strings.Contains(got, "AWB-TEST-123") {

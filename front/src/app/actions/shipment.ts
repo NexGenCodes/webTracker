@@ -5,7 +5,6 @@ import { authOptions } from "@/lib/auth";
 import { revalidatePath } from 'next/cache';
 import { CreateShipmentDto, ShipmentData, ServiceResult } from '@/types/shipment';
 import { ShipmentService } from '@/services/shipment.service';
-import { NotificationService } from '@/services/notification.service';
 import { logger } from '@/lib/logger';
 import { vitals } from '@/lib/vitals';
 
@@ -35,23 +34,7 @@ export async function createShipment(data: CreateShipmentDto): Promise<ServiceRe
  */
 export async function getTracking(trackingNumber: string): Promise<ShipmentData | null> {
     vitals.track('TRACKING_REQUESTED');
-    const shipment = await ShipmentService.getByTracking(trackingNumber);
-
-    // Side effect: Handle WhatsApp alerts if self-healing triggered an update
-    // We check if the object was changed to IN_TRANSIT and had a whatsapp source
-    // @ts-ignore
-    if (shipment && shipment.status === 'IN_TRANSIT' && shipment.whatsappMessageId && shipment.whatsappFrom) {
-        await NotificationService.sendWhatsApp(
-            // @ts-ignore
-            shipment.whatsappMessageId,
-            // @ts-ignore
-            shipment.whatsappFrom,
-            shipment.trackingNumber,
-            'IN_TRANSIT'
-        );
-    }
-
-    return shipment;
+    return await ShipmentService.getByTracking(trackingNumber);
 }
 
 /**
@@ -68,19 +51,6 @@ export async function updateShipmentStatus(
 
     const result = await ShipmentService.updateStatus(trackingNumber, status, location);
     if (result.success) {
-        // Send WhatsApp notification
-        const shipment = await ShipmentService.getByTracking(trackingNumber);
-        // @ts-ignore
-        if (shipment?.whatsappMessageId && shipment?.whatsappFrom) {
-            await NotificationService.sendWhatsApp(
-                // @ts-ignore
-                shipment.whatsappMessageId,
-                // @ts-ignore
-                shipment.whatsappFrom,
-                trackingNumber,
-                status
-            );
-        }
         revalidatePath('/');
         revalidatePath('/admin');
     }
@@ -136,11 +106,4 @@ export async function getAdminDashboardData() {
  */
 export async function pruneOldShipments() {
     await ShipmentService.pruneStale();
-}
-
-/**
- * Cron: Retry notifications
- */
-export async function processNotificationQueue() {
-    await NotificationService.processRetries();
 }

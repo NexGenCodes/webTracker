@@ -16,6 +16,8 @@ var (
 	rxReceiverPhone   = regexp.MustCompile(`(?i)(?:Receiver Phone|Phone|Mobile|Tel):\s*([^\n\r]+)`)
 	rxReceiverAddress = regexp.MustCompile(`(?i)(?:Address|Receiver Address|Addr):\s*([^\n\r]+)`)
 	rxReceiverCountry = regexp.MustCompile(`(?i)(?:Receiver Country|Destination|To|Country):\s*([^\n\r]+)`)
+	rxReceiverEmail   = regexp.MustCompile(`(?i)(?:Email|Receiver Email|Mail):\s*([^\n\r]+)`)
+	rxReceiverID      = regexp.MustCompile(`(?i)(?:ID|Receiver ID|Passport|NIN):\s*([^\n\r]+)`)
 	rxSenderName      = regexp.MustCompile(`(?i)(?:Sender Name|Sender):\s*([^\n\r]+)`)
 	rxSenderCountry   = regexp.MustCompile(`(?i)(?:Sender Country|Origin|From):\s*([^\n\r]+)`)
 )
@@ -34,15 +36,14 @@ func ParseRegex(text string) models.Manifest {
 		ReceiverAddress: extract(rxReceiverAddress, text),
 		ReceiverPhone:   extract(rxReceiverPhone, text),
 		ReceiverCountry: extract(rxReceiverCountry, text),
+		ReceiverEmail:   extract(rxReceiverEmail, text),
+		ReceiverID:      extract(rxReceiverID, text),
 		SenderName:      extract(rxSenderName, text),
 		SenderCountry:   extract(rxSenderCountry, text),
 	}
 
 	if m.ReceiverName == "" {
 		m.MissingFields = append(m.MissingFields, "Receiver Name")
-	}
-	if m.ReceiverAddress == "" {
-		m.MissingFields = append(m.MissingFields, "Receiver Address")
 	}
 	if m.ReceiverPhone == "" {
 		m.MissingFields = append(m.MissingFields, "Receiver Phone")
@@ -61,7 +62,10 @@ func ParseRegex(text string) models.Manifest {
 }
 
 func ParseAI(text, apiKey string) (models.Manifest, error) {
-	prompt := fmt.Sprintf(`Extract shipment details from this text and return ONLY JSON:
+	prompt := fmt.Sprintf(`Extract shipment details from this text and return ONLY JSON.
+REQUIRED: receiverName, receiverPhone, receiverCountry, senderName, senderCountry.
+OPTIONAL: receiverAddress, receiverEmail, receiverID.
+
 Text: "%s"
 
 JSON Schema:
@@ -70,6 +74,8 @@ JSON Schema:
   "receiverAddress": "string",
   "receiverPhone": "string",
   "receiverCountry": "string",
+  "receiverEmail": "string",
+  "receiverID": "string",
   "senderName": "string",
   "senderCountry": "string"
 }`, text)
