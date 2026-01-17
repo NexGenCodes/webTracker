@@ -7,6 +7,7 @@ import { CreateShipmentDto, ShipmentData, ServiceResult } from '@/types/shipment
 import { ShipmentService } from '@/services/shipment.service';
 import { NotificationService } from '@/services/notification.service';
 import { logger } from '@/lib/logger';
+import { vitals } from '@/lib/vitals';
 
 /**
  * Common Authorization wrapper
@@ -20,6 +21,7 @@ async function isAdmin() {
  * Create a new shipment from Admin Portal
  */
 export async function createShipment(data: CreateShipmentDto): Promise<ServiceResult<{ trackingNumber: string }>> {
+    vitals.track('SHIPMENT_CREATED');
     if (!(await isAdmin())) return { success: false, error: 'Unauthorized' };
 
     logger.info('Creating shipment', { data });
@@ -32,6 +34,7 @@ export async function createShipment(data: CreateShipmentDto): Promise<ServiceRe
  * Public: Get tracking details
  */
 export async function getTracking(trackingNumber: string): Promise<ShipmentData | null> {
+    vitals.track('TRACKING_REQUESTED');
     const shipment = await ShipmentService.getByTracking(trackingNumber);
 
     // Side effect: Handle WhatsApp alerts if self-healing triggered an update

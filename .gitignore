@@ -31,16 +31,20 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # env files
+.env
 .env.local
 .env.*.local
+.env.production
+.env.development
+*.env
 *.env.local
-backend/.env.local
-front/.env.local
+*.env.production
+*.env.development
 
-# Template env files (optional: commit these)
-#!.env
-#!backend/.env
-#!front/.env
+# whitelist env examples
+!.env.example
+!backend/.env.example
+!front/.env.example
 
 # vercel
 .vercel
