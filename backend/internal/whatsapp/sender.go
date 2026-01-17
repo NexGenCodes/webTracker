@@ -20,7 +20,12 @@ func NewSender(client *whatsmeow.Client) *Sender {
 	return &Sender{Client: client}
 }
 
+const BotFooter = "\n\n_🤖Bot_"
+
 func (s *Sender) Reply(chat, sender types.JID, text string, quotedID string) {
+	// Add Footer to all messages
+	text += BotFooter
+
 	content := &waProto.Message{}
 
 	if quotedID != "" {

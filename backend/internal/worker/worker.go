@@ -66,7 +66,9 @@ func (w *Worker) process(job models.Job) {
 	// 4. Validation
 	if len(m.MissingFields) > 0 {
 		logger.GlobalVitals.IncParseFailure()
-		msg := "⚠️ *Information Incomplete*\nMissing:\n• " + strings.Join(m.MissingFields, "\n• ")
+		msg := "📝 *Information Incomplete*\n\n" +
+			"The system could not parse all required fields from your message. Please provide:\n" +
+			"• " + strings.Join(m.MissingFields, "\n• ")
 		w.Sender.Reply(job.ChatJID, job.SenderJID, msg, job.MessageID)
 		return
 	}
@@ -76,7 +78,7 @@ func (w *Worker) process(job models.Job) {
 	exists, tracking, err := w.DB.CheckDuplicate(m.ReceiverPhone)
 	if err == nil && exists {
 		logger.GlobalVitals.IncDuplicate()
-		msg := fmt.Sprintf("⚠️ *Duplicate Found*\nID: *%s*", tracking)
+		msg := fmt.Sprintf("📂 *Duplicate Record*\n\nA shipment with this phone number already exists.\nTracking ID: *%s*", tracking)
 		w.Sender.Reply(job.ChatJID, job.SenderJID, msg, job.MessageID)
 		return
 	}
@@ -85,13 +87,13 @@ func (w *Worker) process(job models.Job) {
 	id, err := w.DB.InsertShipment(m, job.SenderPhone)
 	if err != nil {
 		logger.GlobalVitals.IncInsertFailure()
-		w.Sender.Reply(job.ChatJID, job.SenderJID, "❌ System Error: Saving failed", job.MessageID)
+		w.Sender.Reply(job.ChatJID, job.SenderJID, "❌ *System Error*\nSaving failed. Please contact your admin.", job.MessageID)
 		return
 	}
 	logger.GlobalVitals.IncInsertSuccess()
 
 	// 7. Success
-	successMsg := fmt.Sprintf("✅ *Manifest Created*\nID: *%s*", id)
+	successMsg := fmt.Sprintf("📦 *Manifest Created*\nYour shipment has been registered.\n\nID: *%s*", id)
 	if m.IsAI {
 		successMsg += "\n_✨ (AI Enhanced)_"
 	}
