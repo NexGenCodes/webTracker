@@ -44,6 +44,7 @@ type NotificationJob struct {
 
 type Job struct {
 	ChatJID     types.JID
+	SenderJID   types.JID
 	MessageID   string
 	Text        string
 	SenderPhone string
