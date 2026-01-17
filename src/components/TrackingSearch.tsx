@@ -12,6 +12,19 @@ interface TrackingSearchProps {
 export const TrackingSearch: React.FC<TrackingSearchProps> = ({ onSearch, isLoading }) => {
     const { dict } = useI18n();
     const [input, setInput] = useState('');
+    const [loadingMsgIndex, setLoadingMsgIndex] = useState(0);
+
+    React.useEffect(() => {
+        let interval: NodeJS.Timeout;
+        if (isLoading) {
+            interval = setInterval(() => {
+                setLoadingMsgIndex(prev => (prev + 1) % (dict.hero.loadingMessages?.length || 1));
+            }, 1200);
+        } else {
+            setLoadingMsgIndex(0);
+        }
+        return () => clearInterval(interval);
+    }, [isLoading, dict.hero.loadingMessages]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -28,11 +41,24 @@ export const TrackingSearch: React.FC<TrackingSearchProps> = ({ onSearch, isLoad
                 <h1 className="text-4xl md:text-6xl font-black mb-6 text-center text-gradient leading-[0.9] tracking-tighter uppercase">
                     {dict.hero.title}
                 </h1>
-                <p className="text-center text-text-muted mb-12 text-lg md:text-xl font-bold max-w-md mx-auto leading-relaxed border-l-2 border-accent/20 pl-6">
-                    {dict.hero.subtitle}
-                </p>
 
-                <form onSubmit={handleSubmit} className="relative group/form">
+                {isLoading ? (
+                    <div className="h-[92px] flex flex-col items-center justify-center animate-pulse">
+                        <div className="flex items-center gap-3 text-accent mb-2">
+                            <Loader2 className="animate-spin" size={20} />
+                            <span className="text-[10px] font-black uppercase tracking-[0.4em]">{dict.common.loading}</span>
+                        </div>
+                        <p className="text-text-muted text-sm font-bold tracking-tight uppercase opacity-60">
+                            {dict.hero.loadingMessages?.[loadingMsgIndex]}
+                        </p>
+                    </div>
+                ) : (
+                    <p className="text-center text-text-muted mb-12 text-lg md:text-xl font-bold max-w-md mx-auto leading-relaxed border-l-2 border-accent/20 pl-6 h-[92px] flex items-center">
+                        {dict.hero.subtitle}
+                    </p>
+                )}
+
+                <form onSubmit={handleSubmit} className="relative group/form mt-4">
                     <div className="absolute -inset-1 bg-linear-to-r from-accent to-accent-deep rounded-3xl blur opacity-0 group-focus-within/form:opacity-20 transition-opacity duration-500" />
                     <input
                         type="text"

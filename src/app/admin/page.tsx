@@ -1,48 +1,72 @@
 "use client";
 
-import React, { useState } from 'react';
-import { createShipment } from '../actions/shipment';
-import { parseEmail } from '@/lib/email-parser';
-import { Copy, Check, ChevronLeft, Package } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { createShipment, getAdminDashboardData, deleteShipment, bulkDeleteDelivered, markAsDelivered, cancelShipment } from '../actions/shipment';
+import { ShipmentForm } from './components/ShipmentForm';
+import { CreateShipmentDto } from '@/types/shipment';
+import { ChevronLeft, LayoutDashboard, List, Package, PlusCircle, Search } from 'lucide-react';
+
+// Components
 import { useI18n } from '@/components/I18nContext';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { LanguageToggle } from '@/components/LanguageToggle';
-import Link from 'next/link';
-import { APP_NAME } from '@/lib/constants';
+
+import { signIn, signOut, useSession } from "next-auth/react";
+import { Logo } from '@/components/Logo';
+import { StatsCards } from './components/StatsCards';
+import { RecentShipments } from './components/RecentShipments';
+import { ShipmentTable } from './components/ShipmentTable';
+import { SuccessDisplay } from './components/SuccessDisplay';
+
+
+type Tab = 'dashboard' | 'manage' | 'create';
 
 export default function AdminPage() {
     const { dict } = useI18n();
-    const [emailText, setEmailText] = useState('');
+    const { status } = useSession();
+    const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+
     const [trackingId, setTrackingId] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [copied, setCopied] = useState(false);
-    const [password, setPassword] = useState('');
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [shipments, setShipments] = useState<any[]>([]);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [stats, setStats] = useState({ total: 0, inTransit: 0, delivered: 0, pending: 0, canceled: 0 });
+    const [dataLoading, setDataLoading] = useState(false);
 
-    const handleLogin = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (password === 'admin123') {
-            setIsAuthenticated(true);
-            setError(null);
-        } else {
-            setError(dict.admin.wrongPassword);
+    const loadShipments = async () => {
+        setDataLoading(true);
+        try {
+            const result = await getAdminDashboardData();
+            if (result.success && result.shipments && result.stats) {
+                setShipments(result.shipments);
+                setStats(result.stats);
+            }
+        } finally {
+            setDataLoading(false);
         }
     };
 
-    const handleGenerate = async () => {
+    useEffect(() => {
+        if (status === 'authenticated') {
+            loadShipments();
+        }
+    }, [status]);
+
+    const handleCreateShipment = async (data: CreateShipmentDto) => {
         setError(null);
         setLoading(true);
         try {
-            const dto = parseEmail(emailText);
-            const result = await createShipment(dto);
+            const result = await createShipment(data);
             if (result.success) {
                 setTrackingId(result.trackingNumber ?? null);
+                loadShipments();
             } else {
                 setError(result.error ?? dict.admin.failedCreate);
             }
         } catch (err: any) {
-            setError(err.message || dict.admin.invalidEmail);
+            setError(err.message || dict.admin.failedCreate);
         } finally {
             setLoading(false);
         }
@@ -58,45 +82,68 @@ export default function AdminPage() {
 
     const handleBack = () => {
         setTrackingId(null);
-        setEmailText('');
+
         setCopied(false);
     };
 
-    if (!isAuthenticated) {
-        return (
-            <div className="min-h-screen flex flex-col items-center p-4">
-                <header className="w-full max-w-5xl py-6 flex justify-between items-center mb-20">
-                    <Link href="/" className="flex items-center gap-3 font-extrabold text-2xl tracking-tighter">
-                        <div className="bg-accent p-2 rounded-xl">
-                            <Package className="text-white" size={24} />
-                        </div>
-                        <span className="text-gradient uppercase">{APP_NAME}</span>
-                    </Link>
-                    <div className="hidden md:flex items-center gap-8 mr-12 text-sm font-medium text-gray-400">
-                        <Link href="/about" className="hover:text-accent transition-colors">{dict.common.about}</Link>
-                        <Link href="/contact" className="hover:text-accent transition-colors">{dict.common.contact}</Link>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <LanguageToggle />
-                        <ThemeToggle />
-                    </div>
-                </header>
+    const handleDelete = async (trackingNumber: string) => {
+        if (confirm(dict.admin.confirmDelete)) {
+            const result = await deleteShipment(trackingNumber);
+            if (result.success) {
+                loadShipments();
+            }
+        }
+    };
 
-                <div className="max-w-md w-full p-8 glass-panel animate-fade-in mt-12">
-                    <h1 className="text-2xl font-black text-text-main mb-6 text-center">{dict.admin.loginTitle}</h1>
-                    <form onSubmit={handleLogin} className="space-y-4">
-                        <input
-                            type="password"
-                            placeholder={dict.admin.loginPlaceholder}
-                            className="w-full bg-surface-muted border border-border p-3 rounded-xl text-text-main focus:border-accent outline-none transition-all"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                        />
-                        {error && <p className="text-error text-sm text-center font-bold tracking-tight">{error}</p>}
-                        <button type="submit" className="btn-primary w-full py-4 text-lg uppercase tracking-widest">
-                            {dict.admin.loginButton}
-                        </button>
-                    </form>
+    const handleBulkDelete = async () => {
+        if (confirm(dict.admin.confirmBulkDelete)) {
+            const result = await bulkDeleteDelivered();
+            if (result.success) {
+                loadShipments();
+            }
+        }
+    };
+
+    const handleMarkDelivered = async (trackingNumber: string) => {
+        const result = await markAsDelivered(trackingNumber);
+        if (result.success) {
+            loadShipments();
+        }
+    };
+
+    const handleCancel = async (trackingNumber: string) => {
+        if (confirm('Are you sure you want to cancel this shipment?')) {
+            const result = await cancelShipment(trackingNumber);
+            if (result.success) {
+                loadShipments();
+            } else {
+                alert(result.error);
+            }
+        }
+    };
+
+    const filteredShipments = shipments.filter(s =>
+        s.trackingNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        s.receiverName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        s.senderName?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    useEffect(() => {
+        if (status === "unauthenticated") {
+            signIn();
+        }
+    }, [status]);
+
+    if (status === "loading" || status === "unauthenticated") {
+        return (
+            <div className="min-h-screen flex items-center justify-center p-4">
+                <div className="flex flex-col items-center gap-4 animate-pulse">
+                    <div className="bg-accent p-3 rounded-2xl">
+                        <Package className="text-white" size={32} />
+                    </div>
+                    <p className="text-text-muted font-black uppercase tracking-widest text-sm">
+                        {status === "loading" ? "Initializing..." : "Redirecting to login..."}
+                    </p>
                 </div>
             </div>
         );
@@ -104,94 +151,93 @@ export default function AdminPage() {
 
     if (trackingId) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] p-4 text-center animate-fade-in space-y-8">
-                <div className="space-y-2">
-                    <h2 className="text-3xl font-black text-success tracking-tight uppercase">{dict.admin.success}</h2>
-                    <p className="text-text-muted font-medium">{dict.admin.successDesc}</p>
-                </div>
-
-                <div className="w-full max-w-md bg-surface border border-border rounded-2xl p-8 shadow-xl flex flex-col items-center gap-4 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-success/5 rounded-full -mr-16 -mt-16 blur-2xl" />
-                    <span className="text-xs text-text-muted uppercase tracking-widest font-black">{dict.shipment.trackingId}</span>
-                    <span className="text-4xl font-mono text-text-main font-black tracking-widest break-all">
-                        {trackingId}
-                    </span>
-                </div>
-
-                <div className="flex flex-col w-full max-w-sm gap-4">
-                    <button
-                        onClick={handleCopy}
-                        className="btn-primary flex items-center justify-center gap-2 py-4 text-lg w-full"
-                    >
-                        {copied ? <Check /> : <Copy />}
-                        {copied ? dict.admin.copied : dict.admin.copy}
-                    </button>
-                    <button
-                        onClick={handleBack}
-                        className="flex items-center justify-center gap-2 text-gray-400 hover:text-white py-2 transition-colors"
-                    >
-                        <ChevronLeft size={20} />
-                        {dict.admin.createAnother}
-                    </button>
-                </div>
-            </div>
+            <SuccessDisplay
+                trackingId={trackingId}
+                copied={copied}
+                onCopy={handleCopy}
+                onBack={handleBack}
+                dict={dict}
+            />
         );
     }
 
     return (
-        <div className="max-w-xl mx-auto p-4 flex flex-col gap-6 py-12">
-            <header className="flex justify-between items-center mb-8">
-                <Link href="/" className="flex items-center gap-3 font-extrabold text-2xl tracking-tighter">
-                    <div className="bg-accent p-2 rounded-xl shadow-lg shadow-accent/20">
-                        <Package className="text-white" size={24} />
-                    </div>
-                    <span className="text-gradient uppercase">{APP_NAME}</span>
-                </Link>
-                <div className="hidden md:flex items-center gap-8 mr-12 text-sm font-medium text-gray-400">
-                    <Link href="/about" className="hover:text-accent transition-colors">{dict.common.about}</Link>
-                    <Link href="/contact" className="hover:text-accent transition-colors">{dict.common.contact}</Link>
-                </div>
-                <div className="flex items-center gap-4">
-                    <LanguageToggle />
-                    <ThemeToggle />
-                </div>
-            </header>
+        <div className="min-h-screen pt-24 md:pt-32 px-6">
 
-            <div className="space-y-4">
-                <div className="bg-surface-muted p-6 rounded-2xl border border-border text-sm text-text-muted font-medium">
-                    <p className="font-black mb-2 text-text-main uppercase tracking-widest text-xs">{dict.admin.instructions}</p>
-                    <ul className="list-disc pl-4 space-y-2">
-                        <li>{dict.admin.step1}</li>
-                        <li>{dict.admin.step2}</li>
-                        <li>{dict.admin.step3}</li>
-                    </ul>
+            {/* Tabs */}
+            <div className="max-w-7xl mx-auto mb-6 sm:mb-8">
+                <div className="flex gap-2 sm:gap-4 border-b border-border overflow-x-auto">
+                    {[
+                        { id: 'dashboard', icon: LayoutDashboard, label: dict.admin.dashboard },
+                        { id: 'manage', icon: List, label: dict.admin.manageShipments },
+                        { id: 'create', icon: PlusCircle, label: dict.admin.createNew }
+                    ].map((tab) => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id as Tab)}
+                            className={`flex items-center gap-2 px-4 sm:px-6 py-3 sm:py-4 font-black text-xs sm:text-sm uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === tab.id
+                                ? 'text-accent border-b-2 border-accent'
+                                : 'text-text-muted hover:text-text-main'
+                                }`}
+                        >
+                            <tab.icon size={16} />
+                            {tab.label}
+                        </button>
+                    ))}
                 </div>
+            </div>
 
-                <textarea
-                    className="w-full h-64 bg-surface text-text-main p-6 rounded-2xl border border-border focus:border-accent outline-none resize-none font-mono text-sm transition-all shadow-inner"
-                    placeholder={dict.admin.placeholder}
-                    value={emailText}
-                    onChange={(e) => setEmailText(e.target.value)}
-                />
-
-                {error && (
-                    <div className="p-3 bg-red-500/10 border border-red-500/50 rounded-xl text-red-300 text-sm">
-                        {error}
+            <div className="max-w-7xl mx-auto">
+                {/* Dashboard Tab */}
+                {activeTab === 'dashboard' && (
+                    <div className="space-y-6 sm:space-y-8 animate-fade-in">
+                        <StatsCards stats={stats} dataLoading={dataLoading} dict={dict} />
+                        <RecentShipments shipments={shipments} dataLoading={dataLoading} dict={dict} />
                     </div>
                 )}
 
-                <button
-                    disabled={loading || !emailText.trim()}
-                    onClick={handleGenerate}
-                    className="btn-primary w-full py-4 text-lg flex items-center justify-center gap-2"
-                >
-                    {loading ? dict.common.loading : dict.admin.generate}
-                </button>
+                {/* Manage Tab */}
+                {activeTab === 'manage' && (
+                    <div className="space-y-4 sm:space-y-6 animate-fade-in">
+                        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                            <div className="relative flex-1">
+                                <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-text-muted" size={18} />
+                                <input
+                                    type="text"
+                                    placeholder={dict.admin.search}
+                                    className="w-full pl-10 sm:pl-12 pr-4 py-3 bg-surface-muted border border-border rounded-xl text-text-main focus:border-accent outline-none transition-all text-sm sm:text-base"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                />
+                            </div>
+                            <button
+                                onClick={handleBulkDelete}
+                                className="px-4 sm:px-6 py-3 bg-error/10 hover:bg-error text-error hover:text-white rounded-xl font-black text-xs sm:text-sm uppercase tracking-widest transition-all whitespace-nowrap"
+                            >
+                                {dict.admin.bulkDelete}
+                            </button>
+                        </div>
 
-                <Link href="/" className="flex items-center justify-center gap-2 text-gray-400 hover:text-white py-2 transition-colors">
-                    <ChevronLeft size={20} />
-                    {dict.common.home}
-                </Link>
+                        <ShipmentTable
+                            shipments={filteredShipments}
+                            dataLoading={dataLoading}
+                            dict={dict}
+                            onMarkDelivered={handleMarkDelivered}
+                            onCancel={handleCancel}
+                            onDelete={handleDelete}
+                        />
+                    </div>
+                )}
+
+                {/* Create Tab */}
+                {activeTab === 'create' && (
+                    <ShipmentForm
+                        onSubmit={handleCreateShipment}
+                        loading={loading}
+                        error={error}
+                        marketingDict={dict}
+                    />
+                )}
             </div>
         </div>
     );

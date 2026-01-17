@@ -1,4 +1,4 @@
-export type ShipmentStatus = 'PENDING' | 'IN_TRANSIT' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELLED';
+export type ShipmentStatus = 'PENDING' | 'IN_TRANSIT' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELED';
 
 export interface ShipmentEvent {
     id: string;
@@ -13,10 +13,24 @@ export interface ShipmentData {
     trackingNumber: string;
     status: ShipmentStatus;
     senderName: string | null;
+    senderCountry?: string | null;
     receiverName: string | null;
     receiverAddress: string | null;
     receiverCountry: string | null;
     receiverPhone: string | null;
     isArchived: boolean;
     events: ShipmentEvent[];
+    originCoords?: [number, number];
+    destinationCoords?: [number, number];
+    estimatedDelivery?: string | Date;
 }
+
+export interface CreateShipmentDto {
+    receiverName: string;
+    receiverAddress: string;
+    receiverCountry: string;
+    receiverPhone: string;
+    senderName: string;
+    senderCountry: string;
+}
+

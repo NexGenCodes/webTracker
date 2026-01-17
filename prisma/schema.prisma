@@ -14,11 +14,18 @@ model Shipment {
   status          String 
   
   senderName      String?
+  senderCountry   String?
   receiverName    String?
   receiverEmail   String?
   receiverAddress String?
   receiverCountry String?
   receiverPhone   String?
+  whatsappMessageId String?  @unique
+  whatsappFrom    String?
+  
+  // Idempotency fields to prevent duplicate processing
+  lastNotifiedAt   DateTime?
+  lastTransitionAt DateTime?
 
   events          Event[]
   
@@ -35,4 +42,16 @@ model Event {
   location    String
   timestamp   DateTime @default(now())
   notes       String?
+}
+
+model NotificationQueue {
+  id                String   @id @default(cuid())
+  trackingNumber    String
+  whatsappMessageId String
+  whatsappFrom      String
+  status            String
+  message           String
+  retryCount        Int      @default(0)
+  lastAttempt       DateTime @default(now())
+  createdAt         DateTime @default(now())
 }

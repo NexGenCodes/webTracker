@@ -26,6 +26,10 @@ export const metadata: Metadata = {
   description: APP_DESCRIPTION,
 };
 
+import { ClientTransitionProvider } from "@/components/ClientTransitionProvider";
+import AuthProvider from "@/components/AuthProvider";
+import { LayoutHeader } from "@/components/LayoutHeader";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -38,7 +42,12 @@ export default function RootLayout({
       >
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
           <I18nProvider>
-            {children}
+            <LayoutHeader />
+            <ClientTransitionProvider>
+              <AuthProvider>
+                {children}
+              </AuthProvider>
+            </ClientTransitionProvider>
           </I18nProvider>
         </ThemeProvider>
       </body>

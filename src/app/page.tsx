@@ -8,7 +8,6 @@ import { CheckCircle, MapPin, AlertCircle, ShieldCheck, Globe, Zap, Copy, Check,
 import { cn } from '@/lib/utils';
 import { ShipmentData } from '@/types/shipment';
 import { useI18n } from '@/components/I18nContext';
-import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 import { FeatureCard } from '@/components/FeatureCard';
 
@@ -65,29 +64,50 @@ export default function Home() {
 
       <div className="w-full max-w-7xl flex flex-col flex-1 px-6 pt-32 md:pt-40 relative z-10">
 
-        <Header />
 
         {/* Hero Section */}
-        <div className={cn(
-          "transition-all duration-1000 cubic-bezier(0.16, 1, 0.3, 1)",
-          shippingData ? "py-8 opacity-50 blur-sm scale-95" : "py-24 md:py-32"
-        )}>
-          <div className="max-w-2xl mx-auto text-center mb-12">
-            {!shippingData && (
+        {!shippingData && (
+          <div className="py-24 md:py-32">
+            <div className="max-w-2xl mx-auto text-center mb-12">
               <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-accent/10 border border-accent/20 text-accent text-xs font-bold uppercase tracking-widest mb-6 animate-fade-in">
                 <ShieldCheck size={14} />
                 {dict.common.safeLogistics}
               </div>
-            )}
-            <TrackingSearch onSearch={handleSearch} isLoading={loading} />
+              <TrackingSearch onSearch={handleSearch} isLoading={loading} />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Error */}
         {error && (
           <div className="w-full max-w-xl mx-auto p-5 bg-error/10 border border-error/20 rounded-2xl flex items-center gap-4 text-error animate-fade-in mb-12">
             <AlertCircle />
             <p className="font-medium">{error}</p>
+          </div>
+        )}
+
+        {/* Arrival Notification */}
+        {shippingData && shippingData.status === 'OUT_FOR_DELIVERY' && (
+          <div className="w-full max-w-2xl mx-auto mb-8 animate-fade-in">
+            <div className="glass-panel p-6 md:p-8 border-accent/30 bg-accent/5 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-accent/10 rounded-full -mr-32 -mt-32 blur-3xl" />
+              <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center gap-4">
+                <div className="w-16 h-16 bg-accent rounded-2xl flex items-center justify-center shrink-0">
+                  <Package size={32} className="text-white" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-xl md:text-2xl font-black text-accent mb-2 uppercase tracking-tight">
+                    📦 Package Arrived!
+                  </h3>
+                  <p className="text-text-muted font-bold mb-3">
+                    Our local agent will contact you shortly.
+                  </p>
+                  <div className="flex items-center gap-2 text-sm font-black text-accent/80">
+                    <span>Expected delivery: Tomorrow, 8:00 AM - 10:00 AM</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -128,7 +148,19 @@ export default function Home() {
                 </div>
               </div>
 
-              {shippingData.isArchived ? (
+              {shippingData.status === 'CANCELED' ? (
+                <div className="py-24 flex flex-col items-center text-center">
+                  <div className="w-32 h-32 bg-error/10 rounded-[3rem] flex items-center justify-center mb-10 shadow-inner">
+                    <AlertCircle className="w-16 h-16 text-error" />
+                  </div>
+                  <div className="max-w-2xl">
+                    <h3 className="text-5xl md:text-7xl font-black mb-6 tracking-tighter uppercase text-error">Shipment Canceled</h3>
+                    <p className="text-text-muted text-xl leading-relaxed font-bold opacity-80">
+                      This shipment has been canceled by the administrator. Please contact support for more details.
+                    </p>
+                  </div>
+                </div>
+              ) : shippingData.isArchived ? (
                 <div className="py-24 flex flex-col items-center text-center">
                   <div className="w-32 h-32 bg-success/10 rounded-[3rem] flex items-center justify-center mb-10 shadow-inner rotate-3 transition-transform hover:rotate-0 duration-500">
                     <CheckCircle className="w-16 h-16 text-success" />
@@ -196,13 +228,11 @@ export default function Home() {
                   </div>
 
                   <div className="lg:col-span-7 flex flex-col h-full">
-                    <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-accent mb-8 flex items-center gap-4">
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-accent mb-4 sm:mb-6 md:mb-8 flex items-center gap-4">
                       {dict.shipment.liveLocation}
                       <span className="h-px flex-1 bg-accent/20" />
                     </h4>
-                    <div className="flex-1 rounded-[2.5rem] overflow-hidden border border-border shadow-3xl relative z-0 min-h-[500px]">
-                      <ShipmentMap locationName={shippingData.events?.[0]?.location || dict.common.default} />
-                    </div>
+                    <ShipmentMap shipmentData={shippingData} />
                   </div>
                 </div>
               )}

@@ -4,6 +4,7 @@ export type CreateShipmentDto = {
     receiverCountry: string;
     receiverPhone: string;
     senderName: string;
+    senderCountry: string;
 }
 
 export function parseEmail(emailBody: string): CreateShipmentDto {
@@ -16,6 +17,7 @@ export function parseEmail(emailBody: string): CreateShipmentDto {
         receiverCountry: /(?:Country|Destination):\s*(.*)/i,
         receiverPhone: /(?:Phone|Contact|Tel):\s*(.*)/i,
         senderName: /(?:Sender|From|Originator):\s*(.*)/i,
+        senderCountry: /(?:Sender Country|Origin Country|From Country):\s*(.*)/i,
     };
 
     Object.entries(patterns).forEach(([key, regex]) => {
@@ -32,6 +34,7 @@ export function parseEmail(emailBody: string): CreateShipmentDto {
     if (!data.receiverCountry) missing.push('Country');
     if (!data.receiverPhone) missing.push('Phone');
     if (!data.senderName) missing.push('Sender Name');
+    if (!data.senderCountry) missing.push('Sender Country');
 
     if (missing.length > 0) {
         throw new Error(`Missing information: ${missing.join(', ')}. Please Ensure these labels are present in the email.`);

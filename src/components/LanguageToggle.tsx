@@ -11,6 +11,9 @@ const languages: { code: Locale; label: string }[] = [
     { code: 'es', label: 'Español' },
     { code: 'de', label: 'Deutsch' },
     { code: 'zh', label: '中文' },
+    { code: 'pt', label: 'Português' },
+    { code: 'it', label: 'Italiano' },
+    { code: 'ar', label: 'العربية' },
 ];
 
 export const LanguageToggle = memo(() => {

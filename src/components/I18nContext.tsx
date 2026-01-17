@@ -7,9 +7,13 @@ interface I18nContextProps {
     locale: Locale;
     setLocale: (locale: Locale) => void;
     dict: Dictionary;
+    isRTL: boolean;
 }
 
 const I18nContext = createContext<I18nContextProps | undefined>(undefined);
+
+// RTL languages
+const RTL_LOCALES: Locale[] = ['ar'];
 
 export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [locale, setLocaleState] = useState<Locale>('en');
@@ -21,16 +25,26 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     }, []);
 
+    // Apply RTL direction to document
+    useEffect(() => {
+        const isRTL = RTL_LOCALES.includes(locale);
+        document.documentElement.dir = isRTL ? 'rtl' : 'ltr';
+        document.documentElement.lang = locale;
+    }, [locale]);
+
     const setLocale = React.useCallback((newLocale: Locale) => {
         setLocaleState(newLocale);
         localStorage.setItem('locale', newLocale);
     }, []);
 
+    const isRTL = RTL_LOCALES.includes(locale);
+
     const contextValue = React.useMemo(() => ({
         locale,
         setLocale,
-        dict: dictionaries[locale]
-    }), [locale, setLocale]);
+        dict: dictionaries[locale],
+        isRTL
+    }), [locale, setLocale, isRTL]);
 
     return (
         <I18nContext.Provider value={contextValue}>
