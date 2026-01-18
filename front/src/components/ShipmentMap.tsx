@@ -25,8 +25,6 @@ interface ShipmentMapProps {
 // --- Icons SVGs ---
 const TruckIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white drop-shadow-md"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>`;
 const PlaneIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white drop-shadow-md"><path d="M2 12h20"></path><path d="M13 2l5.36 8.04"></path><path d="M6 12l2.36 7.09"></path><path d="M19 12l-4-8"></path><path d="M16 22l-4-8"></path></svg>`; // Simplified plane
-const CloudIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" class="text-gray-400/80"><path d="M17.5,19c-3.037,0-5.5-2.463-5.5-5.5c0-1.054,0.298-2.044,0.814-2.887C11.967,10.229,11,9.221,11,8c0-2.209,1.791-4,4-4 c1.812,0,3.339,1.21,3.834,2.836C19.166,6.864,19.571,6.875,20,6.875c2.209,0,4,1.791,4,4c0,2.152-1.699,3.906-3.831,3.996 C20.088,14.939,20,15.654,20,16.5C20,17.881,18.881,19,17.5,19z"></path></svg>`;
-const SunIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" class="text-yellow-400/80"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`;
 
 // Helper to generate a curved path (arc) between two points
 const generateArc = (start: [number, number], end: [number, number], steps: number = 100): [number, number][] => {
@@ -91,13 +89,7 @@ const ShipmentMap: React.FC<ShipmentMapProps> = ({ shipmentData }) => {
     // @ts-ignore
     const VehicleSVG = isLongJorney ? PlaneIconSVG : TruckIconSVG;
 
-    // Simulated Weather Points
-    const weatherPoints = useMemo(() => {
-        const points = [];
-        if (arcPath.length > 50) points.push({ pos: arcPath[40], icon: SunIconSVG });
-        if (arcPath.length > 150) points.push({ pos: arcPath[120], icon: CloudIconSVG });
-        return points;
-    }, [arcPath]);
+    const isActive = shipmentData.status === 'IN_TRANSIT' || shipmentData.status === 'OUT_FOR_DELIVERY';
 
     useEffect(() => {
         setIsMounted(true);
@@ -177,13 +169,6 @@ const ShipmentMap: React.FC<ShipmentMapProps> = ({ shipmentData }) => {
         iconAnchor: [16, 16]
     }) : null;
 
-    const weatherIcon = (svg: string) => typeof window !== 'undefined' ? L.divIcon({
-        className: 'weather-icon',
-        html: `<div class="drop-shadow-sm opacity-80 animate-bounce" style="animation-duration: 3s;">${svg}</div>`,
-        iconSize: [24, 24],
-        iconAnchor: [12, 12]
-    }) : null;
-
 
     if (!isMounted) return <div className="h-[300px] w-full bg-surface-muted animate-pulse rounded-2xl" />;
 
@@ -233,7 +218,7 @@ const ShipmentMap: React.FC<ShipmentMapProps> = ({ shipmentData }) => {
             `}>
                 <button
                     onClick={toggleFullscreen}
-                    className="absolute top-4 right-4 z-[400] bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 p-2 rounded-lg shadow-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border border-border"
+                    className="absolute top-4 right-4 z-10 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 p-2 rounded-lg shadow-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border border-border"
                     title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
                 >
                     {isFullscreen ? (
@@ -243,21 +228,21 @@ const ShipmentMap: React.FC<ShipmentMapProps> = ({ shipmentData }) => {
                     )}
                 </button>
 
-                <div className="absolute top-4 left-4 z-[400] flex flex-col gap-2">
+                <div className="absolute top-4 left-4 z-10 flex flex-col gap-2">
                     <div className="bg-white/90 dark:bg-gray-900/90 backdrop-blur-md px-4 py-2 rounded-xl border border-white/20 shadow-lg flex items-center gap-3">
                         <div className="relative">
-                            <div className="w-3 h-3 rounded-full bg-success shadow-[0_0_10px_rgba(34,197,94,0.5)]" />
-                            <div className="absolute inset-0 rounded-full bg-success animate-ping opacity-75"></div>
+                            <div className={`w-3 h-3 rounded-full ${isActive ? 'bg-success shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-gray-400'}`} />
+                            {isActive && <div className="absolute inset-0 rounded-full bg-success animate-ping opacity-75"></div>}
                         </div>
                         <div>
                             <p className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest leading-none mb-0.5">Telemetry</p>
-                            <p className="text-xs font-bold text-gray-800 dark:text-gray-100 uppercase tracking-wide leading-none">{dict.map.liveTelemetry}</p>
+                            <p className="text-xs font-bold text-gray-800 dark:text-gray-100 uppercase tracking-wide leading-none">{isActive ? dict.map.liveTelemetry : 'Offline'}</p>
                         </div>
                     </div>
                 </div>
 
                 {isFullscreen && (
-                    <div className="absolute bottom-8 left-8 z-[400] w-64 bg-slate-900/80 backdrop-blur-xl border border-white/10 p-4 rounded-2xl text-white shadow-2xl">
+                    <div className="absolute bottom-8 left-8 z-10 w-64 bg-slate-900/80 backdrop-blur-xl border border-white/10 p-4 rounded-2xl text-white shadow-2xl">
                         <div className="flex justify-between items-end mb-4">
                             <div>
                                 <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-1">Package Status</p>
@@ -266,12 +251,12 @@ const ShipmentMap: React.FC<ShipmentMapProps> = ({ shipmentData }) => {
                             <div className="text-right">
                                 <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-1">Speed</p>
                                 <p className="text-lg font-bold text-accent leading-none">
-                                    {isLongJorney ? '~860 km/h' : '~95 km/h'}
+                                    {isActive ? (isLongJorney ? '~860 km/h' : '~95 km/h') : '0 km/h'}
                                 </p>
                             </div>
                         </div>
                         <div className="h-1.5 w-full bg-slate-700 rounded-full overflow-hidden mb-2">
-                            <div className="h-full bg-gradient-to-r from-blue-500 to-accent" style={{ width: `${progress * 100}%` }} />
+                            <div className="h-full bg-linear-to-r from-blue-500 to-accent" style={{ width: `${progress * 100}%` }} />
                         </div>
                         <div className="flex justify-between text-[10px] text-slate-400 font-mono uppercase">
                             <span>{Math.round(bearing)}° HEAD</span>
@@ -290,24 +275,35 @@ const ShipmentMap: React.FC<ShipmentMapProps> = ({ shipmentData }) => {
                 >
                     <TileLayer url={tileLayerUrl} />
 
+                    {/* Base Track (The full planned route) - Muted & Dashed */}
+                    <Polyline
+                        positions={arcPath}
+                        pathOptions={{
+                            color: resolvedTheme === 'dark' ? '#334155' : '#64748b', // Slate-700 (dark) vs Slate-500 (light)
+                            weight: 3,
+                            opacity: 0.8,
+                            dashArray: '6, 8',
+                            lineCap: 'round'
+                        }}
+                    />
+
+                    {/* Progress Track (Traveled distance) - Solid Accent */}
                     <Polyline
                         positions={traveledPath}
-                        pathOptions={{ color: 'hsl(var(--accent))', weight: 4, opacity: 1, lineCap: 'round' }}
-                    />
-                    <Polyline
-                        positions={remainingPath}
-                        pathOptions={{ color: 'hsl(var(--accent))', weight: 3, opacity: 0.4, dashArray: '10, 10', lineCap: 'round' }}
+                        pathOptions={{
+                            color: 'hsl(var(--accent))',
+                            weight: 4,
+                            opacity: 1,
+                            lineCap: 'round',
+                            // shadowBlur: 10, // Not a standard Leaflet Polyline option
+                            // shadowColor: 'hsl(var(--accent))' // Not a standard Leaflet Polyline option
+                        }}
                     />
 
                     {originIcon && <Marker position={origin} icon={originIcon} />}
                     {destinationIcon && <Marker position={destination} icon={destinationIcon} />}
 
-                    {weatherPoints.map((w, i) => {
-                        const icon = weatherIcon(w.icon);
-                        return icon ? <Marker key={i} position={w.pos} icon={icon} /> : null;
-                    })}
-
-                    {vehicleIcon && progress > 0 && progress < 1 && (
+                    {vehicleIcon && isActive && progress > 0 && progress < 1 && (
                         <Marker position={currentPosition} icon={vehicleIcon} />
                     )}
 
