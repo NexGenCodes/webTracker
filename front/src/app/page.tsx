@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, Suspense } from 'react';
 import dynamic from 'next/dynamic';
+import { useSearchParams } from 'next/navigation';
 import { TrackingSearch } from '@/components/TrackingSearch';
 import { getTracking } from './actions/shipment';
 import { CheckCircle, MapPin, AlertCircle, ShieldCheck, Globe, Zap, Copy, Check, Package } from 'lucide-react';
@@ -16,20 +17,17 @@ const ShipmentMap = dynamic(() => import('@/components/ShipmentMap'), {
   loading: () => <div className="h-[300px] w-full bg-surface-muted animate-pulse rounded-2xl mt-8"></div>
 });
 
-export default function Home() {
+function HomeContent() {
   const { dict } = useI18n();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [shippingData, setShippingData] = useState<ShipmentData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const copyToClipboard = useCallback((text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }, []);
+  const initialId = searchParams.get('id');
 
-  const handleSearch = async (trackingNumber: string) => {
+  const handleSearch = useCallback(async (trackingNumber: string) => {
     setLoading(true);
     setError(null);
     setShippingData(null);
@@ -46,7 +44,20 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [dict]);
+
+  // Deep linking effect
+  useEffect(() => {
+    if (initialId) {
+      handleSearch(initialId);
+    }
+  }, [initialId, handleSearch]);
+
+  const copyToClipboard = useCallback((text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, []);
 
   return (
     <main className="min-h-screen flex flex-col items-center overflow-x-hidden relative">
@@ -240,7 +251,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* Placeholder Features */}
         {!shippingData && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-24 animate-fade-in delay-200">
             <FeatureCard
@@ -264,5 +274,17 @@ export default function Home() {
         <Footer />
       </div>
     </main>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent"></div>
+      </div>
+    }>
+      <HomeContent />
+    </Suspense>
   );
 }
