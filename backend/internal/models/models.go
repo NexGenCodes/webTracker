@@ -92,3 +92,7 @@ type Job struct {
 func StrPtr(s string) *string {
 	return &s
 }
+
+func Uint64Ptr(u uint64) *uint64 {
+	return &u
+}

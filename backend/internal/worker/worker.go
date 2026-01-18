@@ -10,6 +10,7 @@ import (
 	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/parser"
 	"webtracker-bot/internal/supabase"
+	"webtracker-bot/internal/utils"
 	"webtracker-bot/internal/whatsapp"
 
 	"go.mau.fi/whatsmeow"
@@ -88,7 +89,7 @@ func (w *Worker) process(job models.Job) {
 	logger.GlobalVitals.IncParseSuccess()
 
 	// 5. Duplicate Check
-	exists, tracking, err := w.DB.CheckDuplicate(m.ReceiverPhone)
+	exists, tracking, err := w.DB.CheckDuplicate(context.Background(), m.ReceiverPhone)
 	if err == nil && exists {
 		logger.GlobalVitals.IncDuplicate()
 		msg := fmt.Sprintf("📂 *DUPLICATE RECORD*\n\n━━━━━━━━━━━━━━━━━━━━━━━\nTracking ID: *%s*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n_A shipment with this phone number already exists._", tracking)
@@ -97,7 +98,7 @@ func (w *Worker) process(job models.Job) {
 	}
 
 	// 6. Insert
-	id, err := w.DB.InsertShipment(m, job.SenderPhone)
+	id, err := w.DB.InsertShipment(context.Background(), m, job.SenderPhone)
 	if err != nil {
 		logger.GlobalVitals.IncInsertFailure()
 		w.Sender.Reply(job.ChatJID, job.SenderJID, "❌ *SYSTEM ERROR*\n_Saving failed. Please contact your admin._", job.MessageID, job.Text)
@@ -105,12 +106,53 @@ func (w *Worker) process(job models.Job) {
 	}
 	logger.GlobalVitals.IncInsertSuccess()
 
-	// 7. Success
-	successMsg := fmt.Sprintf("📦 *PACKAGE SHIPPING CREATED*\n\n━━━━━━━━━━━━━━━━━━━━━━━\nTracking ID: *%s*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n📌 *Track your package:*\nhttps://web-tracker-iota.vercel.app?id=%s\n\n_", id, id)
-	if m.IsAI {
-		successMsg += "\n_✨ Parsed by AI_"
+	// 7. Fetch full shipment for receipt
+	shipment, err := w.DB.GetShipment(context.Background(), id)
+	if err != nil || shipment == nil {
+		logger.Warn().Err(err).Str("tracking_id", id).Msg("Failed to fetch shipment for receipt")
+		// Fallback to text-only success
+		textMsg := fmt.Sprintf("📦 *PACKAGE SHIPPING CREATED*\n\n━━━━━━━━━━━━━━━━━━━━━━━\nTracking ID: *%s*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n📌 *Track your package:*\nhttps://web-tracker-iota.vercel.app?id=%s", id, id)
+		if m.IsAI {
+			textMsg += "\n\n_✨ Parsed by AI_"
+		}
+		w.Sender.Reply(job.ChatJID, job.SenderJID, textMsg, job.MessageID, job.Text)
+		return
 	}
-	w.Sender.Reply(job.ChatJID, job.SenderJID, successMsg, job.MessageID, job.Text)
+
+	// 8. Generate receipt image
+	receiptImg, err := utils.RenderReceipt(*shipment, w.CompanyName)
+	if err != nil {
+		logger.Warn().Err(err).Str("tracking_id", id).Msg("Receipt render failed, sending text")
+		// Fallback to text-only success
+		textMsg := fmt.Sprintf("📦 *PACKAGE SHIPPING CREATED*\n\n━━━━━━━━━━━━━━━━━━━━━━━\nTracking ID: *%s*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n📌 *Track your package:*\nhttps://web-tracker-iota.vercel.app?id=%s", id, id)
+		if m.IsAI {
+			textMsg += "\n\n_✨ Parsed by AI_"
+		}
+		w.Sender.Reply(job.ChatJID, job.SenderJID, textMsg, job.MessageID, job.Text)
+		return
+	}
+
+	// 9. Send receipt image (quoted reply to manifest)
+	caption := "📦 *PACKAGE SHIPPING CREATED*"
+	if m.IsAI {
+		caption += "\n\n_✨ Parsed by AI_"
+	}
+
+	err = w.Sender.SendImage(job.ChatJID, job.SenderJID, receiptImg, caption, job.MessageID, job.Text)
+	if err != nil {
+		logger.Warn().Err(err).Msg("Failed to send receipt image, sending text fallback")
+		// Fallback to text if image send fails
+		textMsg := fmt.Sprintf("📦 *PACKAGE SHIPPING CREATED*\n\n━━━━━━━━━━━━━━━━━━━━━━━\nTracking ID: *%s*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n📌 *Track your package:*\nhttps://web-tracker-iota.vercel.app?id=%s", id, id)
+		if m.IsAI {
+			textMsg += "\n\n_✨ Parsed by AI_"
+		}
+		w.Sender.Reply(job.ChatJID, job.SenderJID, textMsg, job.MessageID, job.Text)
+		return
+	}
+
+	// 10. Send tracking ID as follow-up message
+	trackingMsg := fmt.Sprintf("🔗 *Tracking ID:* %s\n\n📌 *Track your package:*\nhttps://web-tracker-iota.vercel.app?id=%s", id, id)
+	w.Sender.Send(job.ChatJID, trackingMsg)
 }
 
 func (w *Worker) isPotentialManifest(text string) (bool, bool) {
