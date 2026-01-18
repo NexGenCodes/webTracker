@@ -28,7 +28,7 @@ export const Footer: React.FC<FooterProps> = ({ minimal = false, className }) =>
 
     return (
         <footer className={cn("mt-auto py-24 border-t border-border", className)}>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-16 mb-20">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-10 md:gap-16 mb-20">
                 <div className="col-span-1 md:col-span-1">
                     <Logo className="mb-8" iconClassName="group-hover:rotate-12" />
                     <p className="text-text-muted text-sm leading-relaxed mb-8 font-medium">

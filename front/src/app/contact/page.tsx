@@ -35,31 +35,15 @@ export default function ContactPage() {
         if (result.success) {
             setSubmitted(true);
             setError(null);
-            toast.success(dict.contact.success + '! ' + dict.contact.successDesc, {
-                duration: 5000,
-                position: 'top-center',
-                style: {
-                    background: 'hsl(var(--success))',
-                    color: 'white',
-                    fontWeight: 'bold',
-                    padding: '16px 24px',
-                    borderRadius: '12px',
-                },
+            toast.success(dict.contact.success, {
+                icon: '📧',
             });
             // Reset form
             formRef.current?.reset();
         } else {
             setError(result.error || 'Failed to send message');
             toast.error(result.error || 'Failed to send message', {
-                duration: 4000,
-                position: 'top-center',
-                style: {
-                    background: '#ef4444',
-                    color: 'white',
-                    fontWeight: 'bold',
-                    padding: '16px 24px',
-                    borderRadius: '12px',
-                },
+                icon: '❌',
             });
         }
 

@@ -22,8 +22,8 @@ export const Logo: React.FC<LogoProps> = memo(({ className, iconClassName }) => 
                     <Package className={cn("text-accent transition-transform duration-500 group-hover:text-white", iconClassName)} size={22} strokeWidth={2.5} />
                 </div>
             </div>
-            <div className="flex flex-col">
-                <span className="text-gradient uppercase font-black text-2xl leading-none tracking-tighter">
+            <div className="hidden min-[470px]:flex flex-col">
+                <span className="text-gradient uppercase font-black text-lg sm:text-2xl leading-none tracking-tighter">
                     {APP_NAME}
                 </span>
                 <span className="text-[9px] font-black uppercase tracking-[0.4em] text-text-muted opacity-60 ml-0.5 mt-1">
