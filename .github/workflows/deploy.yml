@@ -33,6 +33,7 @@ jobs:
           port: 22
           script: |
             sudo mkdir -p /opt/webtracker
+            sudo mkdir -p /opt/webtracker/internal/utils
             sudo chown -R ${{ secrets.EC2_USER }}:${{ secrets.EC2_USER }} /opt/webtracker
             sudo chmod -R 755 /opt/webtracker
             
@@ -48,7 +49,7 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
-          source: "backend/bot,backend/webtracker-bot.service"
+          source: "backend/bot,backend/webtracker-bot.service,backend/internal/utils/receipt_template.html"
           target: "/opt/webtracker"
           strip_components: 1
 
