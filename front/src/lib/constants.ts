@@ -1,4 +1,32 @@
-export const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "Airway Bill";
+// ============================================
+// BRANDING CONSTANTS (Plug and Play)
+// ============================================
+// Change APP_NAME to rebrand the entire application
+export const APP_NAME = "Airway Bill";
+
+/**
+ * Auto-generate tracking prefix from company name
+ * Examples: "Airway Bill" -> "AWB", "Test Express" -> "TEX", "MyCompany" -> "MYC"
+ */
+function generateTrackingPrefix(name: string): string {
+    const trimmed = name.trim();
+    if (!trimmed) return "AWB";
+
+    const words = trimmed.split(/\s+/);
+
+    // Multi-word: take first letter of each word
+    if (words.length > 1) {
+        return words
+            .map(word => word[0])
+            .join('')
+            .toUpperCase();
+    }
+
+    // Single word: take first 3 letters
+    return trimmed.substring(0, 3).toUpperCase();
+}
+
+export const TRACKING_PREFIX = generateTrackingPrefix(APP_NAME);
 export const APP_DESCRIPTION = "Real-time shipment tracking with advanced privacy protection.";
 
 export const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL || "support@airwaybill.com";

@@ -109,47 +109,18 @@ supabase secrets set ADMIN_EMAIL=your-email
 3. Set Verify Token: (same as `WHATSAPP_VERIFY_TOKEN`)
 4. Subscribe to `messages` webhook field
 
-### 6. Cron Job Setup
+### 6. Backend Automation
 
-#### Option A: cron-job.org (Recommended for Free Tier)
+**All automated tasks (status transitions, notifications, pruning) are handled by the backend bot's native scheduler.**
 
-1. Sign up at <https://cron-job.org>
-2. Create three jobs:
+The backend runs the following automated tasks:
 
-**Job 1: Hourly Status Transitions**
+- **Status Transitions**: Every 10 minutes, PENDING shipments older than 1 hour are automatically transitioned to IN_TRANSIT
+- **Notifications**: Every 2 minutes, WhatsApp notifications are sent for status changes
+- **Daily Pruning**: At midnight, shipments older than 7 days are automatically deleted
+- **Health Checks**: Every 5 minutes, the bot pings a health check endpoint (if configured)
 
-- URL: `https://your-app.vercel.app/api/cron/transition`
-- Schedule: `0 * * * *` (every hour)
-- Header: `Authorization: Bearer YOUR_EXTERNAL_CRON_SECRET`
-
-**Job 2: Notification Retries**
-
-- URL: `https://your-app.vercel.app/api/cron/retry-notifications`
-- Schedule: `*/5 * * * *` (every 5 minutes)
-- Header: `Authorization: Bearer YOUR_EXTERNAL_CRON_SECRET`
-
-**Job 3: Daily Cleanup**
-
-- URL: `https://your-app.vercel.app/api/cron/prune`
-- Schedule: `0 0 * * *` (daily at midnight)
-- Header: `Authorization: Bearer YOUR_EXTERNAL_CRON_SECRET`
-
-#### Option B: Vercel Native Cron (Limited)
-
-Vercel free tier only supports 1 cron/day. Use for daily cleanup only:
-
-Create `vercel.json`:
-
-```json
-{
-  "crons": [
-    {
-      "path": "/api/cron/prune",
-      "schedule": "0 0 * * *"
-    }
-  ]
-}
-```
+No additional cron setup is required for the frontend. The frontend includes a client-side "self-healing" fallback that will transition PENDING shipments when they are viewed, but this is secondary to the backend's primary scheduler.
 
 ### 7. Deploy to Vercel
 
@@ -159,18 +130,42 @@ vercel
 
 Set environment variables in Vercel dashboard (same as `.env` file).
 
+## 🎨 Branding Customization
+
+To rebrand the entire application, simply edit **one constant** in `src/lib/constants.ts`:
+
+```typescript
+// Change this value to rebrand the entire application
+export const APP_NAME = "Your Company Name";
+```
+
+The tracking prefix is **automatically generated** from your company name:
+
+- Multi-word names: First letter of each word (e.g., "Test Express" → "TEX")
+- Single word names: First 3 letters (e.g., "MyCompany" → "MYC")
+
+Changing `APP_NAME` will automatically update:
+
+- All page titles and meta tags
+- Logo and footer text
+- About Us, Privacy Policy, and Terms of Service pages
+- All localized content across 8 languages
+- **Tracking ID format** (e.g., TEX-abc123, MYC-xyz789)
+
+No environment variables or additional configuration needed!
+
 ## 📱 WhatsApp Message Format
 
 Send messages to your WhatsApp bot in this format:
 
 ```
 !INFO
-Receivers Name: John Doe
-Receivers Address: 123 Main St, Lagos
-Receivers Phone: +234123456789
-Recievers Country: Nigeria
-Senders Name: Jane Smith
-Senders Country: USA
+Receiver's Name: John Doe
+Receiver's Address: 123 Main St, Lagos
+Receiver's Phone: +234123456789
+Receiver's Country: Nigeria
+Sender's Name: Jane Smith
+Sender's Country: USA
 ```
 
 The bot will:

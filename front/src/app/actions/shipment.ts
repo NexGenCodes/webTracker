@@ -34,7 +34,12 @@ export async function createShipment(data: CreateShipmentDto): Promise<ServiceRe
  */
 export async function getTracking(trackingNumber: string): Promise<ShipmentData | null> {
     vitals.track('TRACKING_REQUESTED');
-    return await ShipmentService.getByTracking(trackingNumber);
+    try {
+        return await ShipmentService.getByTracking(trackingNumber);
+    } catch (error) {
+        logger.error('Error fetching tracking', { trackingNumber, error });
+        return null; // Return null instead of crashing, behaves like "not found"
+    }
 }
 
 /**

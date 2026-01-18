@@ -8,15 +8,62 @@ import { IconInfoItem } from "@/components/IconInfoItem";
 import { Mail, Phone, MapPin, Send, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { APP_NAME, CONTACT_EMAIL, CONTACT_PHONE, CONTACT_HQ } from "@/lib/constants";
-import { useState } from "react";
+import { useState, useRef } from "react";
+import { submitContactMessage } from "@/app/actions/contact";
+import toast, { Toaster } from 'react-hot-toast';
 
 export default function ContactPage() {
     const { dict } = useI18n();
+    const [loading, setLoading] = useState(false);
     const [submitted, setSubmitted] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const formRef = useRef<HTMLFormElement>(null);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        setSubmitted(true);
+        setLoading(true);
+
+        const formData = new FormData(e.currentTarget);
+        const data = {
+            name: formData.get('name') as string,
+            email: formData.get('email') as string,
+            message: formData.get('message') as string,
+        };
+
+        const result = await submitContactMessage(data);
+
+        if (result.success) {
+            setSubmitted(true);
+            setError(null);
+            toast.success(dict.contact.success + '! ' + dict.contact.successDesc, {
+                duration: 5000,
+                position: 'top-center',
+                style: {
+                    background: 'hsl(var(--success))',
+                    color: 'white',
+                    fontWeight: 'bold',
+                    padding: '16px 24px',
+                    borderRadius: '12px',
+                },
+            });
+            // Reset form
+            formRef.current?.reset();
+        } else {
+            setError(result.error || 'Failed to send message');
+            toast.error(result.error || 'Failed to send message', {
+                duration: 4000,
+                position: 'top-center',
+                style: {
+                    background: '#ef4444',
+                    color: 'white',
+                    fontWeight: 'bold',
+                    padding: '16px 24px',
+                    borderRadius: '12px',
+                },
+            });
+        }
+
+        setLoading(false);
     };
 
     return (
@@ -64,12 +111,23 @@ export default function ContactPage() {
                             </div>
                         ) : (
                             <form onSubmit={handleSubmit} className="space-y-10">
-                                <PremiumInput label={dict.contact.name} type="text" required />
-                                <PremiumInput label={dict.contact.email} type="email" required />
-                                <PremiumTextarea label={dict.contact.message} required />
-                                <button type="submit" className="btn-primary w-full flex items-center justify-center gap-4 py-6 text-lg shadow-2xl shadow-accent/20 group hover:scale-[1.01] active:scale-[0.99] transition-all border-none!">
+                                {error && (
+                                    <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4">
+                                        <p className="text-red-500 text-sm font-semibold">{error}</p>
+                                    </div>
+                                )}
+                                <PremiumInput name="name" label={dict.contact.name} type="text" required />
+                                <PremiumInput name="email" label={dict.contact.email} type="email" required />
+                                <PremiumTextarea name="message" label={dict.contact.message} required />
+                                <button
+                                    type="submit"
+                                    disabled={loading}
+                                    className="btn-primary w-full flex items-center justify-center gap-4 py-6 text-lg shadow-2xl shadow-accent/20 group hover:scale-[1.01] active:scale-[0.99] transition-all border-none! disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
                                     <Send size={20} strokeWidth={3} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
-                                    <span className="font-black uppercase tracking-[0.2em]">{dict.contact.send}</span>
+                                    <span className="font-black uppercase tracking-[0.2em]">
+                                        {loading ? 'Sending...' : dict.contact.send}
+                                    </span>
                                 </button>
                             </form>
                         )}

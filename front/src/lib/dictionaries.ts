@@ -1,3 +1,5 @@
+import { APP_NAME } from './constants';
+
 export const dictionaries = {
     en: {
         hero: {
@@ -125,7 +127,7 @@ export const dictionaries = {
         },
         privacy_page: {
             introTitle: "Introduction",
-            introDesc: "At Airway Bill, we take your data privacy with the utmost seriousness. This policy outlines how we handle tracking data and the strict measures we take to protect Personal Identifiable Information (PII).",
+            introDesc: `At ${APP_NAME}, we take your data privacy with the utmost seriousness. This policy outlines how we handle tracking data and the strict measures we take to protect Personal Identifiable Information (PII).`,
             dataTitle: "Data Retention & Scrubbing",
             dataDesc: "Our system is built on a \"Privacy First\" architecture. Once a shipment is marked as **Delivered**, our automated data retention policy triggers a comprehensive scrubbing of all PII, including:",
             item1: "Receiver names and contact numbers",
@@ -137,22 +139,22 @@ export const dictionaries = {
         },
         terms_page: {
             agreeTitle: "Agreement",
-            agreeDesc: "By using the Airway Bill tracking platform, you agree to these professional terms of service. Our service is provided as-is for the purpose of shipment visibility and transparency.",
+            agreeDesc: `By using the ${APP_NAME} tracking platform, you agree to these professional terms of service. Our service is provided as-is for the purpose of shipment visibility and transparency.`,
             useTitle: "Acceptable Use",
             useDesc: "Users are prohibited from attempting to reverse-engineer the tracking ID generation logic or bypass administrative security gates. Unauthorized access to delivery data is a violation of international logistics standards.",
             limitTitle: "Liability",
-            limitDesc: "While we strive for 100% telemetry accuracy, Airway Bill is not liable for delayed status updates caused by upstream courier disruptions or network latency.",
+            limitDesc: `While we strive for 100% telemetry accuracy, ${APP_NAME} is not liable for delayed status updates caused by upstream courier disruptions or network latency.`,
         },
         about: {
             title: "Premium Logistics Tracking",
             subtitle: "Secure, Real-Time Visibility Across the Global Supply Chain.",
-            description: "Airway Bill provides enterprise-grade tracking solutions for high-stakes shipments. Our platform ensures that every package is monitored with precision, offering unparalleled transparency and privacy for both senders and recipients.",
+            description: `${APP_NAME} provides enterprise-grade tracking solutions for high-stakes shipments. Our platform ensures that every package is monitored with precision, offering unparalleled transparency and privacy for both senders and recipients.`,
             mission: "Our Commitment",
             missionDesc: "To redefine the tracking experience through intuitive design and uncompromising data security.",
             transparency: "Global Transparency",
             transparencyDesc: "We believe in zero-latency communication. Every status update is verified and synchronized across our global network within seconds.",
             ctaTitle: "Ready to optimize your tracking?",
-            ctaDesc: "Join thousands of enterprises trusting Airway Bill for their high-stakes supply chain visibility.",
+            ctaDesc: `Join thousands of enterprises trusting ${APP_NAME} for their high-stakes supply chain visibility.`,
             ctaButton: "Get Started",
         },
         contact: {
@@ -296,7 +298,7 @@ export const dictionaries = {
         },
         privacy_page: {
             introTitle: "Introducción",
-            introDesc: "En Airway Bill, nos tomamos la privacidad de sus datos con la máxima seriedad. Esta política describe cómo manejamos los datos de seguimiento y las medidas estrictas para proteger la Información de Identificación Personal (PII).",
+            introDesc: `En ${APP_NAME}, nos tomamos la privacidad de sus datos con la máxima seriedad. Esta política describe cómo manejamos los datos de seguimiento y las medidas estrictas para proteger la Información de Identificación Personal (PII).`,
             dataTitle: "Retención y Limpieza de Datos",
             dataDesc: "Nuestro sistema está basado en una arquitectura de \"Privacidad Primero\". Una vez que un envío se marca como **Entregado**, nuestra política activa una limpieza integral de toda la PII, incluyendo:",
             item1: "Nombres de receptores y números de contacto",
@@ -308,22 +310,22 @@ export const dictionaries = {
         },
         terms_page: {
             agreeTitle: "Acuerdo",
-            agreeDesc: "Al utilizar la plataforma de seguimiento de Airway Bill, acepta estos términos de servicio profesionales. Nuestro servicio se proporciona tal cual para la visibilidad y transparencia de los envíos.",
+            agreeDesc: `Al utilizar la plataforma de seguimiento de ${APP_NAME}, acepta estos términos de servicio profesionales. Nuestro servicio se proporciona tal cual para la visibilidad y transparencia de los envíos.`,
             useTitle: "Uso Aceptable",
             useDesc: "Se prohíbe intentar realizar ingeniería inversa en la generación de ID de seguimiento o eludir las puertas de seguridad. El acceso no autorizado es una violación de los estándares logísticos.",
             limitTitle: "Responsabilidad",
-            limitDesc: "Aunque nos esforzamos por una precisión del 100%, Airway Bill no es responsable de los retrasos causados por interrupciones en los mensajeros o latencia de red.",
+            limitDesc: `Aunque nos esforzamos por una precisión del 100%, ${APP_NAME} no es responsable de los retrasos causados por interrupciones en los mensajeros o latencia de red.`,
         },
         about: {
             title: "Seguimiento Logístico Premium",
             subtitle: "Visibilidad Segura y en Tiempo Real para su Cadena de Suministro.",
-            description: "Airway Bill ofrece soluciones de seguimiento de nivel empresarial para envíos críticos. Nuestra plataforma garantiza que cada paquete sea monitoreado con precisión, ofreciendo una transparencia y privacidad sin precedentes.",
+            description: `${APP_NAME} ofrece soluciones de seguimiento de nivel empresarial para envíos críticos. Nuestra plataforma garantiza que cada paquete sea monitoreado con precisión, ofreciendo una transparencia y privacidad sin precedentes.`,
             mission: "Nuestro Compromiso",
             missionDesc: "Redefinir la experiencia de seguimiento a través de un diseño intuitivo y una seguridad de datos sin concesiones.",
             transparency: "Transparencia Global",
             transparencyDesc: "Creemos en la comunicación de latencia cero. Cada actualización de estado se verifica y sincroniza en segundos.",
             ctaTitle: "¿Listo para optimizar su seguimiento?",
-            ctaDesc: "Únase a miles de empresas que confían en Airway Bill para su visibilidad crítica.",
+            ctaDesc: `Únase a miles de empresas que confían en ${APP_NAME} para su visibilidad crítica.`,
             ctaButton: "Empezar",
         },
         contact: {
@@ -467,7 +469,7 @@ export const dictionaries = {
         },
         privacy_page: {
             introTitle: "Einleitung",
-            introDesc: "Bei Airway Bill nehmen wir den Datenschutz Ihrer Daten sehr ernst. Diese Richtlinie beschreibt, wie wir Tracking-Daten handhaben und welche strengen Maßnahmen wir zum Schutz personenbezogener Daten (PII) ergreifen.",
+            introDesc: `Bei ${APP_NAME} nehmen wir den Datenschutz Ihrer Daten sehr ernst. Diese Richtlinie beschreibt, wie wir Tracking-Daten handhaben und welche strengen Maßnahmen wir zum Schutz personenbezogener Daten (PII) ergreifen.`,
             dataTitle: "Datenaufbewahrung & Bereinigung",
             dataDesc: "Unser System basiert auf einer \"Privacy First\"-Architektur. Sobald eine Sendung als **Zugestellt** markiert ist, löst unsere Richtlinie eine umfassende Bereinigung aller PII aus, einschließlich:",
             item1: "Empfängernamen und Kontaktnummern",
@@ -479,22 +481,22 @@ export const dictionaries = {
         },
         terms_page: {
             agreeTitle: "Vereinbarung",
-            agreeDesc: "Durch die Nutzung der Airway Bill Tracking-Plattform stimmen Sie diesen professionellen Nutzungsbedingungen zu. Unser Service wird so bereitgestellt, wie er ist, zum Zweck der Transparenz.",
+            agreeDesc: `Durch die Nutzung der ${APP_NAME} Tracking-Plattform stimmen Sie diesen professionellen Nutzungsbedingungen zu. Unser Service wird so bereitgestellt, wie er ist, zum Zweck der Transparenz.`,
             useTitle: "Zulässige Nutzung",
             useDesc: "Es ist verboten, die Logik der Tracking-ID-Generierung zu manipulieren oder Sicherheitsbarrieren zu umgehen. Unbefugter Zugriff verletzt internationale Logistikstandards.",
             limitTitle: "Haftung",
-            limitDesc: "Obwohl wir eine 100%ige Genauigkeit anstreben, haftet Airway Bill nicht für Verzögerungen bei Status-Updates durch Kurierunterbrechungen.",
+            limitDesc: `Obwohl wir eine 100%ige Genauigkeit anstreben, haftet ${APP_NAME} nicht für Verzögerungen bei Status-Updates durch Kurierunterbrechungen.`,
         },
         about: {
             title: "Premium Logistik-Tracking",
             subtitle: "Sichere Echtzeit-Transparenz für Ihre Lieferkette.",
-            description: "Airway Bill bietet Tracking-Lösungen auf Unternehmensebene für kritische Sendungen. Unsere Plattform stellt sicher, dass jedes Paket präzise überwacht wird.",
+            description: `${APP_NAME} bietet Tracking-Lösungen auf Unternehmensebene für kritische Sendungen. Unsere Plattform stellt sicher, dass jedes Paket präzise überwacht wird.`,
             mission: "Unsere Verpflichtung",
             missionDesc: "Neudefinition des Tracking-Erlebnisses durch intuitives Design und kompromisslose Datensicherheit.",
             transparency: "Globale Transparenz",
             transparencyDesc: "Wir glauben an Kommunikation ohne Verzögerung. Jedes Status-Update wird in Sekundenschnelle synchronisiert.",
             ctaTitle: "Bereit, Ihr Tracking zu optimieren?",
-            ctaDesc: "Schließen Sie sich Tausenden von Unternehmen an, die auf Airway Bill vertrauen.",
+            ctaDesc: `Schließen Sie sich Tausenden von Unternehmen an, die auf ${APP_NAME} vertrauen.`,
             ctaButton: "Jetzt starten",
         },
         contact: {
@@ -809,7 +811,7 @@ export const dictionaries = {
         },
         privacy_page: {
             introTitle: "Introduction",
-            introDesc: "Chez Airway Bill, nous prenons la confidentialité de vos données très au sérieux. Cette politique décrit comment nous traitons les données de suivi et les mesures strictes que nous prenons pour protéger les informations personnelles (PII).",
+            introDesc: "Chez , nous prenons la confidentialité de vos données très au sérieux. Cette politique décrit comment nous traitons les données de suivi et les mesures strictes que nous prenons pour protéger les informations personnelles (PII).",
             dataTitle: "Rétention et suppression des données",
             dataDesc: "Notre système repose sur une architecture de \"confidentialité avant tout\". Une fois l'expédition marquée comme **Livrée**, notre politique déclenche une suppression complète de toutes les PII, y compris :",
             item1: "Noms et numéros de contact des destinataires",
@@ -821,16 +823,16 @@ export const dictionaries = {
         },
         terms_page: {
             agreeTitle: "Accord",
-            agreeDesc: "En utilisant la plateforme de suivi Airway Bill, vous acceptez ces conditions de service professionnelles. Notre service est fourni en l'état à des fins de visibilité et de transparence.",
+            agreeDesc: "En utilisant la plateforme de suivi , vous acceptez ces conditions de service professionnelles. Notre service est fourni en l'état à des fins de visibilité et de transparence.",
             useTitle: "Utilisation acceptable",
             useDesc: "Il est interdit aux utilisateurs de tenter de rétro-concevoir la logique de génération d'ID de suivi ou de contourner les barrières de sécurité. L'accès non autorisé viole les normes logistiques internationales.",
             limitTitle: "Responsabilité",
-            limitDesc: "Bien que nous visions une précision de 100 %, Airway Bill n'est pas responsable des mises à jour retardées causées par des interruptions chez les coursiers.",
+            limitDesc: "Bien que nous visions une précision de 100 %,  n'est pas responsable des mises à jour retardées causées par des interruptions chez les coursiers.",
         },
         about: {
             title: "Suivi logistique premium",
             subtitle: "Visibilité sécurisée en temps réel sur la chaîne d'approvisionnement mondiale.",
-            description: "Airway Bill fournit des solutions de suivi de classe entreprise pour les expéditions à enjeux élevés. Notre plateforme garantit que chaque colis est surveillé avec précision, offrant une transparence et une confidentialité inégalées pour les expéditeurs et les destinataires.",
+            description: " fournit des solutions de suivi de classe entreprise pour les expéditions à enjeux élevés. Notre plateforme garantit que chaque colis est surveillé avec précision, offrant une transparence et une confidentialité inégalées pour les expéditeurs et les destinataires.",
             mission: "Notre engagement",
             missionDesc: "Redéfinir l'expérience de suivi grâce à un design intuitif et une sécurité des données sans concession.",
             transparency: "Transparence Mondiale",
@@ -980,7 +982,7 @@ export const dictionaries = {
         },
         privacy_page: {
             introTitle: "Introdução",
-            introDesc: "Na Airway Bill, levamos a privacidade dos seus dados muito a sério. Esta política descreve como lidamos com dados de rastreamento e as medidas rigorosas para proteger Informações Pessoais Identificáveis (PII).",
+            introDesc: "Na , levamos a privacidade dos seus dados muito a sério. Esta política descreve como lidamos com dados de rastreamento e as medidas rigorosas para proteger Informações Pessoais Identificáveis (PII).",
             dataTitle: "Retenção e Limpeza de Dados",
             dataDesc: "Nosso sistema é baseado em uma arquitetura de \"Privacidade Primeiro\". Uma vez que um envio é marcado como **Entregue**, nossa política ativa uma limpeza abrangente de todas as PII, incluindo:",
             item1: "Nomes de destinatários e números de contato",
@@ -992,7 +994,7 @@ export const dictionaries = {
         },
         terms_page: {
             agreeTitle: "Acordo",
-            agreeDesc: "Ao usar a plataforma de rastreamento Airway Bill, você concorda com estes termos de serviço profissionais. Nosso serviço é fornecido como está para fins de visibilidade e transparência de envios.",
+            agreeDesc: "Ao usar a plataforma de rastreamento , você concorda com estes termos de serviço profissionais. Nosso serviço é fornecido como está para fins de visibilidade e transparência de envios.",
             useTitle: "Uso Aceitável",
             useDesc: "É proibido tentar fazer engenharia reversa na geração de ID de rastreamento ou contornar portões de segurança. O acesso não autorizado viola os padrões logísticos.",
             limitTitle: "Responsabilidade",
@@ -1001,13 +1003,13 @@ export const dictionaries = {
         about: {
             title: "Rastreamento Logístico Premium",
             subtitle: "Visibilidade Segura e em Tempo Real para Sua Cadeia de Suprimentos.",
-            description: "A Airway Bill oferece soluções de rastreamento de nível empresarial para envios críticos. Nossa plataforma garante que cada pacote seja monitorado com precisão, oferecendo transparência e privacidade sem precedentes.",
+            description: "A  oferece soluções de rastreamento de nível empresarial para envios críticos. Nossa plataforma garante que cada pacote seja monitorado com precisão, oferecendo transparência e privacidade sem precedentes.",
             mission: "Nosso Compromisso",
             missionDesc: "Redefinir a experiência de rastreamento através de design intuitivo e segurança de dados sem concessões.",
             transparency: "Transparência Global",
             transparencyDesc: "Acreditamos em comunicação de latência zero. Cada atualização de status é verificada e sincronizada em segundos.",
             ctaTitle: "Pronto para otimizar seu rastreamento?",
-            ctaDesc: "Junte-se a milhares de empresas que confiam na Airway Bill para sua visibilidade crítica.",
+            ctaDesc: "Junte-se a milhares de empresas que confiam Na  para sua visibilidade crítica.",
             ctaButton: "Começar",
         },
         contact: {
@@ -1151,7 +1153,7 @@ export const dictionaries = {
         },
         privacy_page: {
             introTitle: "Introduzione",
-            introDesc: "In Airway Bill, prendiamo molto sul serio la privacy dei tuoi dati. Questa politica descrive come gestiamo i dati di tracciamento e le misure rigorose per proteggere le Informazioni Personali Identificabili (PII).",
+            introDesc: "In , prendiamo molto sul serio la privacy dei tuoi dati. Questa politica descrive come gestiamo i dati di tracciamento e le misure rigorose per proteggere le Informazioni Personali Identificabili (PII).",
             dataTitle: "Conservazione e Pulizia dei Dati",
             dataDesc: "Il nostro sistema si basa su un'architettura \"Privacy First\". Una volta che una spedizione è contrassegnata come **Consegnata**, la nostra politica attiva una pulizia completa di tutte le PII, tra cui:",
             item1: "Nomi dei destinatari e numeri di contatto",
@@ -1163,7 +1165,7 @@ export const dictionaries = {
         },
         terms_page: {
             agreeTitle: "Accordo",
-            agreeDesc: "Utilizzando la piattaforma di tracciamento Airway Bill, accetti questi termini di servizio professionali. Il nostro servizio è fornito così com'è per scopi di visibilità e trasparenza.",
+            agreeDesc: "Utilizzando la piattaforma di tracciamento , accetti questi termini di servizio professionali. Il nostro servizio è fornito così com'è per scopi di visibilità e trasparenza.",
             useTitle: "Uso Accettabile",
             useDesc: "È vietato tentare di fare reverse engineering della logica di generazione dell'ID di tracciamento o aggirare i gate di sicurezza. L'accesso non autorizzato viola gli standard logistici.",
             limitTitle: "Responsabilità",
@@ -1172,13 +1174,13 @@ export const dictionaries = {
         about: {
             title: "Tracciamento Logistico Premium",
             subtitle: "Visibilità Sicura in Tempo Reale per la Tua Catena di Approvvigionamento.",
-            description: "Airway Bill offre soluzioni di tracciamento di livello aziendale per spedizioni critiche. La nostra piattaforma garantisce che ogni pacco sia monitorato con precisione, offrendo trasparenza e privacy senza precedenti.",
+            description: " offre soluzioni di tracciamento di livello aziendale per spedizioni critiche. La nostra piattaforma garantisce che ogni pacco sia monitorato con precisione, offrendo trasparenza e privacy senza precedenti.",
             mission: "Il Nostro Impegno",
             missionDesc: "Ridefinire l'esperienza di tracciamento attraverso un design intuitivo e una sicurezza dei dati senza compromessi.",
             transparency: "Trasparenza Globale",
             transparencyDesc: "Crediamo nella comunicazione a latenza zero. Ogni aggiornamento di stato viene verificato e sincronizzato in pochi secondi.",
             ctaTitle: "Pronto a ottimizzare il tuo tracciamento?",
-            ctaDesc: "Unisciti a migliaia di aziende che si affidano ad Airway Bill per la loro visibilità critica.",
+            ctaDesc: "Unisciti a migliaia di aziende che si affidano ad  per la loro visibilità critica.",
             ctaButton: "Inizia",
         },
         contact: {

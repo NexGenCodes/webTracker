@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { CreateShipmentDto, ShipmentData, ServiceResult } from '@/types/shipment';
 import crypto from 'crypto';
-import { COUNTRY_COORDS } from "@/lib/constants";
+import { COUNTRY_COORDS, TRACKING_PREFIX } from "@/lib/constants";
 import { logger } from '@/lib/logger';
 
 export class ShipmentService {
@@ -33,7 +33,7 @@ export class ShipmentService {
                 .update(hashInput)
                 .digest('hex');
 
-            const trackingNumber = `AWB-${hash}`;
+            const trackingNumber = `${TRACKING_PREFIX}-${hash}`;
 
             const shipment = await prisma.shipment.create({
                 data: {
