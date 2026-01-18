@@ -127,7 +127,7 @@ func (h *InfoHandler) Execute(ctx context.Context, db *supabase.Client, args []s
 		return Result{Message: msg}
 	}
 
-	shipment, err := db.GetShipment(args[0])
+	shipment, err := db.GetShipment(ctx, args[0])
 	if err != nil {
 		return Result{Message: "❌ *DATABASE ERROR*\n_Lookup failed. Please try again later._", Error: err}
 	}

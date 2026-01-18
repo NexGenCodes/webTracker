@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --paper: #e6e0d0;
+            /* Vintage document tan */
+            --ink: #1a1a1a;
+            --stamp: rgba(160, 30, 30, 0.7);
+            --border: #333;
+            --fold-line: rgba(0, 0, 0, 0.05);
+        }
+
+        body {
+            background-color: #2c2c2c;
+            display: flex;
+            justify-content: center;
+            padding: 40px;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        /* Paper Effect */
+        .awb-container {
+            width: 850px;
+            background: var(--paper);
+            background-image: url('https://www.transparenttextures.com/patterns/felt.png');
+            padding: 30px;
+            border: 1px solid #c0b8a0;
+            box-shadow: 10px 10px 40px rgba(0, 0, 0, 0.5);
+            position: relative;
+            color: var(--ink);
+        }
+
+        /* Realistic Dispatched Stamp */
+        .stamp {
+            position: absolute;
+            top: 45%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-15deg);
+            border: 4px double var(--stamp);
+            color: var(--stamp);
+            padding: 10px 30px;
+            font-size: 48px;
+            font-weight: 900;
+            text-transform: uppercase;
+            border-radius: 12px;
+            mix-blend-mode: multiply;
+            letter-spacing: 5px;
+            pointer-events: none;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 15px;
+        }
+
+        .header>div {
+            flex: 1;
+        }
+
+        .logo-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        .logo-emblem svg {
+            width: 80px;
+            height: auto;
+            filter: drop-shadow(1px 1px 1px rgba(0, 0, 0, 0.2));
+            margin-bottom: 5px;
+        }
+
+        .title-area {
+            text-align: center;
+        }
+
+        .title-area h1 {
+            margin: 0;
+            font-family: 'Arial Black', sans-serif;
+            color: #7a2a1c;
+            font-size: 36px;
+            text-transform: uppercase;
+        }
+
+        .title-area p {
+            margin: 0;
+            font-weight: bold;
+            font-style: italic;
+        }
+
+        /* The Grid */
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            border-left: 1px solid var(--border);
+            border-top: 1px solid var(--border);
+            margin-top: 20px;
+        }
+
+        .cell {
+            border-right: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+            padding: 10px;
+            position: relative;
+        }
+
+        .label {
+            font-size: 10px;
+            font-weight: 900;
+            text-transform: uppercase;
+            color: #555;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .value {
+            font-size: 16px;
+            font-weight: bold;
+            color: var(--ink);
+            filter: url(#ink-bleed);
+            transform: rotate(-0.1deg);
+            /* Typewriter jitter */
+            display: inline-block;
+            text-shadow: 0.1px 0.1px 0px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Barcode Placeholder */
+        .barcode {
+            text-align: center;
+            padding: 15px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .barcode span {
+            font-size: 40px;
+            font-family: 'Libre Barcode 39', cursive;
+        }
+
+        /* Footer Stamp */
+        .footer-stamps {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-top: 30px;
+        }
+
+        .official-seal-box {
+            width: 140px;
+            height: 140px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transform: rotate(8deg);
+            opacity: 0.7;
+            mix-blend-mode: multiply;
+            filter: contrast(1.1);
+        }
+
+        .signature-area {
+            font-family: 'Dancing Script', cursive;
+            font-size: 28px;
+            color: #000080;
+            /* Blue ink */
+            text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.1);
+            margin-top: 10px;
+            transform: rotate(-2deg);
+        }
+
+        .official-stamp {
+            position: absolute;
+            width: 120px;
+            height: 120px;
+            opacity: 0.7;
+            mix-blend-mode: multiply;
+            left: 40px;
+            top: 5px;
+            pointer-events: none;
+        }
+
+        /* NEW REALISM FEATURES */
+        .watermark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-30deg);
+            font-size: 150px;
+            font-weight: 900;
+            color: rgba(122, 42, 28, 0.05);
+            pointer-events: none;
+            z-index: 0;
+            white-space: nowrap;
+            text-transform: uppercase;
+        }
+
+        .serial-number {
+            position: absolute;
+            top: 15px;
+            right: 30px;
+            color: #d11;
+            font-size: 22px;
+            font-weight: bold;
+            font-family: 'Arial', sans-serif;
+            opacity: 0.9;
+            transform: rotate(2deg);
+        }
+
+        .hologram-seal {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #ddd 0%, #fff 30%, #bbb 50%, #eee 70%, #999 100%);
+            border-radius: 50%;
+            bottom: 20px;
+            left: 20px;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.8) inset, 1px 1px 3px rgba(0, 0, 0, 0.2);
+            opacity: 0.8;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .hologram-seal::after {
+            content: "ORIGINAL SECURITY DOCUMENT";
+            font-size: 4px;
+            text-align: center;
+            font-weight: bold;
+            color: rgba(0, 0, 0, 0.3);
+        }
+
+        .legal-footer {
+            margin-top: 40px;
+            border-top: 1px dashed #999;
+            padding-top: 10px;
+            font-size: 8px;
+            line-height: 1.2;
+            color: #666;
+            text-align: justify;
+        }
+
+        .qr-area {
+            position: absolute;
+            bottom: 60px;
+            right: 40px;
+            width: 70px;
+            height: 70px;
+            background: #fff;
+            padding: 5px;
+            border: 1px solid #ddd;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            opacity: 0.8;
+            transform: rotate(-1deg);
+        }
+
+        .qr-placeholder {
+            width: 60px;
+            height: 60px;
+            background-image: repeating-conic-gradient(#000 0% 25%, #fff 0% 50%);
+            background-size: 4px 4px;
+        }
+
+        .paper-wear {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            background:
+                /* Fold Marks */
+                linear-gradient(to right, transparent 48%, var(--fold-line) 49%, var(--fold-line) 51%, transparent 52%),
+                linear-gradient(to bottom, transparent 33%, var(--fold-line) 34%, var(--fold-line) 35%, transparent 36%),
+                /* General Wear */
+                radial-gradient(circle at 10% 20%, rgba(0, 0, 0, 0.02) 0%, transparent 20%),
+                radial-gradient(circle at 90% 80%, rgba(122, 42, 28, 0.03) 0%, transparent 15%);
+        }
+
+        /* SVG Ink Bleed Filter */
+        .filter-svg {
+            width: 0;
+            height: 0;
+            position: absolute;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="awb-container">
+        <!-- SVG Filter Definitions -->
+        <svg class="filter-svg">
+            <defs>
+                <filter id="ink-bleed">
+                    <feGaussianBlur in="SourceGraphic" stdDeviation="0.2" result="blur" />
+                    <feTurbulence type="fractalNoise" baseFrequency="0.1" numOctaves="3" result="noise" />
+                    <feDisplacementMap in="blur" in2="noise" scale="0.8" />
+                </filter>
+            </defs>
+        </svg>
+
+        <div class="paper-wear"></div>
+        <div class="watermark">CERTIFIED</div>
+        <div class="serial-number">№ 00{{.TrackingNumber}}</div>
+        <div class="stamp">DISPATCHED</div>
+
+        <div class="header">
+            <div class="logo-area">
+                <div class="logo-emblem">
+                    <svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M60 10 L110 30 V70 C110 100 60 120 60 120 C60 120 10 100 10 70 V30 L60 10 Z"
+                            fill="#7a2a1c" opacity="0.05" />
+                        <path d="M60 10 L110 30 V70 C110 100 60 120 60 120 C60 120 10 100 10 70 V30 L60 10 Z"
+                            fill="none" stroke="#7a2a1c" stroke-width="2.5" />
+                        <circle cx="60" cy="55" r="28" fill="none" stroke="#1a1a1a" stroke-width="1.5" />
+                        <path d="M32 55 H88 M60 27 V83" stroke="#1a1a1a" stroke-width="1" opacity="0.4" />
+                        <ellipse cx="60" cy="55" rx="28" ry="12" fill="none" stroke="#1a1a1a" stroke-width="1"
+                            opacity="0.4" />
+                    </svg>
+                </div>
+                <div
+                    style="font-family: 'Courier New', monospace; font-size: 10px; font-weight: 900; color: #7a2a1c; letter-spacing: 2px; font-style: italic; white-space: nowrap;">
+                    GLOBAL LOGISTICS
+                </div>
+            </div>
+            <div class="title-area">
+                <h1>{{if .CompanyName}}{{.CompanyName}}{{else}}AIRWAY BILL{{end}}</h1>
+                <p style="text-transform: uppercase; font-size: 14px; letter-spacing: 1px;">Official Diplomatic &
+                    Priority Transit Service</p>
+                <div
+                    style="font-size: 11px; margin-top: 10px; font-weight: bold; border-top: 1px solid #7a2a1c; display: inline-block; padding-top: 5px;">
+                    REF NO: {{.TrackingNumber}}/VIP/{{.CreatedAt.Format "2006"}}</div>
+            </div>
+            <div style="text-align: right; display: flex; flex-direction: column; align-items: flex-end;">
+                <span class="label">Origin</span>
+                <div class="value"
+                    style="background: rgba(122, 42, 28, 0.1); padding: 5px 15px; border-radius: 3px; border: 1px solid rgba(122, 42, 28, 0.2); width: fit-content;">
+                    {{.SenderCountry}}</div>
+            </div>
+        </div>
+
+        <div class="barcode">
+            <div style="font-size: 10px; margin-bottom: 5px;">* TRACKING ID: {{.TrackingNumber}} *</div>
+            <div
+                style="height: 40px; background: repeating-linear-gradient(90deg, #000, #000 2px, transparent 2px, transparent 4px); width: 300px; margin: auto;">
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="cell"><span class="label">Destination Country</span>
+                <div class="value">{{.ReceiverCountry}}</div>
+            </div>
+            <div class="cell"><span class="label">Departure Date</span>
+                <div class="value">{{.CreatedAt.Format "02/01/2006"}}</div>
+            </div>
+
+            <div class="cell"><span class="label">Sender's Name</span>
+                <div class="value">{{.SenderName}}</div>
+            </div>
+            <div class="cell"><span class="label">Service Type</span>
+                <div class="value">DIPLOMATIC DELIVERY</div>
+            </div>
+
+            <div class="cell"><span class="label">Receiver's Name</span>
+                <div class="value">{{.ReceiverName}}</div>
+            </div>
+            <div class="cell"><span class="label">Arrival Date</span>
+                <div class="value">12/01/2026</div>
+            </div>
+
+            <div class="cell"><span class="label">Receiver's Email</span>
+                <div class="value">{{if .ReceiverEmail}}{{.ReceiverEmail}}{{else}}N/A{{end}}</div>
+            </div>
+            <div class="cell"><span class="label">Phone Number</span>
+                <div class="value">{{.ReceiverPhone}}</div>
+            </div>
+
+            <div class="cell"><span class="label">Consignment Box</span>
+                <div class="value" style="font-size: 13px;">DIPLOMATIC CARGO - SECURE ENCLOSURE</div>
+            </div>
+            <div class="cell"><span class="label">Weight</span>
+                <div class="value">15.00 KG</div>
+            </div>
+
+            <div class="cell"><span class="label">Customs Duty</span>
+                <div class="value" style="color: #666; font-style: italic; border-bottom: 1px dotted #ccc; width: 80%;">
+                    &nbsp;</div>
+            </div>
+            <div class="cell"><span class="label">Valuation</span>
+                <div class="value">*** NO COMMERCIAL VALUE ***</div>
+            </div>
+
+            <div class="cell" style="grid-column: span 2;">
+                <span class="label">Delivering Address</span>
+                <div class="value" style="font-size: 14px;">{{.ReceiverAddress}}</div>
+            </div>
+        </div>
+
+        <div class="footer-stamps">
+            <div
+                style="border: 1px solid #444; padding: 10px; width: 250px; height: 100px; text-align: center; position: relative;">
+                <span class="label">Sender Authorization & Signature</span>
+                <div class="signature-area">{{.SenderName}}</div>
+                <div class="official-stamp">
+                    <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="50" cy="50" r="45" fill="none" stroke="#7a2a1c" stroke-width="3"
+                            stroke-dasharray="5,2" />
+                        <circle cx="50" cy="50" r="38" fill="none" stroke="#7a2a1c" stroke-width="1.5" />
+                        <text x="50" y="35" text-anchor="middle" font-family="Arial" font-size="8" font-weight="bold"
+                            fill="#7a2a1c">CERTIFIED</text>
+                        <text x="50" y="55" text-anchor="middle" font-family="Arial" font-size="12" font-weight="bold"
+                            fill="#7a2a1c">APPROVED</text>
+                        <text x="50" y="75" text-anchor="middle" font-family="Arial" font-size="8" font-weight="bold"
+                            fill="#7a2a1c">OFFICIAL LOGISTICS</text>
+                    </svg>
+                </div>
+            </div>
+            <div class="official-seal-box">
+                <svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="60" cy="60" r="55" fill="none" stroke="#222" stroke-width="2" />
+                    <circle cx="60" cy="60" r="48" fill="none" stroke="#222" stroke-width="1" />
+                    <path id="sealPath" d="M 20,60 A 40,40 0 1,1 100,60 A 40,40 0 1,1 20,60" fill="none" />
+                    <text font-family="Arial" font-size="7" font-weight="bold" fill="#222">
+                        <textPath href="#sealPath" startOffset="0%">UNITED NATIONS INTER. AGENT REPRESENTATIVE
+                        </textPath>
+                    </text>
+                    <g transform="translate(60,60) scale(0.6)">
+                        <path d="M-40,0 Q0,-40 40,0 T-40,0" fill="none" stroke="#222" stroke-width="2" />
+                        <circle cx="0" cy="0" r="15" fill="none" stroke="#222" stroke-width="1.5" />
+                        <path d="M-20,-20 L20,20 M-20,20 L20,-20" stroke="#222" stroke-width="1" />
+                    </g>
+                    <text x="60" y="85" text-anchor="middle" font-family="Arial" font-size="8" font-weight="bold"
+                        fill="#222">OFFICIAL SEAL</text>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+</body>
+
+</html>

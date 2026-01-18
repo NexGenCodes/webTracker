@@ -40,6 +40,13 @@ func NewClient(dbURL string, prefix string) (*Client, error) {
 	return &Client{db: db, Prefix: prefix}, nil
 }
 
+// Ping checks database connectivity
+func (s *Client) Ping() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	return s.db.PingContext(ctx)
+}
+
 // withRetry handles transient network/database errors for write operations
 func (s *Client) withRetry(fn func() error) error {
 	var lastErr error
@@ -55,10 +62,13 @@ func (s *Client) withRetry(fn func() error) error {
 	return fmt.Errorf("operation failed after 3 retries: %w", lastErr)
 }
 
-func (s *Client) CheckDuplicate(phone string) (bool, string, error) {
+func (s *Client) CheckDuplicate(ctx context.Context, phone string) (bool, string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
 	query := `SELECT "trackingNumber" FROM "Shipment" WHERE "receiverPhone" = $1 LIMIT 1`
 	var tracking string
-	err := s.db.QueryRow(query, phone).Scan(&tracking)
+	err := s.db.QueryRowContext(ctx, query, phone).Scan(&tracking)
 	if err == sql.ErrNoRows {
 		return false, "", nil
 	}
@@ -68,7 +78,10 @@ func (s *Client) CheckDuplicate(phone string) (bool, string, error) {
 	return true, tracking, nil
 }
 
-func (s *Client) InsertShipment(m models.Manifest, senderPhone string) (string, error) {
+func (s *Client) InsertShipment(ctx context.Context, m models.Manifest, senderPhone string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
 	// Total length should be 9. Prefix + "-" + Random.
 	randomLen := 9 - len(s.Prefix) - 1
 	if randomLen < 3 {
@@ -85,7 +98,7 @@ func (s *Client) InsertShipment(m models.Manifest, senderPhone string) (string, 
 			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW())
 			RETURNING "trackingNumber"`
 
-		return s.db.QueryRow(
+		return s.db.QueryRowContext(ctx,
 			query,
 			uuid.NewString(), newID, "PENDING", m.SenderName, m.SenderCountry,
 			m.ReceiverName, m.ReceiverPhone, m.ReceiverEmail, m.ReceiverID, m.ReceiverAddress, m.ReceiverCountry, senderPhone,
@@ -180,7 +193,10 @@ func (s *Client) PruneStaleData() (int, error) {
 	return totalPruned, nil
 }
 
-func (s *Client) GetShipment(trackingNumber string) (*models.Shipment, error) {
+func (s *Client) GetShipment(ctx context.Context, trackingNumber string) (*models.Shipment, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
 	queryFields := `
 		SELECT "id", "trackingNumber", "status", "senderName", "senderCountry", 
 			   "receiverName", "receiverPhone", "receiverEmail", "receiverID", "receiverAddress", "receiverCountry", 
@@ -188,7 +204,7 @@ func (s *Client) GetShipment(trackingNumber string) (*models.Shipment, error) {
 		FROM "Shipment" WHERE "trackingNumber" = $1 LIMIT 1`
 
 	var shipment models.Shipment
-	err := s.db.QueryRow(queryFields, trackingNumber).Scan(
+	err := s.db.QueryRowContext(ctx, queryFields, trackingNumber).Scan(
 		&shipment.ID, &shipment.TrackingNumber, &shipment.Status, &shipment.SenderName, &shipment.SenderCountry,
 		&shipment.ReceiverName, &shipment.ReceiverPhone, &shipment.ReceiverEmail, &shipment.ReceiverID, &shipment.ReceiverAddress, &shipment.ReceiverCountry,
 		&shipment.WhatsappFrom, &shipment.CreatedAt, &shipment.UpdatedAt, &shipment.LastNotifiedAt,

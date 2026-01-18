@@ -2,181 +2,141 @@ package parser
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
+	"time"
+
+	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
+
+	"golang.org/x/time/rate"
 )
 
-func isReceiver(lower string) bool {
-	return strings.Contains(lower, "receiver") || strings.Contains(lower, "reciver") ||
-		strings.Contains(lower, "receive") || strings.Contains(lower, "recieve") ||
-		strings.Contains(lower, "resiver") || strings.Contains(lower, "recever")
-}
+// AI rate limiter: 5 requests per second
+var aiRateLimiter = rate.NewLimiter(rate.Every(200*time.Millisecond), 5)
 
-func isSender(lower string) bool {
-	return strings.Contains(lower, "sender") || strings.Contains(lower, "origin") || strings.Contains(lower, "from")
-}
-
+// ParseRegex extracts manifest data using regex patterns
 func ParseRegex(text string) models.Manifest {
 	m := models.Manifest{}
-	lines := strings.Split(text, "\n")
 
-	type field struct {
-		target   *string
-		keywords []string
-		isPrefix bool // Fallback for standard "Name:" format
+	// Receiver Name
+	if match := regexp.MustCompile(`(?i)(?:receiver|reciver|recever|resiver)(?:'s)?\s*(?:name)?:?\s*([A-Za-z\s]+)`).FindStringSubmatch(text); len(match) > 1 {
+		m.ReceiverName = strings.TrimSpace(match[1])
 	}
 
-	receiverFields := []field{
-		{&m.ReceiverName, []string{"name"}, true},
-		{&m.ReceiverPhone, []string{"phone", "mobile", "tel", "num", "contact", "telephone", "mobil", "number"}, false},
-		{&m.ReceiverAddress, []string{"address", "addr"}, false},
-		{&m.ReceiverCountry, []string{"country", "destination", "to"}, false},
-		{&m.ReceiverEmail, []string{"email", "mail"}, false},
-		{&m.ReceiverID, []string{"id", "passport", "nin"}, false},
+	// Receiver Phone
+	phonePatterns := []string{
+		`(?i)(?:receiver|reciver|recever|resiver)(?:'s)?\s*(?:phone|mobile|tel|num|contact|telephone|mobil|number)?:?\s*([\+\d\s\-\(\)]+)`,
+		`(?i)(?:phone|mobile|tel|num|contact|telephone|mobil|number):?\s*([\+\d\s\-\(\)]+)`,
+	}
+	for _, pattern := range phonePatterns {
+		if match := regexp.MustCompile(pattern).FindStringSubmatch(text); len(match) > 1 {
+			m.ReceiverPhone = strings.TrimSpace(match[1])
+			break
+		}
 	}
 
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		lower := strings.ToLower(line)
+	// Receiver Address
+	if match := regexp.MustCompile(`(?i)(?:receiver|reciver|recever|resiver)(?:'s)?\s*address:?\s*(.+?)(?:\n|$)`).FindStringSubmatch(text); len(match) > 1 {
+		m.ReceiverAddress = strings.TrimSpace(match[1])
+	}
 
-		// 1. Check for Sender Fields (Unique prefix)
-		if strings.Contains(lower, "sender") {
-			if strings.Contains(lower, "name") {
-				m.SenderName = cleanLine(line, "name")
-			} else if strings.Contains(lower, "country") || strings.Contains(lower, "origin") || strings.Contains(lower, "from") {
-				m.SenderCountry = cleanLine(line, "country", "origin", "from")
-			}
-			continue
-		}
+	// Receiver Country
+	if match := regexp.MustCompile(`(?i)(?:receiver|reciver|recever|resiver)(?:'s)?\s*country:?\s*([A-Za-z\s]+)`).FindStringSubmatch(text); len(match) > 1 {
+		m.ReceiverCountry = strings.TrimSpace(match[1])
+	}
 
-		// 2. Check for Receiver Fields with Person Keywords (Robust)
-		if isReceiver(lower) {
-			found := false
-			for _, f := range receiverFields {
-				for _, kw := range f.keywords {
-					if strings.Contains(lower, kw) {
-						*f.target = cleanLine(line, kw)
-						found = true
-						break
-					}
-				}
-				if found {
-					break
-				}
-			}
-			// Special case: "Receiver: John Doe" (No specific field name)
-			if !found && m.ReceiverName == "" {
-				m.ReceiverName = cleanLine(line, "receiver", "reciver", "receive", "recieve")
-			}
-			continue
-		}
+	// Receiver Email
+	if match := regexp.MustCompile(`(?i)(?:receiver|reciver|recever|resiver)(?:'s)?\s*email:?\s*([^\s]+@[^\s]+)`).FindStringSubmatch(text); len(match) > 1 {
+		m.ReceiverEmail = strings.TrimSpace(match[1])
+	}
 
-		// 3. Fallback to Standard "Field:" format (No receiver/sender prefix)
-		for _, f := range receiverFields {
-			if *f.target != "" {
-				continue
-			}
-			for _, kw := range f.keywords {
-				prefix := kw + ":"
-				if strings.HasPrefix(lower, prefix) {
-					parts := strings.SplitN(line, ":", 2)
-					if len(parts) > 1 {
-						*f.target = strings.TrimSpace(parts[1])
-					}
-					break
-				}
-			}
-		}
+	// Receiver ID
+	if match := regexp.MustCompile(`(?i)(?:receiver|reciver|recever|resiver)(?:'s)?\s*(?:id|ID):?\s*([A-Za-z0-9\-]+)`).FindStringSubmatch(text); len(match) > 1 {
+		m.ReceiverID = strings.TrimSpace(match[1])
+	}
 
-		// Special case fallbacks for Sender
-		if m.SenderCountry == "" && (strings.HasPrefix(lower, "origin:") || strings.HasPrefix(lower, "from:")) {
-			parts := strings.SplitN(line, ":", 2)
-			if len(parts) > 1 {
-				m.SenderCountry = strings.TrimSpace(parts[1])
-			}
-		}
+	// Sender Name
+	if match := regexp.MustCompile(`(?i)sender(?:'s)?\s*(?:name)?:?\s*([A-Za-z\s]+)`).FindStringSubmatch(text); len(match) > 1 {
+		m.SenderName = strings.TrimSpace(match[1])
+	}
+
+	// Sender Country
+	if match := regexp.MustCompile(`(?i)sender(?:'s)?\s*country:?\s*([A-Za-z\s]+)`).FindStringSubmatch(text); len(match) > 1 {
+		m.SenderCountry = strings.TrimSpace(match[1])
 	}
 
 	m.Validate()
 	return m
 }
 
-func cleanLine(line string, keywords ...string) string {
-	lower := strings.ToLower(line)
-	bestIdx := -1
-	for _, kw := range keywords {
-		if idx := strings.Index(lower, kw); idx != -1 {
-			if bestIdx == -1 || idx > bestIdx {
-				bestIdx = idx + len(kw)
-			}
-		}
-	}
-	if bestIdx == -1 {
-		return ""
-	}
-	res := line[bestIdx:]
-	res = strings.TrimLeft(res, " '’s:：") // Clean up apostrophes, colons, and spaces
-	res = strings.TrimSpace(res)
+// ParseAI uses Gemini AI to extract manifest data with rate limiting
+func ParseAI(text, apiKey string) (models.Manifest, error) {
+	// Rate limit AI requests
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-	// Additional clean for phone numbers: remove common non-numeric chars if it looks like a phone field
-	if strings.Contains(lower, "phone") || strings.Contains(lower, "tel") || strings.Contains(lower, "mobile") || strings.Contains(lower, "num") {
-		// Just a basic sanitize, keep '+', but remove things like '(' ')' '-'
-		res = strings.ReplaceAll(res, "(", "")
-		res = strings.ReplaceAll(res, ")", "")
-		res = strings.ReplaceAll(res, "-", "")
-		res = strings.ReplaceAll(res, " ", "")
+	if err := aiRateLimiter.Wait(ctx); err != nil {
+		return models.Manifest{}, fmt.Errorf("AI rate limit exceeded: %w", err)
 	}
 
-	return res
+	url := "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey
+
+	prompt := fmt.Sprintf(`Extract shipping information from this text and return ONLY a JSON object with these exact fields:
+{
+  "receiverName": "",
+  "receiverAddress": "",
+  "receiverPhone": "",
+  "receiverCountry": "",
+  "receiverEmail": "",
+  "receiverID": "",
+  "senderName": "",
+  "senderCountry": ""
 }
 
-func ParseAI(text, apiKey string) (models.Manifest, error) {
-	prompt := fmt.Sprintf(`Extract shipment details from this text and return ONLY JSON.
-REQUIRED: receiverName, receiverPhone, receiverAddress, receiverCountry, senderName, senderCountry.
-OPTIONAL: receiverEmail, receiverID.
+Text: %s
 
-Text: "%s"
+Return ONLY the JSON, no explanations.`, text)
 
-JSON Schema:
-{
-  "receiverName": "string",
-  "receiverAddress": "string",
-  "receiverPhone": "string",
-  "receiverCountry": "string",
-  "receiverEmail": "string",
-  "receiverID": "string",
-  "senderName": "string",
-  "senderCountry": "string"
-}`, text)
-
-	payload := map[string]interface{}{
-		"contents": []interface{}{
-			map[string]interface{}{
-				"parts": []interface{}{
-					map[string]interface{}{"text": prompt},
+	reqBody := map[string]interface{}{
+		"contents": []map[string]interface{}{
+			{
+				"parts": []map[string]string{
+					{"text": prompt},
 				},
 			},
 		},
 	}
 
-	jsonBytes, _ := json.Marshal(payload)
-	url := "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return models.Manifest{}, err
+	}
 
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonBytes))
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return models.Manifest{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
 		return models.Manifest{}, err
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
-	var aiResp struct {
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return models.Manifest{}, fmt.Errorf("AI API error %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result struct {
 		Candidates []struct {
 			Content struct {
 				Parts []struct {
@@ -186,21 +146,23 @@ JSON Schema:
 		} `json:"candidates"`
 	}
 
-	if err := json.Unmarshal(body, &aiResp); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return models.Manifest{}, err
 	}
 
-	if len(aiResp.Candidates) == 0 || len(aiResp.Candidates[0].Content.Parts) == 0 {
-		return models.Manifest{}, fmt.Errorf("AI returned no results")
+	if len(result.Candidates) == 0 || len(result.Candidates[0].Content.Parts) == 0 {
+		return models.Manifest{}, fmt.Errorf("no AI response")
 	}
 
-	rawJSON := aiResp.Candidates[0].Content.Parts[0].Text
-	rawJSON = strings.TrimPrefix(rawJSON, "```json")
-	rawJSON = strings.TrimSuffix(rawJSON, "```")
-	rawJSON = strings.TrimSpace(rawJSON)
+	aiText := result.Candidates[0].Content.Parts[0].Text
+	aiText = strings.TrimSpace(aiText)
+	aiText = strings.Trim(aiText, "```json")
+	aiText = strings.Trim(aiText, "```")
+	aiText = strings.TrimSpace(aiText)
 
 	var m models.Manifest
-	if err := json.Unmarshal([]byte(rawJSON), &m); err != nil {
+	if err := json.Unmarshal([]byte(aiText), &m); err != nil {
+		logger.Warn().Str("ai_response", aiText).Msg("Failed to parse AI JSON")
 		return models.Manifest{}, err
 	}
 

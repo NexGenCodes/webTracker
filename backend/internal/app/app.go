@@ -10,10 +10,12 @@ import (
 
 	"webtracker-bot/internal/commands"
 	"webtracker-bot/internal/config"
+	"webtracker-bot/internal/health"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/scheduler"
 	"webtracker-bot/internal/supabase"
+	"webtracker-bot/internal/utils"
 	"webtracker-bot/internal/whatsapp"
 	"webtracker-bot/internal/worker"
 
@@ -60,6 +62,16 @@ func (a *App) Init() error {
 
 	// 3. Register Events
 	a.WA.AddEventHandler(a.handleWAEvent)
+
+	// 4. Init Receipt Renderer
+	if err := utils.InitReceiptRenderer(); err != nil {
+		return fmt.Errorf("receipt renderer init: %w", err)
+	}
+
+	// 5. Start Health Server
+	health.StartHealthServer("8080", func() error {
+		return a.DB.Ping()
+	})
 
 	return nil
 }
@@ -149,6 +161,7 @@ func (a *App) Shutdown() error {
 	if a.Cron != nil {
 		a.Cron.Stop()
 	}
+	utils.ShutdownRenderer()
 	close(a.Jobs)
 	a.WG.Wait()
 	logger.Info().Msg("Bot shutdown complete.")
