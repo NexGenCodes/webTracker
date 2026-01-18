@@ -106,9 +106,9 @@ func (w *Worker) process(job models.Job) {
 	logger.GlobalVitals.IncInsertSuccess()
 
 	// 7. Success
-	successMsg := fmt.Sprintf("📦 *PACKAGE SHIPPING CREATED*\n\n━━━━━━━━━━━━━━━━━━━━━━━\nTracking ID: *%s*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n_Shipment successfully registered in our system._", id)
+	successMsg := fmt.Sprintf("📦 *PACKAGE SHIPPING CREATED*\n\n━━━━━━━━━━━━━━━━━━━━━━━\nTracking ID: *%s*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n📌 *Track your package:*\nhttps://web-tracker-iota.vercel.app?id=%s\n\n_", id, id)
 	if m.IsAI {
-		successMsg += "\n_✨"
+		successMsg += "\n_✨ Parsed by AI_"
 	}
 	w.Sender.Reply(job.ChatJID, job.SenderJID, successMsg, job.MessageID, job.Text)
 }
