@@ -119,6 +119,7 @@ func (a *App) connectWA() error {
 			if evt.Event == "code" {
 				qrterminal.GenerateHalfBlock(evt.Code, qrterminal.L, os.Stdout)
 				fmt.Println("\nScan the QR code above to login")
+				fmt.Printf("Or copy this code: %s\n", evt.Code)
 			}
 		}
 	} else {
