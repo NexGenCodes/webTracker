@@ -291,7 +291,7 @@ const ShipmentMap: React.FC<ShipmentMapProps> = ({ shipmentData }) => {
                     <Polyline
                         positions={traveledPath}
                         pathOptions={{
-                            color: 'hsl(var(--accent))',
+                            color: isActive ? '#3b82f6' : 'hsl(var(--accent))',
                             weight: 4,
                             opacity: 1,
                             lineCap: 'round',
