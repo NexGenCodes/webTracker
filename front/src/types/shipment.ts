@@ -22,6 +22,7 @@ export interface ShipmentData {
     events: ShipmentEvent[];
     originCoords?: [number, number];
     destinationCoords?: [number, number];
+    createdAt?: string | Date;
     estimatedDelivery?: string | Date;
     // Added for WhatsApp context in services
     whatsappMessageId?: string | null;
