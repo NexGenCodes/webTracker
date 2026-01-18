@@ -362,98 +362,46 @@ body {
 }
 
 /* Enhanced Telemetry Markers */
-.origin-marker {
-  width: 24px;
-  height: 24px;
-  background: hsl(var(--bg));
-  border: 2px solid hsl(var(--primary));
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 0 15px hsl(var(--primary) / 0.3);
-}
-
-.origin-marker::after {
-  content: '';
-  width: 8px;
-  height: 8px;
+/* FedEx-Style Map Markers */
+.fedex-origin-marker {
+  width: 20px;
+  height: 20px;
   background: hsl(var(--primary));
+  border: 3px solid white;
   border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
-.destination-marker {
-  width: 24px;
-  height: 24px;
-  background: hsl(var(--bg));
-  border: 2px solid hsl(var(--accent));
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 0 20px hsl(var(--accent) / 0.5);
-  animation: pulse-destination 2s ease-in-out infinite;
-}
-
-@keyframes pulse-destination {
-
-  0%,
-  100% {
-    box-shadow: 0 0 10px hsl(var(--accent) / 0.3);
-  }
-
-  50% {
-    box-shadow: 0 0 30px hsl(var(--accent) / 0.7);
-  }
-}
-
-.destination-marker::after {
-  content: '';
-  width: 10px;
-  height: 10px;
+.fedex-destination-marker {
+  width: 20px;
+  height: 20px;
   background: hsl(var(--accent));
-  border-radius: 2px;
-  transform: rotate(45deg);
-}
-
-.moving-marker-glow {
-  position: relative;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.moving-marker-core {
-  width: 12px;
-  height: 12px;
-  background: white;
+  border: 3px solid white;
   border-radius: 50%;
-  z-index: 2;
-  box-shadow: 0 0 15px white, 0 0 30px hsl(var(--accent));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
-.moving-marker-trail {
-  position: absolute;
-  width: 100%;
-  height: 100%;
+.fedex-moving-marker {
+  width: 16px;
+  height: 16px;
+  background: hsl(var(--accent));
+  border: 2px solid white;
   border-radius: 50%;
-  background: radial-gradient(circle, hsl(var(--accent) / 0.4) 0%, transparent 70%);
-  animation: marker-trail 1.5s linear infinite;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  animation: fedex-pulse 2s ease-in-out infinite;
 }
 
-@keyframes marker-trail {
-  0% {
+@keyframes fedex-pulse {
+  0%, 100% {
     transform: scale(1);
-    opacity: 0.8;
+    opacity: 1;
   }
-
-  100% {
-    transform: scale(2.5);
-    opacity: 0;
+  50% {
+    transform: scale(1.1);
+    opacity: 0.9;
   }
 }
+
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
