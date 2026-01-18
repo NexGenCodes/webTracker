@@ -28,12 +28,14 @@ export class ShipmentService {
      */
     static async create(data: CreateShipmentDto): Promise<ServiceResult<{ trackingNumber: string }>> {
         try {
-            const hashInput = `${data.receiverName}${data.receiverPhone}${data.receiverCountry}${data.senderName}`;
-            const hash = crypto.createHash('shake256', { outputLength: 5 })
-                .update(hashInput)
-                .digest('hex');
-
-            const trackingNumber = `${TRACKING_PREFIX}-${hash}`;
+            // Aligned with Go backend standard: Exactly 9 characters total
+            const randomLen = Math.max(9 - TRACKING_PREFIX.length - 1, 3);
+            const charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+            let randomPart = "";
+            for (let i = 0; i < randomLen; i++) {
+                randomPart += charset.charAt(Math.floor(Math.random() * charset.length));
+            }
+            const trackingNumber = `${TRACKING_PREFIX}-${randomPart}`;
 
             const shipment = await prisma.shipment.create({
                 data: {

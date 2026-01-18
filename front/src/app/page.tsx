@@ -11,6 +11,7 @@ import { ShipmentData } from '@/types/shipment';
 import { useI18n } from '@/components/I18nContext';
 import { Footer } from '@/components/Footer';
 import { FeatureCard } from '@/components/FeatureCard';
+import { toast } from 'react-hot-toast';
 
 const ShipmentMap = dynamic(() => import('@/components/ShipmentMap'), {
   ssr: false,
@@ -36,15 +37,26 @@ function HomeContent() {
       const data = await getTracking(trackingNumber);
       if (data) {
         setShippingData(data);
+        toast.success(dict.admin?.success || 'Shipment found', {
+          icon: '📦',
+        });
       } else {
-        setError(dict.common.notFound);
+        const errorMsg = dict.common.notFound;
+        setError(errorMsg);
+        toast.error(errorMsg, {
+          icon: '🔍',
+        });
       }
     } catch (err) {
-      setError(dict.common.error);
+      const errorMsg = dict.common.error;
+      setError(errorMsg);
+      toast.error(errorMsg, {
+        icon: '⚠️',
+      });
     } finally {
       setLoading(false);
     }
-  }, [dict]);
+  }, [dict, dict.admin, dict.common]);
 
   // Deep linking effect
   useEffect(() => {
@@ -56,8 +68,12 @@ function HomeContent() {
   const copyToClipboard = useCallback((text: string) => {
     navigator.clipboard.writeText(text);
     setCopied(true);
+    toast.success(dict.admin?.copied || 'Copied!', {
+      duration: 2000,
+      icon: '📋',
+    });
     setTimeout(() => setCopied(false), 2000);
-  }, []);
+  }, [dict.admin]);
 
   return (
     <main className="min-h-screen flex flex-col items-center overflow-x-hidden relative">
@@ -78,7 +94,7 @@ function HomeContent() {
 
         {/* Hero Section */}
         {!shippingData && (
-          <div className="py-24 md:py-32">
+          <div className="py-12 md:py-32">
             <div className="max-w-2xl mx-auto text-center mb-12">
               <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-accent/10 border border-accent/20 text-accent text-xs font-bold uppercase tracking-widest mb-6 animate-fade-in">
                 <ShieldCheck size={14} />
@@ -125,11 +141,11 @@ function HomeContent() {
         {/* Search Results */}
         {shippingData && (
           <div className="mb-24 animate-scale-in">
-            <div className="glass-panel p-8 md:p-14 shadow-3xl border-border/50 overflow-hidden relative">
+            <div className="glass-panel p-5 md:p-14 shadow-3xl border-border/50 overflow-hidden relative">
               <div className="absolute top-0 right-0 w-96 h-96 bg-accent/5 rounded-full -mr-48 -mt-48 blur-3xl pointer-events-none" />
 
               {/* Status Header */}
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-10 mb-16 pb-12 border-b border-border relative z-10">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 md:gap-10 mb-8 md:mb-16 pb-8 md:pb-12 border-b border-border relative z-10">
                 <div className="flex items-center gap-6">
                   <div className="relative">
                     <div className="absolute inset-0 bg-accent blur-3xl opacity-20 animate-pulse" />
@@ -139,7 +155,7 @@ function HomeContent() {
                   </div>
                   <div>
                     <span className="text-accent text-[11px] font-black uppercase tracking-[0.4em] mb-2 block">{dict.shipment.status}</span>
-                    <h2 className="text-4xl md:text-6xl font-black text-text-main tracking-tighter uppercase leading-none">
+                    <h2 className="text-2xl md:text-6xl font-black text-text-main tracking-tighter uppercase leading-none">
                       {shippingData.isArchived ? dict.shipment.finalized : shippingData.status.replace(/_/g, ' ')}
                     </h2>
                   </div>
@@ -147,8 +163,8 @@ function HomeContent() {
 
                 <div className="flex flex-col items-start md:items-end">
                   <span className="text-text-muted text-[11px] font-black uppercase tracking-[0.4em] mb-3">{dict.shipment.trackingId}</span>
-                  <div className="flex items-center gap-4 bg-surface-muted px-6 py-4 rounded-3xl border border-border group/copy transition-all hover:border-accent/30 shadow-inner">
-                    <span className="font-mono text-2xl font-black tracking-widest text-text-main group-hover:text-accent transition-colors">{shippingData.trackingNumber}</span>
+                  <div className="flex items-center gap-4 bg-surface-muted px-4 md:px-6 py-4 rounded-3xl border border-border group/copy transition-all hover:border-accent/30 shadow-inner">
+                    <span className="font-mono text-lg md:text-2xl font-black tracking-wide md:tracking-widest text-text-main group-hover:text-accent transition-colors break-all md:break-normal">{shippingData.trackingNumber}</span>
                     <button
                       onClick={() => copyToClipboard(shippingData.trackingNumber)}
                       className="p-2.5 hover:bg-accent/10 rounded-2xl text-text-muted hover:text-accent transition-all active:scale-90"
@@ -165,7 +181,7 @@ function HomeContent() {
                     <AlertCircle className="w-16 h-16 text-error" />
                   </div>
                   <div className="max-w-2xl">
-                    <h3 className="text-5xl md:text-7xl font-black mb-6 tracking-tighter uppercase text-error">Shipment Canceled</h3>
+                    <h3 className="text-3xl md:text-7xl font-black mb-6 tracking-tighter uppercase text-error">Shipment Canceled</h3>
                     <p className="text-text-muted text-xl leading-relaxed font-bold opacity-80">
                       This shipment has been canceled by the administrator. Please contact support for more details.
                     </p>
@@ -177,14 +193,14 @@ function HomeContent() {
                     <CheckCircle className="w-16 h-16 text-success" />
                   </div>
                   <div className="max-w-2xl">
-                    <h3 className="text-5xl md:text-7xl font-black mb-6 tracking-tighter uppercase text-gradient">{dict.shipment.deliveredTitle}</h3>
+                    <h3 className="text-3xl md:text-7xl font-black mb-6 tracking-tighter uppercase text-gradient">{dict.shipment.deliveredTitle}</h3>
                     <p className="text-text-muted text-xl leading-relaxed font-bold opacity-80">
                       {dict.shipment.deliveredDesc}
                     </p>
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-20 relative z-10">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-20 relative z-10">
                   <div className="lg:col-span-5 space-y-16">
                     <div className="space-y-8">
                       <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-accent flex items-center gap-4">
@@ -199,7 +215,7 @@ function HomeContent() {
                         ].map((detail, idx) => (
                           <div key={idx} className="flex justify-between items-center py-6 border-b border-border last:border-0 group/item">
                             <span className="text-text-muted font-black text-xs uppercase tracking-widest">{detail.label}</span>
-                            <span className={cn("font-black text-text-main text-xl group-hover:text-accent transition-colors", detail.italic && "italic")}>{detail.value}</span>
+                            <span className={cn("font-black text-text-main text-lg md:text-xl group-hover:text-accent transition-colors", detail.italic && "italic")}>{detail.value}</span>
                           </div>
                         ))}
                       </div>
@@ -218,7 +234,7 @@ function HomeContent() {
                               i === 0 ? "bg-accent scale-125 shadow-lg shadow-accent/40" : "bg-border group-hover/event:bg-accent/40"
                             )} />
                             <div className="flex items-center gap-4 mb-2">
-                              <p className={cn("font-black text-xl tracking-tight leading-none uppercase", i === 0 ? "text-text-main" : "text-text-muted")}>
+                              <p className={cn("font-black text-lg md:text-xl tracking-tight leading-none uppercase", i === 0 ? "text-text-main" : "text-text-muted")}>
                                 {event.status.replace(/_/g, ' ')}
                               </p>
                               {i === 0 && (

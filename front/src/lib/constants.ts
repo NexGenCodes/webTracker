@@ -104,3 +104,21 @@ export const COUNTRY_COORDS: Record<string, [number, number]> = {
 }
 
 export const ADMIN_TIMEZONE = process.env.ADMIN_TIMEZONE || "Africa/Lagos";
+
+/**
+ * Validates tracking number format: Exactly 9 characters total.
+ * Prefix-Random Alphanumeric (excluding I, 1, O, 0)
+ */
+export function isValidTrackingNumber(id: string): boolean {
+    if (!id || id.length !== 9) return false;
+    
+    // Construct regex dynamic based on the TRACKING_PREFIX
+    // Standard charset: ABCDEFGHJKLMNPQRSTUVWXYZ23456789
+    const randomPartLen = 9 - TRACKING_PREFIX.length - 1;
+    if (randomPartLen < 3) return true; // Minimal length check if prefix is huge
+    
+    const charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    const regex = new RegExp(`^${TRACKING_PREFIX}-[${charset}]{${randomPartLen}}$`);
+    
+    return regex.test(id);
+}

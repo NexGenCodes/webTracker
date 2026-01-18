@@ -1,15 +1,17 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useCallback, memo } from 'react';
 import { Search, Loader2 } from 'lucide-react';
 import { useI18n } from './I18nContext';
+import { isValidTrackingNumber } from '@/lib/constants';
+import { toast } from 'react-hot-toast';
 
 interface TrackingSearchProps {
     onSearch: (trackingNumber: string) => Promise<void>;
     isLoading: boolean;
 }
 
-export const TrackingSearch: React.FC<TrackingSearchProps> = ({ onSearch, isLoading }) => {
+export const TrackingSearch: React.FC<TrackingSearchProps> = memo(({ onSearch, isLoading }) => {
     const { dict } = useI18n();
     const [input, setInput] = useState('');
     const [loadingMsgIndex, setLoadingMsgIndex] = useState(0);
@@ -26,19 +28,31 @@ export const TrackingSearch: React.FC<TrackingSearchProps> = ({ onSearch, isLoad
         return () => clearInterval(interval);
     }, [isLoading, dict.hero.loadingMessages]);
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = useCallback(async (e: React.FormEvent) => {
         e.preventDefault();
-        if (input.trim()) {
-            await onSearch(input.trim());
+        const trimmed = input.trim();
+        if (!trimmed) return;
+
+        if (!isValidTrackingNumber(trimmed)) {
+            toast.error("Invalid tracking format. Please check your ID.", {
+                icon: '🎫',
+            });
+            return;
         }
-    };
+
+        await onSearch(trimmed);
+    }, [input, onSearch]);
+
+    const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        setInput(e.target.value);
+    }, []);
 
     return (
         <div className="w-full max-w-2xl mx-auto p-1 bg-linear-to-br from-border/50 via-accent/5 to-border/50 rounded-[2.5rem] shadow-3xl group/container">
-            <div className="glass-panel p-10 md:p-14 relative overflow-hidden rounded-[2.2rem]">
+            <div className="glass-panel p-5 md:p-14 relative overflow-hidden rounded-[2.2rem]">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-accent/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
 
-                <h1 className="text-4xl md:text-6xl font-black mb-6 text-center text-gradient leading-[0.9] tracking-tighter uppercase">
+                <h1 className="text-3xl md:text-6xl font-black mb-6 text-center text-gradient leading-[0.9] tracking-tighter uppercase">
                     {dict.hero.title}
                 </h1>
 
@@ -53,7 +67,7 @@ export const TrackingSearch: React.FC<TrackingSearchProps> = ({ onSearch, isLoad
                         </p>
                     </div>
                 ) : (
-                    <p className="text-center text-text-muted mb-12 text-lg md:text-xl font-bold max-w-md mx-auto leading-relaxed border-l-2 border-accent/20 pl-6 h-[92px] flex items-center">
+                    <p className="text-center text-text-muted mb-8 md:mb-12 text-base md:text-xl font-bold max-w-md mx-auto leading-relaxed border-l-2 border-accent/20 pl-6 h-[92px] flex items-center">
                         {dict.hero.subtitle}
                     </p>
                 )}
@@ -63,15 +77,15 @@ export const TrackingSearch: React.FC<TrackingSearchProps> = ({ onSearch, isLoad
                     <input
                         type="text"
                         value={input}
-                        onChange={(e) => setInput(e.target.value)}
+                        onChange={handleInputChange}
                         placeholder={dict.hero.placeholder}
-                        className="relative z-10 w-full bg-surface-muted text-text-main py-6 pl-10 pr-44 rounded-3xl border-2 border-transparent outline-none focus:border-accent/30 focus:bg-surface focus:ring-8 focus:ring-accent/5 transition-all placeholder:text-text-muted/40 font-black tracking-widest text-xl shadow-inner uppercase"
+                        className="relative z-10 w-full bg-surface-muted text-text-main py-4 md:py-6 pl-6 md:pl-10 pr-16 sm:pr-44 rounded-3xl border-2 border-transparent outline-none focus:border-accent/30 focus:bg-surface focus:ring-8 focus:ring-accent/5 transition-all placeholder:text-text-muted/40 font-black tracking-widest text-lg md:text-xl shadow-inner uppercase"
                         disabled={isLoading}
                     />
                     <button
                         type="submit"
                         disabled={isLoading || !input.trim()}
-                        className="absolute right-3 top-3 bottom-3 z-20 btn-primary py-0! px-10! flex items-center justify-center gap-3 transition-all hover:scale-[1.03] active:scale-95 shadow-2xl shadow-accent/30 disabled:grayscale disabled:opacity-50"
+                        className="absolute right-2 md:right-3 top-2 md:top-3 bottom-2 md:bottom-3 z-20 btn-primary py-0! px-4! sm:px-10! flex items-center justify-center gap-3 transition-all hover:scale-[1.03] active:scale-95 shadow-2xl shadow-accent/30 disabled:grayscale disabled:opacity-50"
                     >
                         {isLoading ? <Loader2 className="animate-spin" size={20} /> : (
                             <>
@@ -84,4 +98,5 @@ export const TrackingSearch: React.FC<TrackingSearchProps> = ({ onSearch, isLoad
             </div>
         </div>
     );
-};
+});
+TrackingSearch.displayName = 'TrackingSearch';

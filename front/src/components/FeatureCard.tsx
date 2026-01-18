@@ -19,7 +19,7 @@ export const FeatureCard: React.FC<FeatureCardProps> = memo(({
 }) => {
     return (
         <div className={cn(
-            "glass-panel p-12 hover:scale-[1.02] hover:-translate-y-2 transition-all duration-500 cursor-default shadow-xl border-border/50 hover:border-accent/30 group",
+            "glass-panel p-8 md:p-12 hover:scale-[1.02] hover:-translate-y-2 transition-all duration-500 cursor-default shadow-xl border-border/50 hover:border-accent/30 group",
             className
         )}>
             <div className="w-16 h-16 bg-accent/5 rounded-2xl flex items-center justify-center text-accent mb-10 shadow-inner group-hover:bg-accent group-hover:text-white transition-all duration-500 ring-1 ring-accent/10">

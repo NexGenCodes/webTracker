@@ -29,6 +29,7 @@ export const metadata: Metadata = {
 import { ClientTransitionProvider } from "@/components/ClientTransitionProvider";
 import AuthProvider from "@/components/AuthProvider";
 import { LayoutHeader } from "@/components/LayoutHeader";
+import { Toaster } from "react-hot-toast";
 
 export default function RootLayout({
   children,
@@ -42,6 +43,37 @@ export default function RootLayout({
       >
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
           <I18nProvider>
+            <Toaster position="top-left" toastOptions={{
+              className: 'font-bold uppercase text-[11px] tracking-[0.1em] border shadow-2xl rounded-2xl p-4 min-w-[320px]',
+              duration: 5000,
+              style: {
+                background: 'var(--glass-bg)',
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)',
+                color: 'var(--color-text-main)',
+                border: '1px solid var(--color-border)',
+                boxShadow: 'var(--glass-shadow)',
+              },
+              success: {
+                iconTheme: {
+                  primary: 'var(--color-success)',
+                  secondary: 'white',
+                },
+                style: {
+                  borderLeft: '4px solid var(--color-success)',
+                }
+              },
+              error: {
+                iconTheme: {
+                  primary: 'var(--color-error)',
+                  secondary: 'white',
+                },
+                style: {
+                  borderLeft: '4px solid var(--color-error)',
+                  color: 'var(--color-error)',
+                }
+              }
+            }} />
             <LayoutHeader />
             <ClientTransitionProvider>
               <AuthProvider>
