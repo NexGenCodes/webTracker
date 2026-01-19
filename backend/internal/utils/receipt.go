@@ -122,7 +122,7 @@ func (r *ReceiptRenderer) render(shipment models.Shipment, companyName string) (
 	}
 
 	var pngBuf []byte
-	timeout, timeoutCancel := context.WithTimeout(ctx, 15*time.Second)
+	timeout, timeoutCancel := context.WithTimeout(ctx, 45*time.Second)
 	defer timeoutCancel()
 
 	err := chromedp.Run(timeout,
