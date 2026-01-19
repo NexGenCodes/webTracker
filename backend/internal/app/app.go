@@ -65,7 +65,7 @@ func (a *App) Init() error {
 
 	// 4. Init Receipt Renderer
 	if err := utils.InitReceiptRenderer(); err != nil {
-		return fmt.Errorf("receipt renderer init: %w", err)
+		logger.Error().Err(err).Msg("Failed to initialize receipt renderer (Chrome missing?). Continuing without receipt generation capability.")
 	}
 
 	// 5. Start Health Server
