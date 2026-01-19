@@ -24,15 +24,25 @@ var aiRateLimiter = rate.NewLimiter(rate.Every(200*time.Millisecond), 5)
 func ParseRegex(text string) models.Manifest {
 	m := models.Manifest{}
 
+	// Common variations for "receiver" with flexible suffix
+	rxVariations := `(?:receiver|reciver|recever|resiver|recieve|reciever)[s']*`
+
 	// Receiver Name
-	if match := regexp.MustCompile(`(?i)(?:receiver|reciver|recever|resiver)(?:'s)?\s*(?:name)?:?\s*([A-Za-z\s]+)`).FindStringSubmatch(text); len(match) > 1 {
+	// 1. Specific prefix (handle "Receiver's: Name" case)
+	// Simplified separator logic: match any separators + optional label + any separators
+	if match := regexp.MustCompile(fmt.Sprintf(`(?i)%s[\s:']*(?:name[\s:']*)?([^\n]+)`, rxVariations)).FindStringSubmatch(text); len(match) > 1 {
 		m.ReceiverName = strings.TrimSpace(match[1])
+	} else {
+		// 2. Generic "Name:" fallback
+		if match := regexp.MustCompile(`(?i)(?:^|\n)\s*name[\s:']*([^\n]+)`).FindStringSubmatch(text); len(match) > 1 {
+			m.ReceiverName = strings.TrimSpace(match[1])
+		}
 	}
 
 	// Receiver Phone
 	phonePatterns := []string{
-		`(?i)(?:receiver|reciver|recever|resiver)(?:'s)?\s*(?:phone|mobile|tel|num|contact|telephone|mobil|number)?:?\s*([\+\d\s\-\(\)]+)`,
-		`(?i)(?:phone|mobile|tel|num|contact|telephone|mobil|number):?\s*([\+\d\s\-\(\)]+)`,
+		fmt.Sprintf(`(?i)%s[\s:']*(?:phone|mobile|tel|num|contact|telephone|mobil|number)[\s:']*([\+\d\s\-\(\)]+)`, rxVariations),
+		`(?i)(?:phone|mobile|tel|num|contact|telephone|mobil|number)[\s:']*([\+\d\s\-\(\)]+)`,
 	}
 	for _, pattern := range phonePatterns {
 		if match := regexp.MustCompile(pattern).FindStringSubmatch(text); len(match) > 1 {
@@ -42,32 +52,43 @@ func ParseRegex(text string) models.Manifest {
 	}
 
 	// Receiver Address
-	if match := regexp.MustCompile(`(?i)(?:receiver|reciver|recever|resiver)(?:'s)?\s*address:?\s*(.+?)(?:\n|$)`).FindStringSubmatch(text); len(match) > 1 {
+	if match := regexp.MustCompile(fmt.Sprintf(`(?i)%s[\s:']*(?:address|addr)[\s:']*(.+?)(?:\n|$)`, rxVariations)).FindStringSubmatch(text); len(match) > 1 {
+		m.ReceiverAddress = strings.TrimSpace(match[1])
+	} else if match := regexp.MustCompile(`(?i)(?:^|\n)\s*(?:address|addr)[\s:']*(.+?)(?:\n|$)`).FindStringSubmatch(text); len(match) > 1 {
 		m.ReceiverAddress = strings.TrimSpace(match[1])
 	}
 
 	// Receiver Country
-	if match := regexp.MustCompile(`(?i)(?:receiver|reciver|recever|resiver)(?:'s)?\s*country:?\s*([A-Za-z\s]+)`).FindStringSubmatch(text); len(match) > 1 {
+	if match := regexp.MustCompile(fmt.Sprintf(`(?i)%s[\s:']*country[\s:']*([^\n]+)`, rxVariations)).FindStringSubmatch(text); len(match) > 1 {
 		m.ReceiverCountry = strings.TrimSpace(match[1])
+	} else if match := regexp.MustCompile(`(?i)(?:^|\n)\s*country[\s:']*([^\n]+)`).FindStringSubmatch(text); len(match) > 1 {
+		// Only if not "Sender Country" (simple check, sender usually explicit)
+		if !strings.Contains(strings.ToLower(match[0]), "sender") {
+			m.ReceiverCountry = strings.TrimSpace(match[1])
+		}
 	}
 
 	// Receiver Email
-	if match := regexp.MustCompile(`(?i)(?:receiver|reciver|recever|resiver)(?:'s)?\s*email:?\s*([^\s]+@[^\s]+)`).FindStringSubmatch(text); len(match) > 1 {
+	if match := regexp.MustCompile(fmt.Sprintf(`(?i)%s[\s:']*email[\s:']*([^\s]+@[^\s]+)`, rxVariations)).FindStringSubmatch(text); len(match) > 1 {
+		m.ReceiverEmail = strings.TrimSpace(match[1])
+	} else if match := regexp.MustCompile(`(?i)(?:^|\n)\s*email[\s:']*([^\s]+@[^\s]+)`).FindStringSubmatch(text); len(match) > 1 {
 		m.ReceiverEmail = strings.TrimSpace(match[1])
 	}
 
 	// Receiver ID
-	if match := regexp.MustCompile(`(?i)(?:receiver|reciver|recever|resiver)(?:'s)?\s*(?:id|ID):?\s*([A-Za-z0-9\-]+)`).FindStringSubmatch(text); len(match) > 1 {
+	if match := regexp.MustCompile(fmt.Sprintf(`(?i)%s[\s:']*(?:id|ID)[\s:']*([A-Za-z0-9\-]+)`, rxVariations)).FindStringSubmatch(text); len(match) > 1 {
+		m.ReceiverID = strings.TrimSpace(match[1])
+	} else if match := regexp.MustCompile(`(?i)(?:^|\n)\s*(?:passport|id|nin|gov id)[\s:']*([A-Za-z0-9\-]+)`).FindStringSubmatch(text); len(match) > 1 {
 		m.ReceiverID = strings.TrimSpace(match[1])
 	}
 
 	// Sender Name
-	if match := regexp.MustCompile(`(?i)sender(?:'s)?\s*(?:name)?:?\s*([A-Za-z\s]+)`).FindStringSubmatch(text); len(match) > 1 {
+	if match := regexp.MustCompile(`(?i)sender(?:'s|s)?\s*(?:name)?:?\s*([^\n]+)`).FindStringSubmatch(text); len(match) > 1 {
 		m.SenderName = strings.TrimSpace(match[1])
 	}
 
 	// Sender Country
-	if match := regexp.MustCompile(`(?i)sender(?:'s)?\s*country:?\s*([A-Za-z\s]+)`).FindStringSubmatch(text); len(match) > 1 {
+	if match := regexp.MustCompile(`(?i)sender(?:'s|s)?\s*country:?\s*([^\n]+)`).FindStringSubmatch(text); len(match) > 1 {
 		m.SenderCountry = strings.TrimSpace(match[1])
 	}
 
