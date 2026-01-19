@@ -31,13 +31,6 @@ echo "[3/5] Installing Font dependencies..."
 sudo apt install -y fontconfig libfreetype6
 sudo fc-cache -f -v
 
-# 4. Remove Legacy Chrome (Free up RAM/Disk)
-echo ""
-echo "[4/5] Removing Google Chrome and cleanup..."
-sudo apt purge -y google-chrome-stable || true
-sudo apt autoremove -y
-sudo apt autoclean
-echo "✓ Chrome removed"
 
 # 5. Install Go 1.21+
 echo ""
