@@ -25,7 +25,7 @@ import (
 const (
 	Width   = 1800 // Canvas width in pixels
 	Height  = 1400 // Canvas height in pixels (Increased for more vertical space)
-	Quality = 95   // JPEG output quality (1-100)
+	Quality = 100  // JPEG output quality (1-100)
 )
 
 // =============================================================================
