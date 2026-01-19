@@ -163,7 +163,7 @@ func (w *Worker) isPotentialManifest(text string) (bool, bool) {
 
 	// Receiver Variants Check
 	hasReceiver := false
-	receiverKeywords := []string{"receiver", "reciver", "receive", "recieve", "resiver", "recever"}
+	receiverKeywords := []string{"receiver", "reciver", "receive", "recieve", "resiver", "recever", "receivers", "recievers", "reciever"}
 	for _, kw := range receiverKeywords {
 		if strings.Contains(lower, kw) {
 			hasReceiver = true
