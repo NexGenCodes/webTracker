@@ -81,6 +81,9 @@ backend/logs/
 coverage.out
 backend/bot
 backend/*.exe
+backend/internal/utils/receipt_test_output.jpg
+backend/internal/logger/test_logs/
+**/assets/fonts/
 
 # Editors
 .idea/

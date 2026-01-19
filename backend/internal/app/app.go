@@ -163,7 +163,6 @@ func (a *App) Shutdown() error {
 	if a.Cron != nil {
 		a.Cron.Stop()
 	}
-	utils.ShutdownRenderer()
 	close(a.Jobs)
 	a.WG.Wait()
 	logger.Info().Msg("Bot shutdown complete.")

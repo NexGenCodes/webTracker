@@ -74,7 +74,11 @@ func Load() *Config {
 		}
 	}
 
-	companyName := os.Getenv("COMPANY_NAME")
+	companyNameEnv := os.Getenv("COMPANY_NAME")
+	companyName := strings.ReplaceAll(companyNameEnv, " ", "")
+	if companyName == "" {
+		companyName = "Airwaybill"
+	}
 	companyPrefix := generateAbbreviation(companyName)
 
 	cfg := &Config{

@@ -120,7 +120,7 @@ func (w *Worker) process(job models.Job) {
 	}
 
 	// 8. Generate receipt image
-	receiptImg, err := utils.RenderReceipt(*shipment, w.CompanyName)
+	receiptImg, err := utils.RenderReceipt(*shipment)
 	if err != nil {
 		logger.Warn().Err(err).Str("tracking_id", id).Msg("Receipt render failed, sending text")
 		// Fallback to text-only success
@@ -150,9 +150,9 @@ func (w *Worker) process(job models.Job) {
 		return
 	}
 
-	// 10. Send tracking ID as follow-up message
+	// 10. Send tracking ID as follow-up message (Group Chat) quote the user's message
 	trackingMsg := fmt.Sprintf("🔗 *Tracking ID:* %s\n\n📌 *Track your package:*\nhttps://web-tracker-iota.vercel.app?id=%s", id, id)
-	w.Sender.Send(job.ChatJID, trackingMsg)
+	w.Sender.Reply(job.ChatJID, job.SenderJID, trackingMsg, job.MessageID, job.Text)
 }
 
 func (w *Worker) isPotentialManifest(text string) (bool, bool) {

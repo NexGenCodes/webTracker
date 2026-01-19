@@ -41,7 +41,11 @@ func Init() {
 	}
 
 	multi := zerolog.MultiLevelWriter(writers...)
-	log.Logger = zerolog.New(multi).With().Timestamp().Logger()
+	// 3. Global Fields
+	log.Logger = zerolog.New(multi).With().
+		Timestamp().
+		Caller().
+		Logger()
 
 	// Set global log level
 	level := os.Getenv("LOG_LEVEL")
@@ -74,4 +78,14 @@ func Debug() *zerolog.Event {
 
 func Fatal() *zerolog.Event {
 	return log.Fatal()
+}
+
+// WithField adds a single field to the log
+func WithField(key string, value interface{}) zerolog.Logger {
+	return log.With().Interface(key, value).Logger()
+}
+
+// WithFields adds multiple fields to the log
+func WithFields(fields map[string]interface{}) zerolog.Logger {
+	return log.With().Fields(fields).Logger()
 }

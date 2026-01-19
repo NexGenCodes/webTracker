@@ -25,26 +25,13 @@ echo ""
 echo "[2/5] Updating system packages..."
 sudo apt update && sudo apt upgrade -y
 
-# 3. Install Chrome Dependencies
+# 3. Install Font Dependencies (Required for gg)
 echo ""
-echo "[3/5] Installing Chrome dependencies..."
-sudo apt install -y \
-    libnss3 libatk-bridge2.0-0 libcups2 libdrm2 \
-    libxkbcommon0 libxcomposite1 libxdamage1 \
-    libxrandr2 libgbm1 libasound2 fonts-liberation \
-    libappindicator3-1 libxss1 xdg-utils
+echo "[3/5] Installing Font dependencies..."
+sudo apt install -y fontconfig libfreetype6
 
-# 4. Install Google Chrome Stable
-echo ""
-echo "[4/5] Installing Google Chrome..."
-wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-sudo dpkg -i google-chrome-stable_current_amd64.deb || true
-sudo apt --fix-broken install -y
-rm google-chrome-stable_current_amd64.deb
-
-# Verify Chrome installation
-google-chrome --version
-echo "✓ Chrome installed successfully"
+# Refresh font cache
+sudo fc-cache -f -v
 
 # 5. Install Go 1.21+
 echo ""

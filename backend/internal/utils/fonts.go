@@ -15,8 +15,11 @@ import (
 
 var (
 	fontDataMu sync.Mutex
-	fontsPath  = filepath.Join("internal", "assets", "fonts")
 )
+
+func getFontsPath() string {
+	return filepath.Join(GetAssetsPath(), "fonts")
+}
 
 const (
 	FontCourierBold = "courier_bold.ttf"
@@ -31,7 +34,7 @@ func EnsureFontsDownloader() error {
 	fontDataMu.Lock()
 	defer fontDataMu.Unlock()
 
-	if err := os.MkdirAll(fontsPath, 0755); err != nil {
+	if err := os.MkdirAll(getFontsPath(), 0755); err != nil {
 		return fmt.Errorf("failed to create fonts dir: %w", err)
 	}
 
@@ -44,7 +47,7 @@ func EnsureFontsDownloader() error {
 	}
 
 	for filename, url := range fonts {
-		path := filepath.Join(fontsPath, filename)
+		path := filepath.Join(getFontsPath(), filename)
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			logger.Info().Str("font", filename).Msg("Downloading missing font...")
 			if err := downloadFile(path, url); err != nil {
@@ -78,6 +81,6 @@ func downloadFile(filepath string, url string) error {
 
 // LoadFont helper to safely load a font face
 func LoadFont(dc *gg.Context, fontName string, points float64) error {
-	path := filepath.Join(fontsPath, fontName)
+	path := filepath.Join(getFontsPath(), fontName)
 	return dc.LoadFontFace(path, points)
 }
