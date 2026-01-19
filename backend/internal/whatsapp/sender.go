@@ -41,8 +41,8 @@ func (s *Sender) Reply(chat, sender types.JID, text string, quotedID string, quo
 		content.Conversation = models.StrPtr(text)
 	}
 
-	// Anti-Spam Jitter: 500ms to 2500ms
-	jitter := time.Duration(500+rand.Intn(2000)) * time.Millisecond
+	// Anti-Spam Jitter: Balanced (300ms - 1000ms) to prevent bans
+	jitter := time.Duration(300+rand.Intn(700)) * time.Millisecond
 	time.Sleep(jitter)
 
 	resp, err := s.Client.SendMessage(context.Background(), chat, content)
@@ -60,7 +60,7 @@ func (s *Sender) Send(chat types.JID, text string) {
 		Conversation: models.StrPtr(text),
 	}
 
-	jitter := time.Duration(500+rand.Intn(2000)) * time.Millisecond
+	jitter := time.Duration(300+rand.Intn(700)) * time.Millisecond
 	time.Sleep(jitter)
 
 	resp, err := s.Client.SendMessage(context.Background(), chat, content)
@@ -113,8 +113,8 @@ func (s *Sender) SendImage(chat, sender types.JID, imageBytes []byte, caption st
 		ImageMessage: imageMsg,
 	}
 
-	// Anti-spam jitter
-	jitter := time.Duration(500+rand.Intn(2000)) * time.Millisecond
+	// Anti-spam jitter: Balanced
+	jitter := time.Duration(300+rand.Intn(700)) * time.Millisecond
 	time.Sleep(jitter)
 
 	resp, err := s.Client.SendMessage(context.Background(), chat, content)

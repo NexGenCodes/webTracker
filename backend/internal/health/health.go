@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"webtracker-bot/internal/logger"
-	"webtracker-bot/internal/utils"
 )
 
 var (
@@ -22,7 +21,6 @@ type HealthStatus struct {
 	Uptime          string `json:"uptime"`
 	RequestsHandled int64  `json:"requests_handled"`
 	Errors          int64  `json:"errors"`
-	ChromeAvailable bool   `json:"chrome_available"`
 	DatabasePingMs  int64  `json:"database_ping_ms"`
 	Timestamp       string `json:"timestamp"`
 }
@@ -83,7 +81,6 @@ func handleReadiness(w http.ResponseWriter, r *http.Request, dbPingFn func() err
 		Uptime:          time.Since(startTime).Round(time.Second).String(),
 		RequestsHandled: atomic.LoadInt64(&requestCount),
 		Errors:          atomic.LoadInt64(&errorCount),
-		ChromeAvailable: utils.IsRendererHealthy(),
 		Timestamp:       time.Now().UTC().Format(time.RFC3339),
 	}
 
@@ -96,11 +93,6 @@ func handleReadiness(w http.ResponseWriter, r *http.Request, dbPingFn func() err
 	} else {
 		status.DatabasePingMs = time.Since(start).Milliseconds()
 		w.WriteHeader(http.StatusOK)
-	}
-
-	// Check Chrome
-	if !status.ChromeAvailable {
-		status.Status = "degraded"
 	}
 
 	w.Header().Set("Content-Type", "application/json")

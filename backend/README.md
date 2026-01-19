@@ -5,11 +5,27 @@ Optimized Go bot using `whatsmeow` + Worker Pools + Direct Supabase API.
 ## 🏗️ Architecture
 
 - **Protocol**: `whatsmeow` (Multi-Device)
-- **Concurrency**: 3 Workers consuming a buffered channel (Limit: 100)
-- **Database**: Direct `net/http` calls to Supabase (No heavy SDKs)
-- **Storage**: `sqlite3` (auth.db) for session persistence
+- **Concurrency**: Worker Pools for scalable message processing
+- **Database**: Supabase (PostgreSQL)
+- **Rendering**: Native Go `gg` library (No Chrome required)
+- **Monitoring**: Built-in health check and vitals monitoring
 
-## 📦 Build for Production (Linux/AMD64)
+## 📂 Project Structure
+
+- `assets/`: Image and font assets
+- `cmd/bot/`: Application entry point
+- `internal/`: Private library code
+  - `app/`: App lifecycle and initialization
+  - `commands/`: Command dispatching logic
+  - `config/`: Configuration management
+  - `health/`: Health server and monitoring
+  - `logger/`: Structured logging
+  - `models/`: Domain models
+  - `parser/`: Manifest parsing (Regex + AI)
+  - `supabase/`: Database interactions
+  - `utils/`: Receipt rendering and helpers
+  - `whatsapp/`: WhatsApp client and events
+  - `worker/`: Async job workers
 
 To run this on a standard VPS (Ubuntu/Debian):
 
