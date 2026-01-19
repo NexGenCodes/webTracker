@@ -63,9 +63,11 @@ func (a *App) Init() error {
 	// 3. Register Events
 	a.WA.AddEventHandler(a.handleWAEvent)
 
-	// 4. Init Receipt Renderer
+	// 4. Init Receipt Renderer (Native)
 	if err := utils.InitReceiptRenderer(); err != nil {
-		logger.Error().Err(err).Msg("Failed to initialize receipt renderer (Chrome missing?). Continuing without receipt generation capability.")
+		logger.Error().Err(err).Msg("Failed to initialize receipt renderer (Font download failed?). Receipts may look generic.")
+	} else {
+		logger.Info().Msg("Receipt renderer initialized (Fonts loaded)")
 	}
 
 	// 5. Start Health Server
