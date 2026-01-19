@@ -8,6 +8,7 @@ import (
 	"image"
 	"image/jpeg"
 	"image/png"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -64,7 +65,8 @@ func newReceiptRenderer() (*ReceiptRenderer, error) {
 		chromedp.Flag("disable-default-apps", true),
 		chromedp.Flag("no-first-run", true),
 		chromedp.Flag("no-default-browser-check", true),
-		chromedp.Flag("single-process", false),
+		chromedp.Flag("single-process", true), // Critical for low-memory environments
+		chromedp.Flag("headless", true),
 		chromedp.WindowSize(1200, 1600),
 	)
 
@@ -73,7 +75,7 @@ func newReceiptRenderer() (*ReceiptRenderer, error) {
 	testCtx, testCancel := chromedp.NewContext(allocCtx)
 	defer testCancel()
 
-	testTimeout, testTimeoutCancel := context.WithTimeout(testCtx, 10*time.Second)
+	testTimeout, testTimeoutCancel := context.WithTimeout(testCtx, 15*time.Second) // Increased init timeout
 	defer testTimeoutCancel()
 
 	if err := chromedp.Run(testTimeout); err != nil {
@@ -122,18 +124,18 @@ func (r *ReceiptRenderer) render(shipment models.Shipment, companyName string) (
 	}
 
 	var pngBuf []byte
-	timeout, timeoutCancel := context.WithTimeout(ctx, 45*time.Second)
+	timeout, timeoutCancel := context.WithTimeout(ctx, 90*time.Second) // Increased to 90s
 	defer timeoutCancel()
 
+	// Use data:text/html to avoid about:blank overhead
+	htmlContent := htmlBuf.String()
+
 	err := chromedp.Run(timeout,
-		chromedp.Navigate("about:blank"),
 		chromedp.ActionFunc(func(ctx context.Context) error {
-			// Set HTML content
-			return chromedp.Run(ctx,
-				chromedp.Evaluate(fmt.Sprintf(`document.write(%q)`, htmlBuf.String()), nil),
-			)
+			// Navigate directly to content
+			return chromedp.Navigate("data:text/html;charset=utf-8," + url.PathEscape(htmlContent)).Do(ctx)
 		}),
-		chromedp.Sleep(500*time.Millisecond),                                 // Wait for external resources (fonts, textures)
+		chromedp.Sleep(500*time.Millisecond),                                 // Wait for fonts/rendering
 		chromedp.Screenshot(".awb-container", &pngBuf, chromedp.NodeVisible), // Auto-crop to receipt
 	)
 
