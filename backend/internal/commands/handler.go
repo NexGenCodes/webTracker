@@ -247,6 +247,19 @@ func (h *EditHandler) Execute(ctx context.Context, db *supabase.Client, ldb *loc
 		return Result{Message: "⚠️ *MISSING VALUE*\n_Please provide the new information for the field._"}
 	}
 
+	// Validation Logic
+	if strings.Contains(strings.ToLower(field), "email") {
+		if !parser.ValidateEmail(value) {
+			return Result{Message: "⚠️ *INVALID EMAIL format*\n_Please provide a valid email address (e.g., name@domain.com)._"}
+		}
+	}
+
+	if strings.Contains(strings.ToLower(field), "phone") || strings.Contains(strings.ToLower(field), "mobile") {
+		if !parser.ValidatePhone(value) {
+			return Result{Message: "⚠️ *INVALID PHONE FORMAT*\n_Phone numbers must contain at least 5 digits._"}
+		}
+	}
+
 	// Use the same parser cleaning logic as creation
 	value = parser.CleanText(value)
 

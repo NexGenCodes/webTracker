@@ -193,3 +193,21 @@ Return ONLY the JSON, no explanations.`, text)
 
 	return m, nil
 }
+
+// ValidateEmail checks if the string superficially resembles an email.
+func ValidateEmail(email string) bool {
+	return strings.Contains(email, "@") && strings.Contains(email, ".")
+}
+
+// ValidatePhone checks if the string looks like a phone number (mostly digits).
+func ValidatePhone(phone string) bool {
+	// Must have at least a few digits
+	digits := 0
+	for _, r := range phone {
+		if r >= '0' && r <= '9' {
+			digits++
+		}
+	}
+	// Arbitrary minimum of 5 digits to be a "phone number"
+	return digits >= 5
+}
