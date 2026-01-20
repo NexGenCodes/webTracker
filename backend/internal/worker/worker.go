@@ -49,9 +49,11 @@ func (w *Worker) Start() {
 func (w *Worker) process(job models.Job) {
 	logger.GlobalVitals.IncJobs()
 
-	lang := i18n.Language(job.Language)
+	// 1. Fetch Language (Moved from event listener to worker for concurrency)
+	langStr, _ := w.DB.GetUserLanguage(context.Background(), job.SenderJID.String())
+	lang := i18n.Language(langStr)
 
-	// 1. Check for Commands (Explicit)
+	// 2. Check for Commands (Explicit)
 	ctx := context.WithValue(context.Background(), "jid", job.SenderJID.String())
 	if res, ok := w.Cmd.Dispatch(ctx, job.Text); ok {
 		w.Sender.Reply(job.ChatJID, job.SenderJID, res.Message, job.MessageID, job.Text)
