@@ -23,7 +23,7 @@ var aiRateLimiter = rate.NewLimiter(rate.Every(200*time.Millisecond), 5)
 // ParseRegex extracts manifest data using fuzzy regex patterns to minimize AI reliance.
 func ParseRegex(text string) models.Manifest {
 	m := models.Manifest{}
-	text = cleanText(text)
+	text = CleanText(text)
 
 	// Receiver Variations (Fuzzy)
 	rxLabel := `(?i)(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|to|dest|destination|consignment|consignee)[s']*`
@@ -85,7 +85,7 @@ func ParseRegex(text string) models.Manifest {
 	return m
 }
 
-func cleanText(text string) string {
+func CleanText(text string) string {
 	// Standardize line endings and remove weird invisible chars
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\r", "\n")

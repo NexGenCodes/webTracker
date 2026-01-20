@@ -7,6 +7,7 @@ import (
 	"sync"
 	"webtracker-bot/internal/commands"
 	"webtracker-bot/internal/i18n"
+	"webtracker-bot/internal/localdb"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/parser"
@@ -22,6 +23,7 @@ type Worker struct {
 	Client      *whatsmeow.Client
 	Sender      *whatsapp.Sender
 	DB          *supabase.Client
+	LocalDB     *localdb.Client
 	Jobs        <-chan models.Job
 	WG          *sync.WaitGroup
 	GeminiKey   string
@@ -50,7 +52,7 @@ func (w *Worker) process(job models.Job) {
 	logger.GlobalVitals.IncJobs()
 
 	// 1. Fetch Language (Moved from event listener to worker for concurrency)
-	langStr, _ := w.DB.GetUserLanguage(context.Background(), job.SenderJID.String())
+	langStr, _ := w.LocalDB.GetUserLanguage(context.Background(), job.SenderJID.String())
 	lang := i18n.Language(langStr)
 
 	// 2. Check for Commands (Explicit)

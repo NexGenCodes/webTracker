@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"webtracker-bot/internal/localdb"
+	"webtracker-bot/internal/parser"
 	"webtracker-bot/internal/supabase"
 	"webtracker-bot/internal/utils"
 )
@@ -20,20 +22,22 @@ type Result struct {
 
 // Handler defines the interface all bot commands must implement.
 type Handler interface {
-	Execute(ctx context.Context, db *supabase.Client, args []string, lang string) Result
+	Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string) Result
 }
 
 // Dispatcher routes messages starting with "!" to the appropriate handler.
 type Dispatcher struct {
 	db          *supabase.Client
+	ldb         *localdb.Client
 	handlers    map[string]Handler
 	AwbCmd      string
 	CompanyName string
 }
 
-func NewDispatcher(db *supabase.Client, awbCmd string, companyName string) *Dispatcher {
+func NewDispatcher(db *supabase.Client, ldb *localdb.Client, awbCmd string, companyName string) *Dispatcher {
 	d := &Dispatcher{
 		db:          db,
+		ldb:         ldb,
 		handlers:    make(map[string]Handler),
 		AwbCmd:      awbCmd,
 		CompanyName: companyName,
@@ -78,11 +82,11 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) 
 		}
 
 		jid := ctx.Value("jid").(string)
-		lang, _ := d.db.GetUserLanguage(ctx, jid)
+		lang, _ := d.ldb.GetUserLanguage(ctx, jid)
 
-		res := handler.Execute(ctx, d.db, args, lang)
+		res := handler.Execute(ctx, d.db, d.ldb, args, lang)
 		if res.Language != "" {
-			d.db.SetUserLanguage(ctx, jid, res.Language)
+			d.ldb.SetUserLanguage(ctx, jid, res.Language)
 		}
 		return &res, true
 	}
@@ -99,7 +103,7 @@ type StatsHandler struct {
 	CompanyName string
 }
 
-func (h *StatsHandler) Execute(ctx context.Context, db *supabase.Client, args []string, lang string) Result {
+func (h *StatsHandler) Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string) Result {
 	if len(args) > 0 {
 		return Result{Message: "⚠️ *INCORRECT USAGE*\n_Please send only `!stats` without any extra text._"}
 	}
@@ -124,7 +128,7 @@ type InfoHandler struct {
 	CompanyPrefix string
 }
 
-func (h *InfoHandler) Execute(ctx context.Context, db *supabase.Client, args []string, lang string) Result {
+func (h *InfoHandler) Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string) Result {
 	if len(args) < 1 {
 		company := strings.ToUpper(h.CompanyName)
 		if company == "" {
@@ -159,7 +163,7 @@ type HelpHandler struct {
 	CompanyPrefix string
 }
 
-func (h *HelpHandler) Execute(ctx context.Context, db *supabase.Client, args []string, lang string) Result {
+func (h *HelpHandler) Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string) Result {
 	company := strings.ToUpper(h.CompanyName)
 	if company == "" {
 		company = "LOGISTICS"
@@ -170,7 +174,8 @@ func (h *HelpHandler) Execute(ctx context.Context, db *supabase.Client, args []s
 		"1️⃣ `!stats` - Daily Operations\n" +
 		"2️⃣ `!info [ID]` - Check Status\n" +
 		"3️⃣ `!edit [field] [value]` - Fix mistakes\n" +
-		"4️⃣ `!help` - Show this menu\n" +
+		"4️⃣ `!lang [code]` - Switch language (en, pt, es, de)\n" +
+		"5️⃣ `!help` - Show this menu\n" +
 		"━━━━━━━━━━━━━━━━━━━\n\n" +
 		"*📦 HOW TO REGISTER SHIPMENT INFORMATION:*\n" +
 		"_Simply send a message with these details:_\n\n" +
@@ -182,7 +187,8 @@ func (h *HelpHandler) Execute(ctx context.Context, db *supabase.Client, args []s
 		"Sender Country: UK\n\n" +
 		"*🛠️ HOW TO EDIT:*\n" +
 		"`!edit name Jane Doe` (Fixes last shipment)\n" +
-		fmt.Sprintf("`!edit %s-123 name Jane Doe` (Fixes specific ID)\n\n", h.CompanyPrefix) +
+		fmt.Sprintf("`!edit %s-123 name Jane Doe` (Fixes specific ID)\n", h.CompanyPrefix) +
+		"_Fields: name, phone, address, country, email, id, sender, origin_\n\n" +
 		"*PRO TIP:* _You can use shortcuts like #stats or #edit._"
 
 	return Result{Message: msg}
@@ -190,7 +196,7 @@ func (h *HelpHandler) Execute(ctx context.Context, db *supabase.Client, args []s
 
 type LangHandler struct{}
 
-func (h *LangHandler) Execute(ctx context.Context, db *supabase.Client, args []string, lang string) Result {
+func (h *LangHandler) Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string) Result {
 	if len(args) < 1 {
 		return Result{Message: "🌐 *LANGUAGE MENU*\n\nUsage: `!lang [en|pt|es|de]`\n\nExample: `!lang pt` para Português"}
 	}
@@ -213,7 +219,7 @@ type EditHandler struct {
 	CompanyPrefix string
 }
 
-func (h *EditHandler) Execute(ctx context.Context, db *supabase.Client, args []string, lang string) Result {
+func (h *EditHandler) Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string) Result {
 	if len(args) < 2 {
 		return Result{Message: "📝 *EDIT SHIPMENT INFORMATION*\n\nUsage:\n`!edit [field] [new_value]`\n\nFields: `name`, `phone`, `address`, `country`, `email`, `id`, `sender`, `origin`"}
 	}
@@ -240,6 +246,9 @@ func (h *EditHandler) Execute(ctx context.Context, db *supabase.Client, args []s
 	if value == "" {
 		return Result{Message: "⚠️ *MISSING VALUE*\n_Please provide the new information for the field._"}
 	}
+
+	// Use the same parser cleaning logic as creation
+	value = parser.CleanText(value)
 
 	err := db.UpdateShipmentField(ctx, trackingID, field, value)
 	if err != nil {
