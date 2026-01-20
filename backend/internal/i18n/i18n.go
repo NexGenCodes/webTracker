@@ -88,3 +88,17 @@ func T(lang Language, key string) string {
 	}
 	return val
 }
+
+func GetDateFormat(lang Language) string {
+	l := Language(strings.ToLower(string(lang)))
+	switch l {
+	case DE:
+		return "02.01.2006"
+	case EN:
+		return "02/01/2006"
+	case ES, PT:
+		return "02/01/2006"
+	default:
+		return "02/01/2006"
+	}
+}

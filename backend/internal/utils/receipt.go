@@ -162,8 +162,9 @@ func drawV11Grid(dc *gg.Context, shipment models.Shipment, lang i18n.Language) {
 	}
 	arrival := departure.AddDate(0, 0, 1)
 
-	depStr := departure.Format("02/01/2006")
-	arrStr := arrival.Format("02/01/2006")
+	dateFormat := i18n.GetDateFormat(lang)
+	depStr := departure.Format(dateFormat)
+	arrStr := arrival.Format(dateFormat)
 
 	drawSmartCellV10(dc, gX+c1W, gY+selectorH, c2W, rowH, i18n.T(lang, "receipt_dep_date"), depStr)
 	drawSmartCellV10(dc, gX+c1W+c2W, gY+selectorH, c3W, rowH, i18n.T(lang, "receipt_arr_date"), arrStr)
