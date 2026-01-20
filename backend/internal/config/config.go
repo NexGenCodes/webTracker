@@ -5,7 +5,10 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
+
+	"webtracker-bot/internal/utils"
 
 	"github.com/joho/godotenv"
 )
@@ -21,9 +24,31 @@ type Config struct {
 	CompanyName    string
 	WorkerPoolSize int
 	BufferSize     int
+	PairingPhone   string
+	// Notification Config
+	SMTPHost     string
+	SMTPPort     int
+	SMTPUsername string
+	SMTPPassword string
+	NotifyEmail  string
+
+	// Access Control
+	AllowPrivateChat bool
+
+	// Session Storage
+	WhatsAppSessionPath string
 }
 
 func GetWorkDir() string {
+	// Try to find project root by looking for go.mod
+	dir, _ := os.Getwd()
+	for dir != "" && dir != "." && dir != "/" {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		dir = filepath.Dir(dir)
+	}
+
 	ex, err := os.Executable()
 	if err != nil {
 		return "."
@@ -31,30 +56,73 @@ func GetWorkDir() string {
 	return filepath.Dir(ex)
 }
 
-func generateAbbreviation(name string) string {
+func GenerateAbbreviation(name string) string {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return "AWB"
 	}
 
-	parts := strings.Fields(name)
-	if len(parts) > 1 {
-		abbr := ""
-		for _, p := range parts {
-			if len(p) > 0 {
-				abbr += string(p[0])
-			}
-		}
-		return strings.ToUpper(abbr)
+	// Use the first word if there are multiple, or join them?
+	// The requirement says "split the company name by syllable",
+	// which implies treating the whole thing as a sequence.
+	// We'll clean it first.
+	reg := regexp.MustCompile("[^a-zA-Z]")
+	clean := reg.ReplaceAllString(name, "")
+	if clean == "" {
+		return "AWB"
 	}
 
-	if len(name) > 3 {
-		return strings.ToUpper(name[:3])
+	syllables := utils.SplitIntoSyllables(clean)
+	count := len(syllables)
+
+	var abbr string
+	switch {
+	case count == 1:
+		// 1 Syllable: First | Middle | Last
+		s := syllables[0]
+		if len(s) <= 3 {
+			abbr = s
+		} else {
+			abbr = string(s[0]) + string(s[len(s)/2]) + string(s[len(s)-1])
+		}
+	case count == 2:
+		// 2 Syllables: 1st Syllable (2 chars) + 2nd Syllable (1 char)
+		s1 := syllables[0]
+		s2 := syllables[1]
+		p1 := s1
+		if len(s1) > 2 {
+			p1 = s1[:2]
+		}
+		p2 := string(s2[0])
+		abbr = p1 + p2
+	default:
+		// 3+ Syllables: 1st char of each of the first 3 syllables
+		for i := 0; i < 3 && i < count; i++ {
+			abbr += string(syllables[i][0])
+		}
 	}
-	return strings.ToUpper(name)
+
+	// Pad or truncate to ensure exactly 3 chars if possible
+	abbr = strings.ToUpper(abbr)
+	if len(abbr) > 3 {
+		abbr = abbr[:3]
+	}
+	for len(abbr) < 3 {
+		abbr += "X" // Fallback padding
+	}
+
+	return abbr
 }
 
 func Load() *Config {
+	cfg, err := LoadFromEnv()
+	if err != nil {
+		log.Fatalf("CRITICAL: %v", err)
+	}
+	return cfg
+}
+
+func LoadFromEnv() (*Config, error) {
 	workDir := GetWorkDir()
 
 	// Try loading from executable dir
@@ -79,7 +147,14 @@ func Load() *Config {
 	if companyName == "" {
 		companyName = "Airwaybill"
 	}
-	companyPrefix := generateAbbreviation(companyName)
+	companyPrefix := GenerateAbbreviation(companyName)
+
+	// Parse SMTP Port
+	smtpPort := 587
+	if p := os.Getenv("SMTP_PORT"); p != "" {
+		// simple parsing, ignoring error for brevity in this block
+		fmt.Sscanf(p, "%d", &smtpPort)
+	}
 
 	cfg := &Config{
 		DatabaseURL:    os.Getenv("DIRECT_URL"),
@@ -92,6 +167,20 @@ func Load() *Config {
 		CompanyName:    companyName,
 		WorkerPoolSize: 5,
 		BufferSize:     100,
+		PairingPhone:   os.Getenv("WHATSAPP_PAIRING_PHONE"),
+
+		SMTPHost:     os.Getenv("SMTP_HOST"),
+		SMTPPort:     smtpPort,
+		SMTPUsername: os.Getenv("SMTP_USERNAME"),
+		SMTPPassword: os.Getenv("SMTP_PASSWORD"),
+		NotifyEmail:  os.Getenv("NOTIFY_EMAIL"),
+
+		AllowPrivateChat:    os.Getenv("WHATSAPP_ALLOW_PRIVATE_CHAT") == "true",
+		WhatsAppSessionPath: os.Getenv("WHATSAPP_SESSION_PATH"),
+	}
+
+	if cfg.WhatsAppSessionPath == "" {
+		cfg.WhatsAppSessionPath = filepath.Join(workDir, "session.db")
 	}
 
 	if cfg.DatabaseURL == "" {
@@ -103,10 +192,10 @@ func Load() *Config {
 	}
 
 	if cfg.DatabaseURL == "" {
-		log.Fatal("CRITICAL: DATABASE_URL or DIRECT_URL must be set.")
+		return nil, fmt.Errorf("DATABASE_URL or DIRECT_URL must be set")
 	}
 
-	return cfg
+	return cfg, nil
 }
 
 func (cfg *Config) Validate() error {

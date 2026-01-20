@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"webtracker-bot/internal/commands"
+	"webtracker-bot/internal/i18n"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/parser"
@@ -34,16 +35,32 @@ func (w *Worker) Start() {
 	logger.Info().Int("worker_id", w.ID).Msg("Worker started")
 
 	for job := range w.Jobs {
-		w.process(job)
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					logger.Error().Msgf("Worker %d panicked: %v", w.ID, r)
+				}
+			}()
+			w.process(job)
+		}()
 	}
 }
 
 func (w *Worker) process(job models.Job) {
 	logger.GlobalVitals.IncJobs()
 
+	lang := i18n.Language(job.Language)
+
 	// 1. Check for Commands (Explicit)
-	if reply, ok := w.Cmd.Dispatch(context.Background(), job.Text); ok {
-		w.Sender.Reply(job.ChatJID, job.SenderJID, reply, job.MessageID, job.Text)
+	ctx := context.WithValue(context.Background(), "jid", job.SenderJID.String())
+	if res, ok := w.Cmd.Dispatch(ctx, job.Text); ok {
+		w.Sender.Reply(job.ChatJID, job.SenderJID, res.Message, job.MessageID, job.Text)
+
+		// If it was an edit, we need to regenerate the receipt
+		if res.EditID != "" {
+			logger.Info().Str("edit_id", res.EditID).Msg("Edit detected, triggering receipt regeneration")
+			w.generateAndSendReceipt(job, res.EditID, lang)
+		}
 		return
 	}
 
@@ -51,7 +68,7 @@ func (w *Worker) process(job models.Job) {
 	isManifest, isPartial := w.isPotentialManifest(job.Text)
 	if !isManifest {
 		if isPartial {
-			hint := "💡 *IT LOOKS LIKE A SHIPMENT!*\n\n" +
+			hint := "💡 *IT LOOKS LIKE SHIPMENT INFORMATION!*\n\n" +
 				"━━━━━━━━━━━━━━━━━━━━━━━\n" +
 				"To register a package, please ensure your message includes:\n" +
 				"• Sender Name\n" +
@@ -94,62 +111,57 @@ func (w *Worker) process(job models.Job) {
 
 	if err == nil && exists {
 		logger.GlobalVitals.IncDuplicate()
-		logger.Info().Str("tracking_id", id).Msg("Duplicate record found, re-sending receipt")
-	} else {
-		// 6. Insert New
-		id, err = w.DB.InsertShipment(context.Background(), m, job.SenderPhone)
-		if err != nil {
-			logger.GlobalVitals.IncInsertFailure()
-			w.Sender.Reply(job.ChatJID, job.SenderJID, "❌ *SYSTEM ERROR*\n_Saving failed. Please contact your admin._", job.MessageID, job.Text)
-			return
-		}
-		logger.GlobalVitals.IncInsertSuccess()
-	}
+		logger.Info().Str("tracking_id", id).Str("jid", job.SenderJID.String()).Msg("Duplicate record found, skipping image generation")
 
-	// 7. Fetch shipment for receipt (Works for both New and Duplicate)
-	shipment, err := w.DB.GetShipment(context.Background(), id)
-	if err != nil || shipment == nil {
-		logger.Warn().Err(err).Str("tracking_id", id).Msg("Failed to fetch shipment for receipt")
-		// Fallback to text-only success
-		textMsg := fmt.Sprintf("📦 *PACKAGE SHIPPING CREATED*\n\n━━━━━━━━━━━━━━━━━━━━━━━\nTracking ID: *%s*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n📌 *Track your package:*\nhttps://web-tracker-iota.vercel.app?id=%s", id, id)
-		if m.IsAI {
-			textMsg += "\n\n_✨ Parsed by AI_"
-		}
-		w.Sender.Reply(job.ChatJID, job.SenderJID, textMsg, job.MessageID, job.Text)
+		// For duplicates, ONLY send a text confirmation to save CPU/Network
+		trackingMsg := fmt.Sprintf("📂 *DUPLICATE SHIPMENT INFORMATION*\n\n━━━━━━━━━━━━━━━━━━━━━━━\nTracking ID: *%s*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n📌 *Track your package:*\nhttps://web-tracker-iota.vercel.app?id=%s", id, id)
+		w.Sender.Reply(job.ChatJID, job.SenderJID, trackingMsg, job.MessageID, job.Text)
 		return
 	}
 
-	// 8. Generate high-res receipt image
-	receiptImg, err := utils.RenderReceipt(*shipment)
+	// 6. Insert New
+	id, err = w.DB.InsertShipment(context.Background(), m, job.SenderPhone)
 	if err != nil {
-		logger.Warn().Err(err).Str("tracking_id", id).Msg("Receipt render failed, sending text")
-		// Fallback to text-only success
-		textMsg := fmt.Sprintf("📦 *PACKAGE SHIPPING CREATED*\n\n━━━━━━━━━━━━━━━━━━━━━━━\nTracking ID: *%s*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n📌 *Track your package:*\nhttps://web-tracker-iota.vercel.app?id=%s", id, id)
-		if m.IsAI {
-			textMsg += "\n\n_✨ Parsed by AI_"
-		}
-		w.Sender.Reply(job.ChatJID, job.SenderJID, textMsg, job.MessageID, job.Text)
+		logger.GlobalVitals.IncInsertFailure()
+		logger.Error().Err(err).Str("jid", job.SenderJID.String()).Msg("Failed to insert shipment information")
+		w.Sender.Reply(job.ChatJID, job.SenderJID, "❌ *SYSTEM ERROR*\n_Saving information failed. Please contact your admin._", job.MessageID, job.Text)
 		return
 	}
+	logger.GlobalVitals.IncInsertSuccess()
 
-	// 9. Send receipt image (No caption for better presentation)
-	// We send the image first, then the tracking info as a separate message
-	err = w.Sender.SendImage(job.ChatJID, job.SenderJID, receiptImg, "", job.MessageID, job.Text)
-	if err != nil {
-		logger.Warn().Err(err).Msg("Failed to send receipt image, sending text fallback")
-	}
+	// 7, 8, 9. Generate and send receipt
+	w.generateAndSendReceipt(job, id, lang)
 
 	// 10. Send tracking ID and link as follow-up message
-	header := "📦 *PACKAGE SHIPPING CREATED*"
-	if exists {
-		header = "📂 *DUPLICATE RECORD FOUND*"
-	}
 
-	trackingMsg := fmt.Sprintf("%s\n\n━━━━━━━━━━━━━━━━━━━━━━━\nTracking ID: *%s*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n📌 *Track your package:*\nhttps://web-tracker-iota.vercel.app?id=%s", header, id, id)
-	if m.IsAI && !exists {
+	// 10. Send tracking ID and link as follow-up message
+	trackingMsg := fmt.Sprintf("📦 *SHIPMENT INFORMATION CREATED*\n\n━━━━━━━━━━━━━━━━━━━━━━━\nTracking ID: *%s*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n📌 *Track your package:*\nhttps://web-tracker-iota.vercel.app?id=%s", id, id)
+	if m.IsAI {
 		trackingMsg += "\n\n_✨ Parsed by AI_"
 	}
 	w.Sender.Reply(job.ChatJID, job.SenderJID, trackingMsg, job.MessageID, job.Text)
+}
+
+func (w *Worker) generateAndSendReceipt(job models.Job, id string, lang i18n.Language) {
+	// 1. Fetch
+	shipment, err := w.DB.GetShipment(context.Background(), id)
+	if err != nil || shipment == nil {
+		logger.Warn().Err(err).Str("tracking_id", id).Msg("Failed to fetch info for receipt delivery")
+		return
+	}
+
+	// 2. Render
+	receiptImg, err := utils.RenderReceipt(*shipment, w.CompanyName, lang)
+	if err != nil {
+		logger.Error().Err(err).Str("tracking_id", id).Msg("Failed to render updated receipt")
+		return
+	}
+
+	// 3. Send
+	err = w.Sender.SendImage(job.ChatJID, job.SenderJID, receiptImg, "", job.MessageID, job.Text)
+	if err != nil {
+		logger.Warn().Err(err).Str("tracking_id", id).Msg("Failed to deliver receipt image")
+	}
 }
 
 func (w *Worker) isPotentialManifest(text string) (bool, bool) {

@@ -13,13 +13,13 @@ import (
 	"webtracker-bot/internal/health"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
+	"webtracker-bot/internal/notif"
 	"webtracker-bot/internal/scheduler"
 	"webtracker-bot/internal/supabase"
 	"webtracker-bot/internal/utils"
 	"webtracker-bot/internal/whatsapp"
 	"webtracker-bot/internal/worker"
 
-	"github.com/mdp/qrterminal/v3"
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/types/events"
 )
@@ -46,6 +46,12 @@ func New(cfg *config.Config) *App {
 }
 
 func (a *App) Init() error {
+	// 0. Verify Environment
+	if err := health.VerifyEnvironment(); err != nil {
+		fmt.Printf("FATAL: Environment verification failed: %v\n", err)
+		os.Exit(1)
+	}
+
 	// 1. Init DB
 	db, err := supabase.NewClient(a.Cfg.DatabaseURL, a.Cfg.CompanyPrefix)
 	if err != nil {
@@ -54,7 +60,7 @@ func (a *App) Init() error {
 	a.DB = db
 
 	// 2. Init WhatsApp
-	wa, err := whatsapp.NewClient(a.Cfg.DatabaseURL)
+	wa, err := whatsapp.NewClient(a.Cfg.WhatsAppSessionPath)
 	if err != nil {
 		return fmt.Errorf("whatsapp init: %w", err)
 	}
@@ -125,17 +131,28 @@ func (a *App) Run() error {
 
 func (a *App) connectWA() error {
 	if a.WA.Store.ID == nil {
-		qrChan, _ := a.WA.GetQRChannel(a.Context)
+		if a.Cfg.PairingPhone == "" {
+			return fmt.Errorf("not logged in and no WHATSAPP_PAIRING_PHONE provided in .env")
+		}
+
 		if err := a.WA.Connect(); err != nil {
 			return err
 		}
-		for evt := range qrChan {
-			if evt.Event == "code" {
-				qrterminal.GenerateHalfBlock(evt.Code, qrterminal.L, os.Stdout)
-				fmt.Println("\nScan the QR code above to login")
-				fmt.Printf("Or copy this code: %s\n", evt.Code)
-			}
+
+		code, err := a.WA.PairPhone(a.Context, a.Cfg.PairingPhone, true, whatsmeow.PairClientChrome, "Chrome (Linux)")
+		if err != nil {
+			return err
 		}
+
+		logger.Info().Str("code", code).Msg("Pairing code generated")
+		fmt.Println("********************************")
+		fmt.Println("*                              *")
+		fmt.Println("*   PAIRING CODE: " + code + "   *")
+		fmt.Println("*                              *")
+		fmt.Println("********************************")
+
+		// Send via Email (if configured)
+		notif.SendPairingCodeEmail(a.Cfg, code)
 	} else {
 		return a.WA.Connect()
 	}
@@ -143,11 +160,9 @@ func (a *App) connectWA() error {
 }
 
 func (a *App) handleWAEvent(evt interface{}) {
-	whatsapp.HandleEvent(evt, a.Jobs, a.Cfg.AllowedGroups)
+	whatsapp.HandleEvent(a.WA, evt, a.Jobs, a.Cfg, a.DB)
 
 	switch evt.(type) {
-	case *events.QR:
-		logger.Info().Msg("QR Code received")
 	case *events.Connected:
 		logger.Info().Msg("WhatsApp Connected!")
 	case *events.LoggedOut:

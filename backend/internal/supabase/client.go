@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"webtracker-bot/internal/logger"
@@ -218,6 +219,41 @@ func (s *Client) GetShipment(ctx context.Context, trackingNumber string) (*model
 	return &shipment, nil
 }
 
+func (s *Client) UpdateShipmentField(ctx context.Context, trackingID string, field string, value string) error {
+	// Whitelist allowed fields to prevent arbitrary column updates
+	allowed := map[string]string{
+		"name":    "receiverName",
+		"address": "receiverAddress",
+		"phone":   "receiverPhone",
+		"email":   "receiverEmail",
+		"id":      "receiverID",
+		"country": "receiverCountry",
+		"sender":  "senderName",
+		"origin":  "senderCountry",
+		"weight":  "weight",  // Assuming weight exists or will be needed
+		"content": "content", // Assuming content exists or will be needed
+	}
+
+	dbField, ok := allowed[strings.ToLower(field)]
+	if !ok {
+		return fmt.Errorf("field %s not allowed for editing", field)
+	}
+
+	query := fmt.Sprintf(`UPDATE "Shipment" SET "%s" = $1, "updatedAt" = NOW() WHERE "trackingNumber" = $2`, dbField)
+	_, err := s.db.ExecContext(ctx, query, value, trackingID)
+	return err
+}
+
+func (s *Client) GetLastTrackingByJID(ctx context.Context, jid string) (string, error) {
+	query := `SELECT "trackingNumber" FROM "Shipment" WHERE "whatsappFrom" = $1 ORDER BY "createdAt" DESC LIMIT 1`
+	var tracking string
+	err := s.db.QueryRowContext(ctx, query, jid).Scan(&tracking)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return tracking, err
+}
+
 func (s *Client) GetPendingNotifications() ([]models.NotificationJob, error) {
 	query := `
 		SELECT "trackingNumber", "status", "whatsappFrom"
@@ -247,5 +283,24 @@ func (s *Client) GetPendingNotifications() ([]models.NotificationJob, error) {
 func (s *Client) MarkAsNotified(tracking string) error {
 	query := `UPDATE "Shipment" SET "lastNotifiedAt" = NOW() WHERE "trackingNumber" = $1`
 	_, err := s.db.Exec(query, tracking)
+	return err
+}
+
+func (s *Client) GetUserLanguage(ctx context.Context, jid string) (string, error) {
+	query := `SELECT "language" FROM "UserPreference" WHERE "jid" = $1`
+	var lang string
+	err := s.db.QueryRowContext(ctx, query, jid).Scan(&lang)
+	if err == sql.ErrNoRows {
+		return "en", nil
+	}
+	return lang, err
+}
+
+func (s *Client) SetUserLanguage(ctx context.Context, jid string, lang string) error {
+	query := `
+		INSERT INTO "UserPreference" ("jid", "language") 
+		VALUES ($1, $2)
+		ON CONFLICT ("jid") DO UPDATE SET "language" = EXCLUDED.language`
+	_, err := s.db.ExecContext(ctx, query, jid, lang)
 	return err
 }

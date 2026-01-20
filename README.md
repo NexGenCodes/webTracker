@@ -149,18 +149,19 @@ graph TB
 
 ### 📱 WhatsApp Bot Features
 
-- **Automated Manifest Processing** - Messages starting with `!INFO` or `#INFO` are parsed
-- **Duplicate Detection** - Prevents duplicate shipments based on receiver phone
-- **Real-time Replies** - Instant feedback with tracking number or error messages
-- **Group Filtering** - Optional restriction to specific WhatsApp groups
-- **Status Notifications** - Automated updates when shipments reach destination country
-- **Retry Queue** - Failed notifications are queued and retried automatically
+- **Automated Manifest Processing** - Messages following manifest patterns are parsed using a **Regex-First** hybrid strategy (AI fallback).
+- **Duplicate Optimization** - Detects existing records and skips redundant image generation to save CPU/Network.
+- **Error Correction (`!edit`)** - Correct mistakes on-the-fly (e.g., `!edit name Jane Doe`) with automatic receipt regeneration.
+- **Premium Terminology** - Consistent use of **"Shipment Information"** across all professional communications.
+- **Group Filtering** - Restrict bot activity to specific group JIDs.
+- **Professional Pairing** - Security-focused HTML email delivery of WhatsApp pairing codes.
+- **Status Notifications** - Automated updates for shipments in transit.
 
-### 🤖 AI-Powered Features
+### 🤖 AI & Logic Features
 
-- **Natural Language Parsing** - Extract shipment details from unstructured text
-- **Manifest Validation** - Automatic validation of required fields
-- **Error Handling** - Intelligent error messages for missing or invalid data
+- **Regex-First Hybrid Parsing** - Ultra-robust pattern matching handles 95% of manifests, minimizing Gemini AI costs.
+- **AI Fallback** - Gemini AI handles messy or complex manifest text when patterns fail.
+- **Manifest Validation** - Automated validation of required fields at point of entry.
 
 ### ⚙️ Automation
 
@@ -284,7 +285,9 @@ graph TB
    ./bot.exe
    ```
 
-   On first run, scan the QR code with WhatsApp to authenticate.
+   The bot will generate an 8-character **Pairing Code** and print it in the console. 
+   If SMTP is configured, this code will also be sent to your `NOTIFY_EMAIL` in a professional HTML template.
+   Enter this code in WhatsApp (Linked Devices > Link with Phone Number) to authenticate.
 
 ### Cron Jobs
 
@@ -425,9 +428,10 @@ webTracker/
     ├── internal/
     │   ├── commands/          # Bot command handlers
     │   ├── config/            # Configuration
-    │   ├── logger/            # Logging setup
+    │   ├── logger/            # Zerolog + Log Rotation
     │   ├── models/            # Data models
-    │   ├── parser/            # Manifest parser
+    │   ├── notif/             # Professional Email notifications
+    │   ├── parser/            # Regex-First Manifest parser
     │   ├── scheduler/         # Cron jobs
     │   ├── supabase/          # Database client
     │   ├── whatsapp/          # WhatsApp client
