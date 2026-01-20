@@ -11,6 +11,7 @@ import (
 	"webtracker-bot/internal/commands"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/health"
+	"webtracker-bot/internal/localdb"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/notif"
@@ -27,6 +28,7 @@ import (
 type App struct {
 	Cfg     *config.Config
 	DB      *supabase.Client
+	LocalDB *localdb.Client
 	WA      *whatsmeow.Client
 	Jobs    chan models.Job
 	WG      sync.WaitGroup
@@ -59,6 +61,13 @@ func (a *App) Init() error {
 	}
 	a.DB = db
 
+	// 1.5 Init LocalDB (SQLite)
+	ldb, err := localdb.NewClient(a.Cfg.WhatsAppSessionPath)
+	if err != nil {
+		return fmt.Errorf("localdb init: %w", err)
+	}
+	a.LocalDB = ldb
+
 	// 2. Init WhatsApp
 	wa, err := whatsapp.NewClient(a.Cfg.WhatsAppSessionPath)
 	if err != nil {
@@ -86,7 +95,7 @@ func (a *App) Init() error {
 
 func (a *App) Run() error {
 	// Start Workers
-	cmdDispatcher := commands.NewDispatcher(a.DB, a.Cfg.CompanyPrefix, a.Cfg.CompanyName)
+	cmdDispatcher := commands.NewDispatcher(a.DB, a.LocalDB, a.Cfg.CompanyPrefix, a.Cfg.CompanyName)
 	sender := whatsapp.NewSender(a.WA)
 	for i := 1; i <= 5; i++ {
 		a.WG.Add(1)
