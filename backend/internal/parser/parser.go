@@ -20,80 +20,84 @@ import (
 // AI rate limiter: 5 requests per second
 var aiRateLimiter = rate.NewLimiter(rate.Every(200*time.Millisecond), 5)
 
-// ParseRegex extracts manifest data using regex patterns
+// ParseRegex extracts manifest data using fuzzy regex patterns to minimize AI reliance.
 func ParseRegex(text string) models.Manifest {
 	m := models.Manifest{}
+	text = cleanText(text)
 
-	// Common variations for "receiver" with flexible suffix
-	rxVariations := `(?:receiver|reciver|recever|resiver|recieve|reciever)[s']*`
+	// Receiver Variations (Fuzzy)
+	rxLabel := `(?i)(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|to|dest|destination|consignment|consignee)[s']*`
+	// Sender Variations (Fuzzy)
+	sxLabel := `(?i)(?:sender|sendr|origin|from|shippr|shipper|sent by)[s']*`
 
-	// Receiver Name
-	// 1. Specific prefix (handle "Receiver's: Name" case)
-	// Simplified separator logic: match any separators + optional label + any separators
-	if match := regexp.MustCompile(fmt.Sprintf(`(?i)%s[\s:']*(?:name[\s:']*)?([^\n]+)`, rxVariations)).FindStringSubmatch(text); len(match) > 1 {
-		m.ReceiverName = strings.TrimSpace(match[1])
-	} else {
-		// 2. Generic "Name:" fallback
-		if match := regexp.MustCompile(`(?i)(?:^|\n)\s*name[\s:']*([^\n]+)`).FindStringSubmatch(text); len(match) > 1 {
-			m.ReceiverName = strings.TrimSpace(match[1])
+	// 1. Receiver Name
+	m.ReceiverName = extractField(text, rxLabel+`[\s:']*(?:name[\s:']*)?`, `([^\n]+)`)
+	if m.ReceiverName == "" {
+		m.ReceiverName = extractField(text, `(?i)(?:^|\n)\s*name[\s:']*`, `([^\n]+)`)
+	}
+
+	// 2. Receiver Phone
+	phoneLabel := `(?:phone|mobile|tel|num|contact|telephone|mobil|number|ph|cell|whatsapp)`
+	m.ReceiverPhone = extractField(text, rxLabel+`[\s:']*`+phoneLabel+`[\s:']*`, `([\+\d\s\-\(\).]+)`)
+	if m.ReceiverPhone == "" {
+		m.ReceiverPhone = extractField(text, `(?i)`+phoneLabel+`[\s:']*`, `([\+\d\s\-\(\).]+)`)
+	}
+
+	// 3. Receiver Address
+	addrLabel := `(?:address|addr|street|location|addres|addrs|dir|direction)`
+	m.ReceiverAddress = extractField(text, rxLabel+`[\s:']*`+addrLabel+`[\s:']*`, `(.+?)(?:\n|$)`)
+	if m.ReceiverAddress == "" {
+		m.ReceiverAddress = extractField(text, `(?i)`+addrLabel+`[\s:']*`, `(.+?)(?:\n|$)`)
+	}
+
+	// 4. Receiver Country
+	countryLabel := `(?:country|nation|state|origin|city|pais|land)`
+	m.ReceiverCountry = extractField(text, rxLabel+`[\s:']*`+countryLabel+`[\s:']*`, `([^\n]+)`)
+	if m.ReceiverCountry == "" {
+		// Only pick if not sender's
+		match := extractField(text, `(?i)`+countryLabel+`[\s:']*`, `([^\n]+)`)
+		if match != "" && !strings.Contains(strings.ToLower(text), "sender") {
+			m.ReceiverCountry = match
 		}
 	}
 
-	// Receiver Phone
-	phonePatterns := []string{
-		fmt.Sprintf(`(?i)%s[\s:']*(?:phone|mobile|tel|num|contact|telephone|mobil|number)[\s:']*([\+\d\s\-\(\)]+)`, rxVariations),
-		`(?i)(?:phone|mobile|tel|num|contact|telephone|mobil|number)[\s:']*([\+\d\s\-\(\)]+)`,
-	}
-	for _, pattern := range phonePatterns {
-		if match := regexp.MustCompile(pattern).FindStringSubmatch(text); len(match) > 1 {
-			m.ReceiverPhone = strings.TrimSpace(match[1])
-			break
-		}
+	// 5. Receiver Email
+	emailLabel := `(?:email|e-mail|mail|contact mail)`
+	m.ReceiverEmail = extractField(text, rxLabel+`[\s:']*`+emailLabel+`[\s:']*`, `([^\s]+@[^\s]+)`)
+	if m.ReceiverEmail == "" {
+		m.ReceiverEmail = extractField(text, `(?i)`+emailLabel+`[\s:']*`, `([^\s]+@[^\s]+)`)
 	}
 
-	// Receiver Address
-	if match := regexp.MustCompile(fmt.Sprintf(`(?i)%s[\s:']*(?:address|addr)[\s:']*(.+?)(?:\n|$)`, rxVariations)).FindStringSubmatch(text); len(match) > 1 {
-		m.ReceiverAddress = strings.TrimSpace(match[1])
-	} else if match := regexp.MustCompile(`(?i)(?:^|\n)\s*(?:address|addr)[\s:']*(.+?)(?:\n|$)`).FindStringSubmatch(text); len(match) > 1 {
-		m.ReceiverAddress = strings.TrimSpace(match[1])
+	// 6. Receiver ID
+	idLabel := `(?:passport|id|nin|gov id|dni|cedula|identidad|identificacion)`
+	m.ReceiverID = extractField(text, rxLabel+`[\s:']*(?:id|num)[\s:']*`, `([A-Za-z0-9\-]+)`)
+	if m.ReceiverID == "" {
+		m.ReceiverID = extractField(text, `(?i)`+idLabel+`[\s:']*`, `([A-Za-z0-9\-]+)`)
 	}
 
-	// Receiver Country
-	if match := regexp.MustCompile(fmt.Sprintf(`(?i)%s[\s:']*country[\s:']*([^\n]+)`, rxVariations)).FindStringSubmatch(text); len(match) > 1 {
-		m.ReceiverCountry = strings.TrimSpace(match[1])
-	} else if match := regexp.MustCompile(`(?i)(?:^|\n)\s*country[\s:']*([^\n]+)`).FindStringSubmatch(text); len(match) > 1 {
-		// Only if not "Sender Country" (simple check, sender usually explicit)
-		if !strings.Contains(strings.ToLower(match[0]), "sender") {
-			m.ReceiverCountry = strings.TrimSpace(match[1])
-		}
-	}
+	// 7. Sender Name
+	m.SenderName = extractField(text, sxLabel+`[\s:']*(?:name[\s:']*)?`, `([^\n]+)`)
 
-	// Receiver Email
-	if match := regexp.MustCompile(fmt.Sprintf(`(?i)%s[\s:']*email[\s:']*([^\s]+@[^\s]+)`, rxVariations)).FindStringSubmatch(text); len(match) > 1 {
-		m.ReceiverEmail = strings.TrimSpace(match[1])
-	} else if match := regexp.MustCompile(`(?i)(?:^|\n)\s*email[\s:']*([^\s]+@[^\s]+)`).FindStringSubmatch(text); len(match) > 1 {
-		m.ReceiverEmail = strings.TrimSpace(match[1])
-	}
-
-	// Receiver ID
-	if match := regexp.MustCompile(fmt.Sprintf(`(?i)%s[\s:']*(?:id|ID)[\s:']*([A-Za-z0-9\-]+)`, rxVariations)).FindStringSubmatch(text); len(match) > 1 {
-		m.ReceiverID = strings.TrimSpace(match[1])
-	} else if match := regexp.MustCompile(`(?i)(?:^|\n)\s*(?:passport|id|nin|gov id)[\s:']*([A-Za-z0-9\-]+)`).FindStringSubmatch(text); len(match) > 1 {
-		m.ReceiverID = strings.TrimSpace(match[1])
-	}
-
-	// Sender Name
-	if match := regexp.MustCompile(`(?i)sender(?:'s|s)?\s*(?:name)?:?\s*([^\n]+)`).FindStringSubmatch(text); len(match) > 1 {
-		m.SenderName = strings.TrimSpace(match[1])
-	}
-
-	// Sender Country
-	if match := regexp.MustCompile(`(?i)sender(?:'s|s)?\s*country:?\s*([^\n]+)`).FindStringSubmatch(text); len(match) > 1 {
-		m.SenderCountry = strings.TrimSpace(match[1])
-	}
+	// 8. Sender Country
+	m.SenderCountry = extractField(text, sxLabel+`[\s:']*`+countryLabel+`[\s:']*`, `([^\n]+)`)
 
 	m.Validate()
 	return m
+}
+
+func cleanText(text string) string {
+	// Standardize line endings and remove weird invisible chars
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	text = strings.ReplaceAll(text, "\r", "\n")
+	return text
+}
+
+func extractField(text, labelPattern, valuePattern string) string {
+	re := regexp.MustCompile(fmt.Sprintf(`(?i)%s\s*%s`, labelPattern, valuePattern))
+	if match := re.FindStringSubmatch(text); len(match) > 1 {
+		return strings.TrimSpace(match[1])
+	}
+	return ""
 }
 
 // ParseAI uses Gemini AI to extract manifest data with rate limiting

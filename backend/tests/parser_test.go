@@ -1,7 +1,8 @@
-package parser
+package tests
 
 import (
 	"testing"
+	"webtracker-bot/internal/parser"
 )
 
 func TestParseRegex(t *testing.T) {
@@ -84,28 +85,34 @@ func TestParseRegex(t *testing.T) {
 			input:      "Senders Name: Ziggy Stardust\nSenders Country: Mars",
 			wantSender: "Ziggy Stardust",
 		},
+		{
+			name:      "Capitalization and Whitespace",
+			input:     "  RECEIVER'S NAME  :  Bruce Wayne  \n  PHONE  :  080-999-888  ",
+			wantName:  "Bruce Wayne",
+			wantPhone: "080-999-888",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := ParseRegex(tt.input)
+			got := parser.ParseRegex(tt.input)
 			if tt.wantName != "" && got.ReceiverName != tt.wantName {
-				t.Errorf("ParseRegex() Name = %v, want %v", got.ReceiverName, tt.wantName)
+				t.Errorf("ParseRegex() Name = [%v], want [%v]", got.ReceiverName, tt.wantName)
 			}
 			if tt.wantPhone != "" && got.ReceiverPhone != tt.wantPhone {
-				t.Errorf("ParseRegex() Phone = %v, want %v", got.ReceiverPhone, tt.wantPhone)
+				t.Errorf("ParseRegex() Phone = [%v], want [%v]", got.ReceiverPhone, tt.wantPhone)
 			}
 			if tt.wantAddr != "" && got.ReceiverAddress != tt.wantAddr {
-				t.Errorf("ParseRegex() Address = %v, want %v", got.ReceiverAddress, tt.wantAddr)
+				t.Errorf("ParseRegex() Address = [%v], want [%v]", got.ReceiverAddress, tt.wantAddr)
 			}
 			if tt.wantSender != "" && got.SenderName != tt.wantSender {
-				t.Errorf("ParseRegex() SenderName = %v, want %v", got.SenderName, tt.wantSender)
+				t.Errorf("ParseRegex() SenderName = [%v], want [%v]", got.SenderName, tt.wantSender)
 			}
 			if tt.wantEmail != "" && got.ReceiverEmail != tt.wantEmail {
-				t.Errorf("ParseRegex() Email = %v, want %v", got.ReceiverEmail, tt.wantEmail)
+				t.Errorf("ParseRegex() Email = [%v], want [%v]", got.ReceiverEmail, tt.wantEmail)
 			}
 			if tt.wantID != "" && got.ReceiverID != tt.wantID {
-				t.Errorf("ParseRegex() ID = %v, want %v", got.ReceiverID, tt.wantID)
+				t.Errorf("ParseRegex() ID = [%v], want [%v]", got.ReceiverID, tt.wantID)
 			}
 		})
 	}

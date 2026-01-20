@@ -81,12 +81,18 @@ type NotificationJob struct {
 	WhatsappFrom   *string
 }
 
+type UserPreference struct {
+	JID      string `json:"jid"`
+	Language string `json:"language"`
+}
+
 type Job struct {
 	ChatJID     types.JID
 	SenderJID   types.JID
 	MessageID   string
 	Text        string
 	SenderPhone string
+	Language    string
 }
 
 func StrPtr(s string) *string {

@@ -1,0 +1,31 @@
+# Binaries
+bot
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Secrets & Config
+.env
+ssh.pem
+*.pem
+
+# Database & Sessions
+*.db
+*.db-journal
+*.db-wal
+session.db*
+
+# OS & IDE
+.DS_Store
+.idea/
+.vscode/
+
+# Logs
+*.log
+logs/
+
+# Test outputs
+receipt_test_output.jpg
+waybill_test_output.jpg

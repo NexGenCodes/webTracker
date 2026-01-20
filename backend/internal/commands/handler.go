@@ -12,13 +12,15 @@ import (
 
 // Result represents the outcome of a command execution.
 type Result struct {
-	Message string
-	Error   error
+	Message  string
+	Language string
+	EditID   string // Signals that this ID was edited and needs a new receipt
+	Error    error
 }
 
 // Handler defines the interface all bot commands must implement.
 type Handler interface {
-	Execute(ctx context.Context, db *supabase.Client, args []string) Result
+	Execute(ctx context.Context, db *supabase.Client, args []string, lang string) Result
 }
 
 // Dispatcher routes messages starting with "!" to the appropriate handler.
@@ -44,16 +46,18 @@ func (d *Dispatcher) registerDefaults() {
 	d.handlers["stats"] = &StatsHandler{}
 	d.handlers["info"] = &InfoHandler{}
 	d.handlers["help"] = &HelpHandler{}
+	d.handlers["lang"] = &LangHandler{}
+	d.handlers["edit"] = &EditHandler{}
 }
 
-func (d *Dispatcher) Dispatch(ctx context.Context, text string) (string, bool) {
+func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) {
 	if !presentsAsCommand(text) {
-		return "", false
+		return nil, false
 	}
 
 	parts := strings.Fields(text)
 	if len(parts) == 0 {
-		return "", false
+		return nil, false
 	}
 	rawCmd := strings.ToLower(parts[0][1:]) // Remove "!" prefix
 	args := parts[1:]
@@ -69,12 +73,21 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (string, bool) {
 		case *HelpHandler:
 			h.CompanyName = d.CompanyName
 			h.CompanyPrefix = d.AwbCmd
+		case *EditHandler:
+			h.CompanyPrefix = d.AwbCmd
 		}
-		res := handler.Execute(ctx, d.db, args)
-		return res.Message, true
+
+		jid := ctx.Value("jid").(string)
+		lang, _ := d.db.GetUserLanguage(ctx, jid)
+
+		res := handler.Execute(ctx, d.db, args, lang)
+		if res.Language != "" {
+			d.db.SetUserLanguage(ctx, jid, res.Language)
+		}
+		return &res, true
 	}
 
-	return "", false
+	return nil, false
 }
 
 func presentsAsCommand(text string) bool {
@@ -86,7 +99,7 @@ type StatsHandler struct {
 	CompanyName string
 }
 
-func (h *StatsHandler) Execute(ctx context.Context, db *supabase.Client, args []string) Result {
+func (h *StatsHandler) Execute(ctx context.Context, db *supabase.Client, args []string, lang string) Result {
 	if len(args) > 0 {
 		return Result{Message: "⚠️ *INCORRECT USAGE*\n_Please send only `!stats` without any extra text._"}
 	}
@@ -111,7 +124,7 @@ type InfoHandler struct {
 	CompanyPrefix string
 }
 
-func (h *InfoHandler) Execute(ctx context.Context, db *supabase.Client, args []string) Result {
+func (h *InfoHandler) Execute(ctx context.Context, db *supabase.Client, args []string, lang string) Result {
 	if len(args) < 1 {
 		company := strings.ToUpper(h.CompanyName)
 		if company == "" {
@@ -120,7 +133,7 @@ func (h *InfoHandler) Execute(ctx context.Context, db *supabase.Client, args []s
 		msg := fmt.Sprintf("🚀 *%s COMMAND CENTER*\n\n", company) +
 			"━━━━━━━━━━━━━━━━━━━━━━━\n" +
 			"1️⃣ `!stats` - Daily Operations\n" +
-			"2️⃣ `!info [TrackingID]` - Shipment Tracker\n" +
+			"2️⃣ `!info [TrackingID]` - Shipment Information Tracker\n" +
 			"━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
 			"*PRO TIP:*\n" +
 			fmt.Sprintf("_Use `!info %s-123456789` for full details._", h.CompanyPrefix)
@@ -146,7 +159,7 @@ type HelpHandler struct {
 	CompanyPrefix string
 }
 
-func (h *HelpHandler) Execute(ctx context.Context, db *supabase.Client, args []string) Result {
+func (h *HelpHandler) Execute(ctx context.Context, db *supabase.Client, args []string, lang string) Result {
 	company := strings.ToUpper(h.CompanyName)
 	if company == "" {
 		company = "LOGISTICS"
@@ -156,9 +169,10 @@ func (h *HelpHandler) Execute(ctx context.Context, db *supabase.Client, args []s
 		"━━━━ COMMANDS ━━━━\n" +
 		"1️⃣ `!stats` - Daily Operations\n" +
 		"2️⃣ `!info [ID]` - Check Status\n" +
-		"3️⃣ `!help` - Show this menu\n" +
+		"3️⃣ `!edit [field] [value]` - Fix mistakes\n" +
+		"4️⃣ `!help` - Show this menu\n" +
 		"━━━━━━━━━━━━━━━━━━━\n\n" +
-		"*📦 HOW TO REGISTER A PACKAGE:*\n" +
+		"*📦 HOW TO REGISTER SHIPMENT INFORMATION:*\n" +
 		"_Simply send a message with these details:_\n\n" +
 		"Sender: John Doe\n" +
 		"Receiver Name: Jane Smith\n" +
@@ -166,7 +180,74 @@ func (h *HelpHandler) Execute(ctx context.Context, db *supabase.Client, args []s
 		"Receiver Address: 123 Main St, Lagos\n" +
 		"Receiver Country: Nigeria\n" +
 		"Sender Country: UK\n\n" +
-		"*PRO TIP:* _You can use shortcuts like #stats or #info._"
+		"*🛠️ HOW TO EDIT:*\n" +
+		"`!edit name Jane Doe` (Fixes last shipment)\n" +
+		fmt.Sprintf("`!edit %s-123 name Jane Doe` (Fixes specific ID)\n\n", h.CompanyPrefix) +
+		"*PRO TIP:* _You can use shortcuts like #stats or #edit._"
 
 	return Result{Message: msg}
+}
+
+type LangHandler struct{}
+
+func (h *LangHandler) Execute(ctx context.Context, db *supabase.Client, args []string, lang string) Result {
+	if len(args) < 1 {
+		return Result{Message: "🌐 *LANGUAGE MENU*\n\nUsage: `!lang [en|pt|es|de]`\n\nExample: `!lang pt` para Português"}
+	}
+
+	newLang := strings.ToLower(args[0])
+	switch newLang {
+	case "en", "pt", "es", "de":
+		// Handled by dispatcher update
+		return Result{
+			Message:  fmt.Sprintf("🌐 *LANGUAGE UPDATED*\n\nYour language is now set to *%s*.", strings.ToUpper(newLang)),
+			Language: newLang,
+		}
+	default:
+		return Result{Message: "❌ *UNSUPPORTED LANGUAGE*\n\nAvailable: `en`, `pt`, `es`, `de`"}
+	}
+}
+
+// EditHandler handles !edit [trackingID] [field] [value] or !edit [field] [value]
+type EditHandler struct {
+	CompanyPrefix string
+}
+
+func (h *EditHandler) Execute(ctx context.Context, db *supabase.Client, args []string, lang string) Result {
+	if len(args) < 2 {
+		return Result{Message: "📝 *EDIT SHIPMENT INFORMATION*\n\nUsage:\n`!edit [field] [new_value]`\n\nFields: `name`, `phone`, `address`, `country`, `email`, `id`, `sender`, `origin`"}
+	}
+
+	var trackingID, field, value string
+	jid := ctx.Value("jid").(string)
+
+	// Case 1: !edit [trackingID] [field] [value...]
+	if strings.Contains(args[0], "-") {
+		trackingID = args[0]
+		field = args[1]
+		value = strings.Join(args[2:], " ")
+	} else {
+		// Case 2: !edit [field] [value...] (Target last shipment)
+		var err error
+		trackingID, err = db.GetLastTrackingByJID(ctx, jid)
+		if err != nil || trackingID == "" {
+			return Result{Message: "⚠️ *NO RECORD FOUND*\n_I couldn't find your last shipment. Please provide the tracking ID._"}
+		}
+		field = args[0]
+		value = strings.Join(args[1:], " ")
+	}
+
+	if value == "" {
+		return Result{Message: "⚠️ *MISSING VALUE*\n_Please provide the new information for the field._"}
+	}
+
+	err := db.UpdateShipmentField(ctx, trackingID, field, value)
+	if err != nil {
+		return Result{Message: fmt.Sprintf("❌ *UPDATE FAILED*\n_%v_", err)}
+	}
+
+	return Result{
+		Message: fmt.Sprintf("✅ *INFORMATION UPDATED*\n\n━━━━━━━━━━━━━━━━━━━━━━━\nID: *%s*\nField: *%s*\nNew Value: *%s*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n_Generating your updated receipt..._", trackingID, strings.ToUpper(field), value),
+		EditID:  trackingID,
+	}
 }

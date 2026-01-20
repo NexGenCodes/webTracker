@@ -26,6 +26,9 @@ func Init() {
 
 	// 2. File Writer (Log Rotation)
 	logPath := os.Getenv("LOG_PATH")
+	if logPath == "" {
+		logPath = "logs" // default directory
+	}
 	if logPath != "" {
 		// Ensure directory exists
 		_ = os.MkdirAll(logPath, 0744)

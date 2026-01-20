@@ -16,27 +16,14 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23' # or your go version
+          go-version: '1.25.6'
 
       - name: Build Go Binary
         run: |
           cd backend
           go mod download
           GOOS=linux GOARCH=amd64 go build -o bot ./cmd/bot
-
-      - name: Cleanup Legacy Chrome
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          port: 22
-          script: |
-            # Remove Chrome and unused dependencies to free up 1GB RAM environment
-            sudo apt purge -y google-chrome-stable || true
-            sudo apt autoremove -y
-            sudo apt autoclean
-
+          
       - name: Prepare Directory
         uses: appleboy/ssh-action@master
         with:
@@ -83,8 +70,14 @@ jobs:
             # Set the correct user in the service file (replacing 'User=root' with actual user)
             sudo sed -i "s/User=root/User=${{ secrets.EC2_USER }}/g" /etc/systemd/system/webtracker-bot.service
             
+            # Check if .env exists
+            if [ ! -f /opt/webtracker/.env ]; then
+              echo "⚠️ WARNING: /opt/webtracker/.env not found! Service may fail to start."
+            fi
+
             # Reload systemd and restart
             sudo systemctl daemon-reload
             sudo systemctl enable webtracker-bot
             sudo systemctl restart webtracker-bot
+            sleep 2
             sudo systemctl status webtracker-bot
