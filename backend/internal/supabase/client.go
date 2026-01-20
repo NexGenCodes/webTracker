@@ -83,15 +83,15 @@ func (s *Client) InsertShipment(ctx context.Context, m models.Manifest, senderPh
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	// Total length should be 9. Prefix + "-" + Random.
-	randomLen := 9 - len(s.Prefix) - 1
-	if randomLen < 3 {
-		randomLen = 3 // Minimum random part for safety
-	}
-	newID := s.Prefix + "-" + utils.GenerateShortID(randomLen)
 	var finalID string
-
 	err := s.withRetry(func() error {
+		// Regenerate ID on every retry to prevent collisions
+		randomLen := 9 - len(s.Prefix) - 1
+		if randomLen < 3 {
+			randomLen = 3
+		}
+		newID := s.Prefix + "-" + utils.GenerateShortID(randomLen)
+
 		query := `
 			INSERT INTO "Shipment" (
 				"id", "trackingNumber", "status", "senderName", "senderCountry", 
