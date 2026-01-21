@@ -110,6 +110,7 @@ func (a *App) Run() error {
 			AwbCmd:      a.Cfg.CompanyPrefix,
 			CompanyName: a.Cfg.CompanyName,
 			Cmd:         cmdDispatcher,
+			LocalDB:     a.LocalDB,
 		}
 		go w.Start()
 	}

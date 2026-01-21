@@ -13,10 +13,7 @@ import { Footer } from '@/components/Footer';
 import { FeatureCard } from '@/components/FeatureCard';
 import { toast } from 'react-hot-toast';
 
-const ShipmentMap = dynamic(() => import('@/components/ShipmentMap'), {
-  ssr: false,
-  loading: () => <div className="h-[300px] w-full bg-surface-muted animate-pulse rounded-2xl mt-8"></div>
-});
+
 
 function HomeContent() {
   const { dict } = useI18n();
@@ -200,8 +197,9 @@ function HomeContent() {
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-20 relative z-10">
-                  <div className="lg:col-span-5 space-y-16">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-20 relative z-10">
+                  {/* Left Column: Details */}
+                  <div className="space-y-16">
                     <div className="space-y-8">
                       <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-accent flex items-center gap-4">
                         {dict.shipment.details}
@@ -211,7 +209,8 @@ function HomeContent() {
                         {[
                           { label: dict.shipment.receiver, value: shippingData.receiverName },
                           { label: dict.shipment.from, value: shippingData.senderName },
-                          { label: dict.shipment.destination, value: shippingData.receiverCountry, italic: true }
+                          { label: dict.shipment.destination, value: shippingData.receiverCountry, italic: true },
+                          { label: dict.shipment.origin, value: shippingData.senderCountry },
                         ].map((detail, idx) => (
                           <div key={idx} className="flex justify-between items-center py-6 border-b border-border last:border-0 group/item">
                             <span className="text-text-muted font-black text-xs uppercase tracking-widest">{detail.label}</span>
@@ -220,46 +219,39 @@ function HomeContent() {
                         ))}
                       </div>
                     </div>
-
-                    <div className="space-y-8">
-                      <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-accent flex items-center gap-4">
-                        {dict.shipment.latestUpdates}
-                        <span className="h-px flex-1 bg-accent/20" />
-                      </h4>
-                      <div className="space-y-12 relative border-l-2 border-border ml-3 pl-10 py-2">
-                        {shippingData.events?.map((event: any, i: number) => (
-                          <div key={event.id} className="relative group/event">
-                            <div className={cn(
-                              "absolute left-[-47px] top-1.5 w-6 h-6 rounded-full border-4 border-bg transition-all duration-500",
-                              i === 0 ? "bg-accent scale-125 shadow-lg shadow-accent/40" : "bg-border group-hover/event:bg-accent/40"
-                            )} />
-                            <div className="flex items-center gap-4 mb-2">
-                              <p className={cn("font-black text-lg md:text-xl tracking-tight leading-none uppercase", i === 0 ? "text-text-main" : "text-text-muted")}>
-                                {event.status.replace(/_/g, ' ')}
-                              </p>
-                              {i === 0 && (
-                                <span className="bg-accent text-white text-[9px] font-black uppercase px-2.5 py-1 rounded-lg animate-pulse tracking-widest">{dict.shipment.live}</span>
-                              )}
-                            </div>
-                            <span className="text-[10px] font-black text-accent/60 uppercase tracking-[0.2em]">
-                              {new Date(event.timestamp).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
-                            </span>
-                            <div className="mt-4 flex items-center gap-3 text-sm font-bold text-text-muted bg-surface-muted/50 p-4 rounded-2xl border border-border group-hover/event:border-accent/20 transition-colors">
-                              <MapPin size={16} className="text-accent/60" />
-                              {event.location}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
                   </div>
 
-                  <div className="lg:col-span-7 flex flex-col h-full">
-                    <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-accent mb-4 sm:mb-6 md:mb-8 flex items-center gap-4">
-                      {dict.shipment.liveLocation}
+                  {/* Right Column: Timeline */}
+                  <div className="space-y-8">
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-accent flex items-center gap-4">
+                      {dict.shipment.latestUpdates}
                       <span className="h-px flex-1 bg-accent/20" />
                     </h4>
-                    <ShipmentMap shipmentData={shippingData} />
+                    <div className="space-y-12 relative border-l-2 border-border ml-3 pl-10 py-2">
+                      {shippingData.events?.map((event: any, i: number) => (
+                        <div key={event.id} className="relative group/event">
+                          <div className={cn(
+                            "absolute left-[-47px] top-1.5 w-6 h-6 rounded-full border-4 border-bg transition-all duration-500",
+                            i === 0 ? "bg-accent scale-125 shadow-lg shadow-accent/40" : "bg-border group-hover/event:bg-accent/40"
+                          )} />
+                          <div className="flex items-center gap-4 mb-2">
+                            <p className={cn("font-black text-lg md:text-xl tracking-tight leading-none uppercase", i === 0 ? "text-text-main" : "text-text-muted")}>
+                              {event.status.replace(/_/g, ' ')}
+                            </p>
+                            {i === 0 && (
+                              <span className="bg-accent text-white text-[9px] font-black uppercase px-2.5 py-1 rounded-lg animate-pulse tracking-widest">{dict.shipment.live}</span>
+                            )}
+                          </div>
+                          <span className="text-[10px] font-black text-accent/60 uppercase tracking-[0.2em]">
+                            {new Date(event.timestamp).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+                          </span>
+                          <div className="mt-4 flex items-center gap-3 text-sm font-bold text-text-muted bg-surface-muted/50 p-4 rounded-2xl border border-border group-hover/event:border-accent/20 transition-colors">
+                            <MapPin size={16} className="text-accent/60" />
+                            {event.location}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
