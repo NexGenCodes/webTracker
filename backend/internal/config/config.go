@@ -161,7 +161,13 @@ func LoadFromEnv() (*Config, error) {
 	if admins := os.Getenv("WHATSAPP_ADMIN_PHONES"); admins != "" {
 		parts := strings.Split(admins, ",")
 		for _, p := range parts {
-			adminPhones = append(adminPhones, strings.TrimSpace(p))
+			p = strings.TrimSpace(p)
+			p = strings.ReplaceAll(p, "+", "")
+			p = strings.ReplaceAll(p, "-", "")
+			p = strings.ReplaceAll(p, " ", "")
+			if p != "" {
+				adminPhones = append(adminPhones, p)
+			}
 		}
 	}
 
