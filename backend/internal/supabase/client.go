@@ -299,3 +299,19 @@ func (s *Client) MarkAsNotified(tracking string) error {
 	_, err := s.db.Exec(query, tracking)
 	return err
 }
+
+func (s *Client) DeleteShipment(ctx context.Context, trackingID string) error {
+	query := `DELETE FROM "Shipment" WHERE "trackingNumber" = $1`
+	res, err := s.db.ExecContext(ctx, query, trackingID)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
