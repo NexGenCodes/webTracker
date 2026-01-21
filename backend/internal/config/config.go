@@ -34,6 +34,7 @@ type Config struct {
 
 	// Access Control
 	AllowPrivateChat bool
+	AdminPhones      []string
 
 	// Session Storage
 	WhatsAppSessionPath string
@@ -156,6 +157,14 @@ func LoadFromEnv() (*Config, error) {
 		fmt.Sscanf(p, "%d", &smtpPort)
 	}
 
+	var adminPhones []string
+	if admins := os.Getenv("WHATSAPP_ADMIN_PHONES"); admins != "" {
+		parts := strings.Split(admins, ",")
+		for _, p := range parts {
+			adminPhones = append(adminPhones, strings.TrimSpace(p))
+		}
+	}
+
 	cfg := &Config{
 		DatabaseURL:    os.Getenv("DIRECT_URL"),
 		AllowedGroups:  allowedGroups,
@@ -176,8 +185,30 @@ func LoadFromEnv() (*Config, error) {
 		NotifyEmail:  os.Getenv("NOTIFY_EMAIL"),
 
 		AllowPrivateChat:    os.Getenv("WHATSAPP_ALLOW_PRIVATE_CHAT") == "true",
+		AdminPhones:         adminPhones,
 		WhatsAppSessionPath: os.Getenv("WHATSAPP_SESSION_PATH"),
 	}
+
+	if cfg.PairingPhone != "" {
+		// Clean the pairing phone just in case
+		cleanPairing := strings.ReplaceAll(cfg.PairingPhone, " ", "")
+		cleanPairing = strings.ReplaceAll(cleanPairing, "+", "")
+		cleanPairing = strings.ReplaceAll(cleanPairing, "-", "")
+
+		// Ensure it's not already in the list
+		exists := false
+		for _, p := range adminPhones {
+			if p == cleanPairing {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			adminPhones = append(adminPhones, cleanPairing)
+		}
+	}
+
+	cfg.AdminPhones = adminPhones
 
 	if cfg.WhatsAppSessionPath == "" {
 		cfg.WhatsAppSessionPath = filepath.Join(workDir, "session.db")
