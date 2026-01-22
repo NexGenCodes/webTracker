@@ -95,7 +95,7 @@ func (a *App) Init() error {
 
 func (a *App) Run() error {
 	// Start Workers
-	cmdDispatcher := commands.NewDispatcher(a.DB, a.LocalDB, a.Cfg.CompanyPrefix, a.Cfg.CompanyName, a.Cfg.AdminPhones)
+	cmdDispatcher := commands.NewDispatcher(a.DB, a.LocalDB, a.Cfg.CompanyPrefix, a.Cfg.CompanyName)
 	sender := whatsapp.NewSender(a.WA)
 	for i := 1; i <= 5; i++ {
 		a.WG.Add(1)

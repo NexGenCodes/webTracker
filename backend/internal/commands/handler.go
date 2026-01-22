@@ -32,29 +32,27 @@ type Dispatcher struct {
 	handlers    map[string]Handler
 	AwbCmd      string
 	CompanyName string
-	AdminPhones []string
 }
 
-func NewDispatcher(db *supabase.Client, ldb *localdb.Client, awbCmd string, companyName string, adminPhones []string) *Dispatcher {
+func NewDispatcher(db *supabase.Client, ldb *localdb.Client, awbCmd string, companyName string) *Dispatcher {
 	d := &Dispatcher{
 		db:          db,
 		ldb:         ldb,
 		handlers:    make(map[string]Handler),
 		AwbCmd:      awbCmd,
 		CompanyName: companyName,
-		AdminPhones: adminPhones,
 	}
 	d.registerDefaults()
 	return d
 }
 
 func (d *Dispatcher) registerDefaults() {
-	d.handlers["stats"] = &StatsHandler{AdminPhones: d.AdminPhones}
+	d.handlers["stats"] = &StatsHandler{}
 	d.handlers["info"] = &InfoHandler{}
 	d.handlers["help"] = &HelpHandler{}
 	d.handlers["lang"] = &LangHandler{}
-	d.handlers["edit"] = &EditHandler{AdminPhones: d.AdminPhones}
-	d.handlers["delete"] = &DeleteHandler{AdminPhones: d.AdminPhones}
+	d.handlers["edit"] = &EditHandler{}
+	d.handlers["delete"] = &DeleteHandler{}
 }
 
 func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) {
@@ -104,15 +102,9 @@ func presentsAsCommand(text string) bool {
 // StatsHandler handles !stats
 type StatsHandler struct {
 	CompanyName string
-	AdminPhones []string
 }
 
 func (h *StatsHandler) Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string) Result {
-	senderPhone, ok := ctx.Value("sender_phone").(string)
-	if !ok || !isAdmin(senderPhone, h.AdminPhones) {
-		return Result{Message: "⛔ *PERMISSION DENIED*\n\n_You are not authorized to view statistics._"}
-	}
-
 	if len(args) > 0 {
 		return Result{Message: "⚠️ *INCORRECT USAGE*\n_Please send only `!stats` without any extra text._"}
 	}
@@ -227,15 +219,9 @@ func (h *LangHandler) Execute(ctx context.Context, db *supabase.Client, ldb *loc
 // EditHandler handles !edit [trackingID] [field] [value] or !edit [field] [value]
 type EditHandler struct {
 	CompanyPrefix string
-	AdminPhones   []string
 }
 
 func (h *EditHandler) Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string) Result {
-	senderPhone, ok := ctx.Value("sender_phone").(string)
-	if !ok || !isAdmin(senderPhone, h.AdminPhones) {
-		return Result{Message: "⛔ *PERMISSION DENIED*\n\n_You are not authorized to edit shipments._"}
-	}
-
 	if len(args) < 2 {
 		return Result{Message: "📝 *EDIT SHIPMENT INFORMATION*\n\nUsage:\n`!edit [field] [new_value]`\n\nFields: `name`, `phone`, `address`, `country`, `email`, `id`, `sender`, `origin`"}
 	}
@@ -291,16 +277,9 @@ func (h *EditHandler) Execute(ctx context.Context, db *supabase.Client, ldb *loc
 }
 
 // DeleteHandler handles !delete [trackingID]
-type DeleteHandler struct {
-	AdminPhones []string
-}
+type DeleteHandler struct{}
 
 func (h *DeleteHandler) Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string) Result {
-	senderPhone, ok := ctx.Value("sender_phone").(string)
-	if !ok || !isAdmin(senderPhone, h.AdminPhones) {
-		return Result{Message: "⛔ *PERMISSION DENIED*\n\n_You are not authorized to delete shipments._"}
-	}
-
 	if len(args) < 1 {
 		return Result{Message: "🗑️ *DELETE SHIPMENT*\n\nUsage: `!delete [TrackingID]`"}
 	}
@@ -312,27 +291,4 @@ func (h *DeleteHandler) Execute(ctx context.Context, db *supabase.Client, ldb *l
 	}
 
 	return Result{Message: fmt.Sprintf("🗑️ *SHIPMENT DELETED*\n\nThe shipment *%s* has been permanently removed.", trackingID)}
-}
-
-func isAdmin(phone string, admins []string) bool {
-	if len(admins) == 0 {
-		return false // Secure default
-	}
-
-	// Clean input phone
-	phone = strings.ReplaceAll(phone, "+", "")
-	phone = strings.ReplaceAll(phone, "-", "")
-	phone = strings.ReplaceAll(phone, " ", "")
-
-	// Strip device suffix if present
-	if strings.Contains(phone, ".") {
-		phone = strings.Split(phone, ".")[0]
-	}
-
-	for _, admin := range admins {
-		if strings.TrimSpace(phone) == strings.TrimSpace(admin) {
-			return true
-		}
-	}
-	return false
 }
