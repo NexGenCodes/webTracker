@@ -49,7 +49,7 @@ func NewDispatcher(db *supabase.Client, ldb *localdb.Client, awbCmd string, comp
 }
 
 func (d *Dispatcher) registerDefaults() {
-	d.handlers["stats"] = &StatsHandler{}
+	d.handlers["stats"] = &StatsHandler{AdminPhones: d.AdminPhones}
 	d.handlers["info"] = &InfoHandler{}
 	d.handlers["help"] = &HelpHandler{}
 	d.handlers["lang"] = &LangHandler{}
@@ -104,9 +104,15 @@ func presentsAsCommand(text string) bool {
 // StatsHandler handles !stats
 type StatsHandler struct {
 	CompanyName string
+	AdminPhones []string
 }
 
 func (h *StatsHandler) Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string) Result {
+	senderPhone, ok := ctx.Value("sender_phone").(string)
+	if !ok || !isAdmin(senderPhone, h.AdminPhones) {
+		return Result{Message: "⛔ *PERMISSION DENIED*\n\n_You are not authorized to view statistics._"}
+	}
+
 	if len(args) > 0 {
 		return Result{Message: "⚠️ *INCORRECT USAGE*\n_Please send only `!stats` without any extra text._"}
 	}
@@ -176,9 +182,10 @@ func (h *HelpHandler) Execute(ctx context.Context, db *supabase.Client, ldb *loc
 		"━━━━ COMMANDS ━━━━\n" +
 		"1️⃣ `!stats` - Daily Operations\n" +
 		"2️⃣ `!info [ID]` - Check Status\n" +
-		"3️⃣ `!edit [field] [value]` - Fix mistakes\n" +
-		"4️⃣ `!lang [code]` - Switch language (en, pt, es, de)\n" +
-		"5️⃣ `!help` - Show this menu\n" +
+		"3️⃣ `!edit [field] [value]` - Fix mistakes (Admin)\n" +
+		"4️⃣ `!delete [ID]` - Remove shipment (Admin)\n" +
+		"5️⃣ `!lang [code]` - Switch language (en, pt, es, de)\n" +
+		"6️⃣ `!help` - Show this menu\n" +
 		"━━━━━━━━━━━━━━━━━━━\n\n" +
 		"*📦 HOW TO REGISTER SHIPMENT INFORMATION:*\n" +
 		"_Simply send a message with these details:_\n\n" +
@@ -311,6 +318,12 @@ func isAdmin(phone string, admins []string) bool {
 	if len(admins) == 0 {
 		return false // Secure default
 	}
+
+	// Clean input phone
+	phone = strings.ReplaceAll(phone, "+", "")
+	phone = strings.ReplaceAll(phone, "-", "")
+	phone = strings.ReplaceAll(phone, " ", "")
+
 	for _, admin := range admins {
 		if strings.TrimSpace(phone) == strings.TrimSpace(admin) {
 			return true

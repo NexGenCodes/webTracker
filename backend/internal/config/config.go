@@ -212,6 +212,7 @@ func LoadFromEnv() (*Config, error) {
 		if !exists {
 			adminPhones = append(adminPhones, cleanPairing)
 		}
+		cfg.PairingPhone = cleanPairing
 	}
 
 	cfg.AdminPhones = adminPhones
