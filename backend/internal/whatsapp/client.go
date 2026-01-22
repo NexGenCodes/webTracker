@@ -94,12 +94,20 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 		}
 
 		// Queue job (Language fetch moved to worker to avoid blocking event listener)
+		senderPhone := v.Info.Sender.User
+		if senderPhone == "" && v.Info.IsFromMe {
+			// Fallback to bot's own number if it's from me
+			if client.Store.ID != nil {
+				senderPhone = client.Store.ID.User
+			}
+		}
+
 		queue <- models.Job{
 			ChatJID:     v.Info.Chat,
 			SenderJID:   v.Info.Sender,
 			MessageID:   v.Info.ID,
 			Text:        strings.TrimSpace(text),
-			SenderPhone: v.Info.Sender.User,
+			SenderPhone: senderPhone,
 		}
 	}
 }

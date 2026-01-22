@@ -41,7 +41,14 @@ var (
 	ColorStampRed = color.RGBA{139, 0, 0, 160}
 )
 
+var (
+	logoCache  image.Image
+	stampCache image.Image
+	cacheMu    sync.RWMutex
+)
+
 func InitReceiptRenderer() error {
+	rand.Seed(time.Now().UnixNano())
 	return EnsureFontsDownloader()
 }
 
@@ -408,6 +415,19 @@ func drawFoldLines(dc *gg.Context) {
 }
 
 func loadCompanyLogo() image.Image {
+	cacheMu.RLock()
+	if logoCache != nil {
+		defer cacheMu.RUnlock()
+		return logoCache
+	}
+	cacheMu.RUnlock()
+
+	cacheMu.Lock()
+	defer cacheMu.Unlock()
+	if logoCache != nil {
+		return logoCache
+	}
+
 	logoPath := filepath.Join(GetAssetsPath(), "img", "logo.png")
 	img, err := gg.LoadImage(logoPath)
 	if err != nil {
@@ -424,10 +444,24 @@ func loadCompanyLogo() image.Image {
 	dc := gg.NewContext(newWidth, newHeight)
 	dc.Scale(scale, scale)
 	dc.DrawImage(img, 0, 0)
-	return dc.Image()
+	logoCache = dc.Image()
+	return logoCache
 }
 
 func loadApprovedStamp() image.Image {
+	cacheMu.RLock()
+	if stampCache != nil {
+		defer cacheMu.RUnlock()
+		return stampCache
+	}
+	cacheMu.RUnlock()
+
+	cacheMu.Lock()
+	defer cacheMu.Unlock()
+	if stampCache != nil {
+		return stampCache
+	}
+
 	stampPath := filepath.Join(GetAssetsPath(), "img", "approved_stamp.png")
 	img, err := gg.LoadImage(stampPath)
 	if err != nil {
@@ -439,7 +473,8 @@ func loadApprovedStamp() image.Image {
 	dc := gg.NewContext(newWidth, newHeight)
 	dc.Scale(scale, scale)
 	dc.DrawImage(img, 0, 0)
-	return dc.Image()
+	stampCache = dc.Image()
+	return stampCache
 }
 
 func drawGuillochePatterns(dc *gg.Context) {
@@ -502,7 +537,6 @@ func drawLinearBarcodePro(dc *gg.Context, x, y, w, h float64) {
 }
 
 func drawNoisePro(dc *gg.Context) {
-	rand.Seed(time.Now().UnixNano())
 	for i := 0; i < 40000; i++ {
 		dc.SetRGBA(0, 0, 0, 0.02)
 		dc.DrawPoint(rand.Float64()*Width, rand.Float64()*Height, 1)
