@@ -102,6 +102,11 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 			}
 		}
 
+		// Strip device suffix (e.g., "234...0:12" -> "234...")
+		if strings.Contains(senderPhone, ".") {
+			senderPhone = strings.Split(senderPhone, ".")[0]
+		}
+
 		queue <- models.Job{
 			ChatJID:     v.Info.Chat,
 			SenderJID:   v.Info.Sender,

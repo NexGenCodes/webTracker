@@ -324,6 +324,11 @@ func isAdmin(phone string, admins []string) bool {
 	phone = strings.ReplaceAll(phone, "-", "")
 	phone = strings.ReplaceAll(phone, " ", "")
 
+	// Strip device suffix if present
+	if strings.Contains(phone, ".") {
+		phone = strings.Split(phone, ".")[0]
+	}
+
 	for _, admin := range admins {
 		if strings.TrimSpace(phone) == strings.TrimSpace(admin) {
 			return true
