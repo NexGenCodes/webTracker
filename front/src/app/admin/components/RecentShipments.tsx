@@ -41,10 +41,11 @@ export const RecentShipments: React.FC<RecentShipmentsProps> = ({ shipments, dat
                             {!dataLoading && (
                                 <span className={`px-2 sm:px-3 py-1 rounded-lg text-[10px] sm:text-xs font-black uppercase self-start sm:self-auto ${s.isArchived ? 'bg-success/10 text-success' :
                                     s.status === 'IN_TRANSIT' ? 'bg-accent/10 text-accent' :
-                                        s.status === 'PENDING' ? 'bg-warning/10 text-warning' :
-                                            'bg-surface text-text-muted'
+                                        s.status === 'OUT_FOR_DELIVERY' ? 'bg-primary/10 text-primary' :
+                                            s.status === 'PENDING' ? 'bg-warning/10 text-warning' :
+                                                'bg-surface text-text-muted'
                                     }`}>
-                                    {s.isArchived ? dict.admin.delivered : s.status?.replace('_', ' ')}
+                                    {s.isArchived ? dict.admin.delivered : s.status?.replace(/_/g, ' ')}
                                 </span>
                             )}
                             {dataLoading && <div className="w-20 h-5 bg-border rounded-lg" />}

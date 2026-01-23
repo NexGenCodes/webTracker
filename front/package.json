@@ -4,14 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
-    "@prisma/client": "^5.22.0",
     "@types/leaflet": "^1.9.21",
     "clsx": "^2.1.1",
     "framer-motion": "^12.26.2",
@@ -40,7 +39,6 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.2",
     "jsdom": "^27.4.0",
-    "prisma": "^5.22.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.0.17"

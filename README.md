@@ -56,7 +56,7 @@ graph TB
     end
 
     subgraph "Data Layer"
-        K[(PostgreSQL/Supabase)]
+        K[(SQLite - Local)]
         L[Prisma ORM]
     end
 
@@ -119,11 +119,11 @@ graph TB
 - **Scheduling**: Native internal cron scheduler for automated tasks
 - **AI Integration**: Google Gemini API for manifest parsing
 
-#### **Database (PostgreSQL/Supabase)**
+#### **Database (SQLite)**
 
-- **ORM**: Prisma for type-safe database access
-- **Models**: Shipment, Event, NotificationQueue
-- **Features**: Connection pooling, direct connections, migrations
+- **Framework**: SQLite for local persistence, optimized for low-memory environments (VPS).
+- **Features**: WAL mode enabled for high-concurrency read/write operations.
+- **Models**: Shipment, GroupAuthority, UserPreference.
 
 ---
 
@@ -159,9 +159,9 @@ graph TB
 
 ### 🤖 AI & Logic Features
 
-- **Regex-First Hybrid Parsing** - Ultra-robust pattern matching handles 95% of manifests, minimizing Gemini AI costs.
-- **AI Fallback** - Gemini AI handles messy or complex manifest text when patterns fail.
-- **Manifest Validation** - Automated validation of required fields at point of entry.
+- **Regex-First Hybrid Parsing**: Ultra-robust pattern matching handles 95% of manifests, minimizing AI costs. Supports **ID/Passport** extraction.
+- **AI Fallback**: Gemini AI handles messy text with a pre-defined JSON schema.
+- **Manifest Validation**: Automated validation of required fields (Receiver Name, Phone, Address, etc.).
 
 ### ⚙️ Automation
 

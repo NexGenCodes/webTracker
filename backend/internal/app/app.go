@@ -5,19 +5,19 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
 
+	"webtracker-bot/internal/api"
 	"webtracker-bot/internal/commands"
 	"webtracker-bot/internal/config"
-	"webtracker-bot/internal/health"
 	"webtracker-bot/internal/localdb"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/notif"
 	"webtracker-bot/internal/scheduler"
-	"webtracker-bot/internal/supabase"
 	"webtracker-bot/internal/utils"
 	"webtracker-bot/internal/whatsapp"
 	"webtracker-bot/internal/worker"
@@ -28,13 +28,13 @@ import (
 
 type App struct {
 	Cfg     *config.Config
-	DB      *supabase.Client
 	LocalDB *localdb.Client
 	WA      *whatsmeow.Client
 	Jobs    chan models.Job
 	WG      sync.WaitGroup
 	Cancel  context.CancelFunc
 	Cron    *scheduler.CronManager
+	API     *api.Server
 	Context context.Context
 }
 
@@ -49,47 +49,29 @@ func New(cfg *config.Config) *App {
 }
 
 func (a *App) Init() error {
-	// 0. Verify Environment
-	if err := health.VerifyEnvironment(); err != nil {
-		fmt.Printf("FATAL: Environment verification failed: %v\n", err)
-		os.Exit(1)
-	}
-
-	// 1. Init DB
-	db, err := supabase.NewClient(a.Cfg.DatabaseURL, a.Cfg.CompanyPrefix)
-	if err != nil {
-		return fmt.Errorf("db init: %w", err)
-	}
-	a.DB = db
-
-	// 1.5 Init LocalDB (SQLite)
-	ldb, err := localdb.NewClient(a.Cfg.WhatsAppSessionPath)
+	workDir := config.GetWorkDir()
+	dbPath := filepath.Join(workDir, "webtracker.db")
+	ldb, err := localdb.NewClient(dbPath)
 	if err != nil {
 		return fmt.Errorf("localdb init: %w", err)
 	}
 	a.LocalDB = ldb
 
-	// 2. Init WhatsApp
 	wa, err := whatsapp.NewClient(a.Cfg.WhatsAppSessionPath)
 	if err != nil {
 		return fmt.Errorf("whatsapp init: %w", err)
 	}
 	a.WA = wa
 
-	// 3. Register Events
 	a.WA.AddEventHandler(a.handleWAEvent)
 
-	// 4. Init Receipt Renderer (Native)
 	if err := utils.InitReceiptRenderer(); err != nil {
 		logger.Error().Err(err).Msg("Failed to initialize receipt renderer (Font download failed?). Receipts may look generic.")
 	} else {
 		logger.Info().Msg("Receipt renderer initialized (Fonts loaded)")
 	}
 
-	// 5. Start Health Server
-	health.StartHealthServer("8080", func() error {
-		return a.DB.Ping()
-	})
+	// 5. API Server initialized during Run()
 
 	return nil
 }
@@ -97,31 +79,41 @@ func (a *App) Init() error {
 func (a *App) Run() error {
 	// Start Workers
 	sender := whatsapp.NewSender(a.WA)
-	cmdDispatcher := commands.NewDispatcher(a.DB, a.LocalDB, sender, a.Cfg.CompanyPrefix, a.Cfg.CompanyName, a.Cfg.PairingPhone, a.Cfg.AdminTimezone)
-	for i := 1; i <= 3; i++ {
+	cmdDispatcher := commands.NewDispatcher(a.LocalDB, sender, a.Cfg.CompanyPrefix, a.Cfg.CompanyName, a.Cfg.PairingPhone, a.Cfg.AdminTimezone)
+	for i := 1; i <= 5; i++ {
 		a.WG.Add(1)
 		w := &worker.Worker{
-			ID:          i,
-			Client:      a.WA,
-			Sender:      sender,
-			DB:          a.DB,
-			Jobs:        a.Jobs,
-			WG:          &a.WG,
-			GeminiKey:   a.Cfg.GeminiAPIKey,
-			AwbCmd:      a.Cfg.CompanyPrefix,
-			CompanyName: a.Cfg.CompanyName,
-			Cmd:         cmdDispatcher,
-			LocalDB:     a.LocalDB,
+			ID:              i,
+			Client:          a.WA,
+			Sender:          sender,
+			Jobs:            a.Jobs,
+			WG:              &a.WG,
+			GeminiKey:       a.Cfg.GeminiAPIKey,
+			AwbCmd:          a.Cfg.CompanyPrefix,
+			CompanyName:     a.Cfg.CompanyName,
+			Cmd:             cmdDispatcher,
+			LocalDB:         a.LocalDB,
+			TrackingBaseURL: a.Cfg.TrackingBaseURL,
 		}
 		go w.Start()
 	}
 
-	// Start Scheduler
-	scheduler.StartDailySummary(a.WA, a.DB, a.LocalDB, a.Cfg.AdminTimezone)
-	a.Cron = scheduler.NewManager(a.Cfg, a.DB, a.WA)
+	port := a.Cfg.APIPort
+	if port == "" {
+		port = "8080"
+	}
+
+	a.API = api.NewServer(a.LocalDB, a.Cfg.ApiAuthToken, a.Cfg.GeminiAPIKey)
+	go func() {
+		logger.Info().Str("port", port).Msg("API Server starting")
+		if err := a.API.Start(port); err != nil {
+			logger.Error().Err(err).Msg("API Server failed")
+		}
+	}()
+
+	a.Cron = scheduler.NewManager(a.Cfg, a.LocalDB, a.WA)
 	a.Cron.Start()
 
-	// Start Rate Limiter Cleanup (every 5 minutes)
 	go func() {
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
@@ -135,12 +127,10 @@ func (a *App) Run() error {
 		}
 	}()
 
-	// Connect to WhatsApp
 	if err := a.connectWA(); err != nil {
 		return err
 	}
 
-	// Wait for Signal
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
@@ -185,7 +175,7 @@ func (a *App) connectWA() error {
 }
 
 func (a *App) handleWAEvent(evt interface{}) {
-	whatsapp.HandleEvent(a.WA, evt, a.Jobs, a.Cfg, a.DB, a.LocalDB)
+	whatsapp.HandleEvent(a.WA, evt, a.Jobs, a.Cfg, a.LocalDB)
 
 	switch evt.(type) {
 	case *events.Connected:

@@ -5,13 +5,15 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
+
 	"webtracker-bot/internal/commands"
 	"webtracker-bot/internal/i18n"
 	"webtracker-bot/internal/localdb"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/parser"
-	"webtracker-bot/internal/supabase"
+	"webtracker-bot/internal/shipment"
 	"webtracker-bot/internal/utils"
 	"webtracker-bot/internal/whatsapp"
 
@@ -19,17 +21,17 @@ import (
 )
 
 type Worker struct {
-	ID          int
-	Client      *whatsmeow.Client
-	Sender      *whatsapp.Sender
-	DB          *supabase.Client
-	LocalDB     *localdb.Client
-	Jobs        <-chan models.Job
-	WG          *sync.WaitGroup
-	GeminiKey   string
-	AwbCmd      string
-	CompanyName string
-	Cmd         *commands.Dispatcher
+	ID              int
+	Client          *whatsmeow.Client
+	Sender          *whatsapp.Sender
+	LocalDB         *localdb.Client
+	Jobs            <-chan models.Job
+	WG              *sync.WaitGroup
+	GeminiKey       string
+	AwbCmd          string
+	CompanyName     string
+	TrackingBaseURL string
+	Cmd             *commands.Dispatcher
 }
 
 func (w *Worker) Start() {
@@ -51,11 +53,11 @@ func (w *Worker) Start() {
 func (w *Worker) process(job models.Job) {
 	logger.GlobalVitals.IncJobs()
 
-	// 1. Fetch Language (Moved from event listener to worker for concurrency)
+	// 1. Fetch Language
 	langStr, _ := w.LocalDB.GetUserLanguage(context.Background(), job.SenderJID.String())
 	lang := i18n.Language(langStr)
 
-	// 2. Check for Commands (Explicit)
+	// 2. Check for Commands
 	ctx := context.WithValue(context.Background(), "jid", job.SenderJID.String())
 	ctx = context.WithValue(ctx, "sender_phone", job.SenderPhone)
 	ctx = context.WithValue(ctx, "is_admin", job.IsAdmin)
@@ -111,22 +113,52 @@ func (w *Worker) process(job models.Job) {
 	}
 	logger.GlobalVitals.IncParseSuccess()
 
-	// 5. Duplicate Check & ID Retrieval
-	exists, tracking, err := w.DB.CheckDuplicate(context.Background(), m.ReceiverPhone)
-	id := tracking
+	// 6. Create Shipment (Map Manifest -> Shipment)
+	trackingID := utils.GenerateTrackingID(w.AwbCmd)
+	nowUTC := time.Now().UTC()
 
-	if err == nil && exists {
-		logger.GlobalVitals.IncDuplicate()
-		logger.Info().Str("tracking_id", id).Str("jid", job.SenderJID.String()).Msg("Duplicate record found, skipping image generation")
+	// Default Logic inputs
+	orig := m.SenderCountry
+	dest := m.ReceiverCountry
 
-		// For duplicates, ONLY send a text confirmation to save CPU/Network
-		trackingMsg := fmt.Sprintf("📂 *DUPLICATE SHIPMENT INFORMATION*\n\n━━━━━━━━━━━━━━━━━━━━━━━\nTracking ID: *%s*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n📌 *Track your package:*\nhttps://web-tracker-iota.vercel.app?id=%s", id, id)
-		w.Sender.Reply(job.ChatJID, job.SenderJID, trackingMsg, job.MessageID, job.Text)
-		return
+	transitTime, outForDeliveryTime, deliveryTime := shipment.CalculateSchedule(nowUTC, orig, dest)
+
+	newShipment := &shipment.Shipment{
+		TrackingID:           trackingID,
+		UserJID:              job.SenderJID.String(),
+		Status:               shipment.StatusPending,
+		CreatedAt:            nowUTC,
+		ScheduledTransitTime: transitTime,
+		OutForDeliveryTime:   outForDeliveryTime,
+		ExpectedDeliveryTime: deliveryTime,
+		SenderTimezone:       shipment.ResolveTimezone(orig),
+		RecipientTimezone:    shipment.ResolveTimezone(dest),
+
+		SenderName:     m.SenderName,
+		SenderPhone:    job.SenderPhone,
+		Origin:         m.SenderCountry,
+		RecipientName:  m.ReceiverName,
+		RecipientPhone: m.ReceiverPhone,
+		RecipientEmail: m.ReceiverEmail,
+		RecipientID:    m.ReceiverID,
+		Destination:    m.ReceiverAddress,
+
+		CargoType: m.CargoType,
+		Weight:    1.0,
+		Cost:      0.0,
+	}
+	if newShipment.CargoType == "" {
+		newShipment.CargoType = "General"
+	}
+	if newShipment.Origin == "" {
+		newShipment.Origin = "Processing Center"
+	}
+	if newShipment.Destination == "" {
+		newShipment.Destination = "Local Delivery"
 	}
 
-	// 6. Insert New
-	id, err = w.DB.InsertShipment(context.Background(), m, job.SenderPhone)
+	// Insert into LocalDB
+	err := w.LocalDB.CreateShipment(context.Background(), newShipment)
 	if err != nil {
 		logger.GlobalVitals.IncInsertFailure()
 		logger.Error().Err(err).Str("jid", job.SenderJID.String()).Msg("Failed to insert shipment information")
@@ -136,12 +168,15 @@ func (w *Worker) process(job models.Job) {
 	logger.GlobalVitals.IncInsertSuccess()
 
 	// 7, 8, 9. Generate and send receipt
-	w.generateAndSendReceipt(job, id, lang)
+	w.generateAndSendReceipt(job, trackingID, lang)
 
 	// 10. Send tracking ID and link as follow-up message
+	baseURL := w.TrackingBaseURL
+	if baseURL == "" {
+		baseURL = "https://web-tracker-iota.vercel.app"
+	}
 
-	// 10. Send tracking ID and link as follow-up message
-	trackingMsg := fmt.Sprintf("📦 *SHIPMENT INFORMATION CREATED*\n\n━━━━━━━━━━━━━━━━━━━━━━━\nTracking ID: *%s*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n📌 *Track your package:*\nhttps://web-tracker-iota.vercel.app?id=%s", id, id)
+	trackingMsg := fmt.Sprintf("📦 *SHIPMENT INFORMATION CREATED*\n\n━━━━━━━━━━━━━━━━━━━━━━━\nTracking ID: *%s*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n📌 *Track your package:*\n%s?id=%s", trackingID, baseURL, trackingID)
 	if m.IsAI {
 		trackingMsg += "\n\n_✨ Parsed by AI_"
 	}
@@ -150,14 +185,14 @@ func (w *Worker) process(job models.Job) {
 
 func (w *Worker) generateAndSendReceipt(job models.Job, id string, lang i18n.Language) {
 	// 1. Fetch
-	shipment, err := w.DB.GetShipment(context.Background(), id)
-	if err != nil || shipment == nil {
+	s, err := w.LocalDB.GetShipment(context.Background(), id)
+	if err != nil || s == nil {
 		logger.Warn().Err(err).Str("tracking_id", id).Msg("Failed to fetch info for receipt delivery")
 		return
 	}
 
 	// 2. Render
-	receiptImg, err := utils.RenderReceipt(*shipment, w.CompanyName, lang)
+	receiptImg, err := utils.RenderReceipt(*s, w.CompanyName, lang)
 	if err != nil {
 		logger.Error().Err(err).Str("tracking_id", id).Msg("Failed to render updated receipt")
 		return

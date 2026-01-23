@@ -42,6 +42,10 @@ func NewClient(dbPath string) (*Client, error) {
 		return nil, fmt.Errorf("failed to init schema: %w", err)
 	}
 
+	// Minor migration for existing DBs
+	_, _ = db.Exec("ALTER TABLE Shipment ADD COLUMN recipient_email TEXT")
+	_, _ = db.Exec("ALTER TABLE Shipment ADD COLUMN recipient_id TEXT")
+
 	logger.Info().Str("path", dbPath).Msg("Local DB (SQLite) initialized")
 	return client, nil
 }
@@ -65,6 +69,40 @@ func (c *Client) initSchema(ctx context.Context) error {
 		value TEXT NOT NULL,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
+
+	CREATE TABLE IF NOT EXISTS Shipment (
+		tracking_id TEXT PRIMARY KEY,
+		user_jid TEXT NOT NULL,
+		status TEXT DEFAULT 'pending',
+		
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		scheduled_transit_time DATETIME,
+		outfordelivery_time DATETIME,
+		expected_delivery_time DATETIME,
+		
+		sender_timezone TEXT,
+		recipient_timezone TEXT,
+
+		sender_name TEXT,
+		sender_phone TEXT,
+		origin TEXT,
+		recipient_name TEXT,
+		recipient_phone TEXT,
+		recipient_email TEXT,
+		recipient_id TEXT,
+		destination TEXT,
+		cargo_type TEXT,
+		weight REAL,
+		cost REAL,
+		
+		-- Metadata for easy deletes or bulk ops
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_shipment_triggers_pending ON Shipment(status, scheduled_transit_time) WHERE status = 'pending';
+	CREATE INDEX IF NOT EXISTS idx_shipment_triggers_transit ON Shipment(status, outfordelivery_time) WHERE status = 'intransit';
+	CREATE INDEX IF NOT EXISTS idx_shipment_triggers_outfordelivery ON Shipment(status, expected_delivery_time) WHERE status = 'outfordelivery';
+	CREATE INDEX IF NOT EXISTS idx_shipment_user_jid ON Shipment(user_jid);
 	`
 	_, err := c.db.ExecContext(ctx, query)
 	return err

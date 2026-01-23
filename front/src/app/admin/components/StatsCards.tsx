@@ -5,6 +5,7 @@ interface StatsCardsProps {
         total: number;
         pending: number;
         inTransit: number;
+        outForDelivery: number;
         delivered: number;
     };
     dataLoading: boolean;
@@ -16,11 +17,12 @@ export const StatsCards: React.FC<StatsCardsProps> = ({ stats, dataLoading, dict
         { label: dict.admin.totalShipments, value: stats.total, color: 'text-text-main' },
         { label: dict.admin.pending, value: stats.pending, color: 'text-warning' },
         { label: dict.admin.inTransit, value: stats.inTransit, color: 'text-accent' },
+        { label: dict.admin.outForDelivery, value: stats.outForDelivery || 0, color: 'text-primary' },
         { label: dict.admin.delivered, value: stats.delivered, color: 'text-success' }
     ];
 
     return (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-6">
             {statItems.map((stat, i) => (
                 <div key={i} className="glass-panel p-4 sm:p-6 overflow-hidden relative">
                     {dataLoading && <div className="absolute inset-0 bg-surface-muted/50 animate-pulse pointer-events-none" />}

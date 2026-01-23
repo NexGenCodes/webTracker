@@ -1,10 +1,11 @@
-package localdb
+package tests
 
 import (
 	"context"
 	"os"
 	"path/filepath"
 	"testing"
+	"webtracker-bot/internal/localdb"
 )
 
 func TestLocalDB(t *testing.T) {
@@ -13,7 +14,7 @@ func TestLocalDB(t *testing.T) {
 	dbPath := filepath.Join(tempDir, "test_session.db")
 	defer os.Remove(dbPath)
 
-	client, err := NewClient(dbPath)
+	client, err := localdb.NewClient(dbPath)
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}

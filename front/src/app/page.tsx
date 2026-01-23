@@ -26,12 +26,15 @@ function HomeContent() {
   const initialId = searchParams.get('id');
 
   const handleSearch = useCallback(async (trackingNumber: string) => {
+    const id = trackingNumber.trim().toUpperCase();
+    if (!id) return;
+
     setLoading(true);
     setError(null);
     setShippingData(null);
 
     try {
-      const data = await getTracking(trackingNumber);
+      const data = await getTracking(id);
       if (data) {
         setShippingData(data);
         toast.success(dict.admin?.success || 'Shipment found', {
@@ -228,29 +231,55 @@ function HomeContent() {
                       <span className="h-px flex-1 bg-accent/20" />
                     </h4>
                     <div className="space-y-12 relative border-l-2 border-border ml-3 pl-10 py-2">
-                      {shippingData.events?.map((event: any, i: number) => (
-                        <div key={event.id} className="relative group/event">
-                          <div className={cn(
-                            "absolute left-[-47px] top-1.5 w-6 h-6 rounded-full border-4 border-bg transition-all duration-500",
-                            i === 0 ? "bg-accent scale-125 shadow-lg shadow-accent/40" : "bg-border group-hover/event:bg-accent/40"
-                          )} />
-                          <div className="flex items-center gap-4 mb-2">
-                            <p className={cn("font-black text-lg md:text-xl tracking-tight leading-none uppercase", i === 0 ? "text-text-main" : "text-text-muted")}>
-                              {event.status.replace(/_/g, ' ')}
-                            </p>
-                            {i === 0 && (
-                              <span className="bg-accent text-white text-[9px] font-black uppercase px-2.5 py-1 rounded-lg animate-pulse tracking-widest">{dict.shipment.live}</span>
-                            )}
+                      {shippingData.timeline ? (
+                        shippingData.timeline.map((event, i) => (
+                          <div key={i} className="relative group/event">
+                            <div className={cn(
+                              "absolute left-[-47px] top-1.5 w-6 h-6 rounded-full border-4 border-bg transition-all duration-500",
+                              event.is_completed ? "bg-accent scale-125 shadow-lg shadow-accent/40" : "bg-border opacity-50"
+                            )} />
+                            <div className="flex items-center gap-4 mb-2">
+                              <p className={cn("font-black text-lg md:text-xl tracking-tight leading-none uppercase", event.is_completed ? "text-text-main" : "text-text-muted opacity-50")}>
+                                {event.status}
+                              </p>
+                              {event.is_completed && !shippingData.timeline?.[i + 1]?.is_completed && (
+                                <span className="bg-accent text-white text-[9px] font-black uppercase px-2.5 py-1 rounded-lg animate-pulse tracking-widest">{dict.shipment.live}</span>
+                              )}
+                            </div>
+                            <span className="text-[10px] font-black text-accent/60 uppercase tracking-[0.2em]">
+                              {new Date(event.timestamp).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+                            </span>
+                            <div className="mt-4 flex items-center gap-3 text-sm font-bold text-text-muted bg-surface-muted/50 p-4 rounded-2xl border border-border group-hover/event:border-accent/20 transition-colors">
+                              <Package size={16} className="text-accent/60" />
+                              {event.description}
+                            </div>
                           </div>
-                          <span className="text-[10px] font-black text-accent/60 uppercase tracking-[0.2em]">
-                            {new Date(event.timestamp).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
-                          </span>
-                          <div className="mt-4 flex items-center gap-3 text-sm font-bold text-text-muted bg-surface-muted/50 p-4 rounded-2xl border border-border group-hover/event:border-accent/20 transition-colors">
-                            <MapPin size={16} className="text-accent/60" />
-                            {event.location}
+                        ))
+                      ) : (
+                        shippingData.events?.map((event: any, i: number) => (
+                          <div key={event.id} className="relative group/event">
+                            <div className={cn(
+                              "absolute left-[-47px] top-1.5 w-6 h-6 rounded-full border-4 border-bg transition-all duration-500",
+                              i === 0 ? "bg-accent scale-125 shadow-lg shadow-accent/40" : "bg-border group-hover/event:bg-accent/40"
+                            )} />
+                            <div className="flex items-center gap-4 mb-2">
+                              <p className={cn("font-black text-lg md:text-xl tracking-tight leading-none uppercase", i === 0 ? "text-text-main" : "text-text-muted")}>
+                                {event.status.replace(/_/g, ' ')}
+                              </p>
+                              {i === 0 && (
+                                <span className="bg-accent text-white text-[9px] font-black uppercase px-2.5 py-1 rounded-lg animate-pulse tracking-widest">{dict.shipment.live}</span>
+                              )}
+                            </div>
+                            <span className="text-[10px] font-black text-accent/60 uppercase tracking-[0.2em]">
+                              {new Date(event.timestamp).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+                            </span>
+                            <div className="mt-4 flex items-center gap-3 text-sm font-bold text-text-muted bg-surface-muted/50 p-4 rounded-2xl border border-border group-hover/event:border-accent/20 transition-colors">
+                              <MapPin size={16} className="text-accent/60" />
+                              {event.location}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))
+                      )}
                     </div>
                   </div>
                 </div>

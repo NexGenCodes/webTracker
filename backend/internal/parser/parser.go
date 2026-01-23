@@ -61,18 +61,18 @@ func ParseRegex(text string) models.Manifest {
 		}
 	}
 
-	// 5. Receiver Email
-	emailLabel := `(?:email|e-mail|mail|contact mail)`
-	m.ReceiverEmail = extractField(text, rxLabel+`[\s:']*`+emailLabel+`[\s:']*`, `([^\s]+@[^\s]+)`)
-	if m.ReceiverEmail == "" {
-		m.ReceiverEmail = extractField(text, `(?i)`+emailLabel+`[\s:']*`, `([^\s]+@[^\s]+)`)
+	// 5. Receiver ID
+	idLabel := `(?:id|passport|passport\s*num|id\s*num|identity|identification|tin|nin|ssn)`
+	m.ReceiverID = extractField(text, rxLabel+`[\s:']*`+idLabel+`[\s:']*`, `([A-Z0-9\s-]+)`)
+	if m.ReceiverID == "" {
+		m.ReceiverID = extractField(text, `(?i)`+idLabel+`[\s:']*`, `([A-Z0-9\s-]+)`)
 	}
 
-	// 6. Receiver ID
-	idLabel := `(?:passport|id|nin|gov id|dni|cedula|identidad|identificacion)`
-	m.ReceiverID = extractField(text, rxLabel+`[\s:']*(?:id|num)[\s:']*`, `([A-Za-z0-9\-]+)`)
-	if m.ReceiverID == "" {
-		m.ReceiverID = extractField(text, `(?i)`+idLabel+`[\s:']*`, `([A-Za-z0-9\-]+)`)
+	// 6. Receiver Email
+	emailLabel := `(?:email|mail|e-mail)`
+	m.ReceiverEmail = extractField(text, rxLabel+`[\s:']*`+emailLabel+`[\s:']*`, `([^\n\s]+@[^\n\s]+\.[^\n\s]+)`)
+	if m.ReceiverEmail == "" {
+		m.ReceiverEmail = extractField(text, `(?i)`+emailLabel+`[\s:']*`, `([^\n\s]+@[^\n\s]+\.[^\n\s]+)`)
 	}
 
 	// 7. Sender Name
@@ -80,6 +80,10 @@ func ParseRegex(text string) models.Manifest {
 
 	// 8. Sender Country
 	m.SenderCountry = extractField(text, sxLabel+`[\s:']*`+countryLabel+`[\s:']*`, `([^\n]+)`)
+
+	// 9. Cargo Type
+	cargoLabel := `(?:item|content|cargo|description|type|package|commodity)`
+	m.CargoType = extractField(text, `(?i)`+cargoLabel+`[\s:']*`, `([^\n]+)`)
 
 	m.Validate()
 	return m
@@ -110,23 +114,30 @@ func ParseAI(text, apiKey string) (models.Manifest, error) {
 		return models.Manifest{}, fmt.Errorf("AI rate limit exceeded: %w", err)
 	}
 
-	url := "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey
+	url := "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=" + apiKey
 
-	prompt := fmt.Sprintf(`Extract shipping information from this text and return ONLY a JSON object with these exact fields:
-{
-  "receiverName": "",
-  "receiverAddress": "",
-  "receiverPhone": "",
-  "receiverCountry": "",
-  "receiverEmail": "",
-  "receiverID": "",
-  "senderName": "",
-  "senderCountry": ""
-}
+	prompt := `You are a logistics data extraction assistant. Extract shipping information from user text and return JSON matching the schema below.
+        
+        TARGET SCHEMA:
+        {
+            "receiverName": string,
+            "receiverAddress": string,
+            "receiverCountry": string,
+            "receiverPhone": string,
+            "receiverEmail": string,
+            "receiverID": string,
+            "senderName": string,
+            "senderCountry": string
+        }
 
-Text: %s
-
-Return ONLY the JSON, no explanations.`, text)
+        RULES:
+        1. Extract the fields from the input text.
+        2. If a field is missing, use an empty string "" - DO NOT return null.
+        3. Infer countries if city names are well-known (e.g. "Paris" -> "France").
+        4. Phone numbers: Extract as is.
+        
+        Extract from this:
+        ` + text
 
 	reqBody := map[string]interface{}{
 		"contents": []map[string]interface{}{

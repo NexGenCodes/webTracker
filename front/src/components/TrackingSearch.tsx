@@ -30,7 +30,7 @@ export const TrackingSearch: React.FC<TrackingSearchProps> = memo(({ onSearch, i
 
     const handleSubmit = useCallback(async (e: React.FormEvent) => {
         e.preventDefault();
-        const trimmed = input.trim();
+        const trimmed = input.trim().toUpperCase();
         if (!trimmed) return;
 
         if (!isValidTrackingNumber(trimmed)) {

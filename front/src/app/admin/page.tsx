@@ -32,7 +32,7 @@ export default function AdminPage() {
     const [copied, setCopied] = useState(false);
     const [shipments, setShipments] = useState<any[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
-    const [stats, setStats] = useState({ total: 0, inTransit: 0, delivered: 0, pending: 0, canceled: 0 });
+    const [stats, setStats] = useState({ total: 0, inTransit: 0, outForDelivery: 0, delivered: 0, pending: 0, canceled: 0 });
     const [dataLoading, setDataLoading] = useState(false);
 
     const loadShipments = async () => {

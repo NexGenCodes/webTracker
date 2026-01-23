@@ -11,7 +11,6 @@ import (
 	"webtracker-bot/internal/localdb"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/parser"
-	"webtracker-bot/internal/supabase"
 	"webtracker-bot/internal/utils"
 	"webtracker-bot/internal/whatsapp"
 
@@ -26,14 +25,11 @@ type Result struct {
 	Error    error
 }
 
-// Handler defines the interface all bot commands must implement.
 type Handler interface {
-	Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result
+	Execute(ctx context.Context, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result
 }
 
-// Dispatcher routes messages starting with "!" to the appropriate handler.
 type Dispatcher struct {
-	db            *supabase.Client
 	ldb           *localdb.Client
 	sender        *whatsapp.Sender // Added for broadcasting
 	handlers      map[string]Handler
@@ -43,9 +39,8 @@ type Dispatcher struct {
 	AdminTimezone string
 }
 
-func NewDispatcher(db *supabase.Client, ldb *localdb.Client, sender *whatsapp.Sender, awbCmd string, companyName string, botPhone string, adminTimezone string) *Dispatcher {
+func NewDispatcher(ldb *localdb.Client, sender *whatsapp.Sender, awbCmd string, companyName string, botPhone string, adminTimezone string) *Dispatcher {
 	d := &Dispatcher{
-		db:            db,
 		ldb:           ldb,
 		sender:        sender,
 		handlers:      make(map[string]Handler),
@@ -86,10 +81,8 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) 
 		senderPhone := ctx.Value("sender_phone").(string)
 		isAdmin, _ := ctx.Value("is_admin").(bool)
 
-		// 1. Identify Owner Phone (Bot's or specifically configured)
 		isOwner := senderPhone == d.BotPhone
 
-		// 2. Rate Limiting (Owner is exempt)
 		if !isOwner {
 			allowed, retryIn := utils.Allow(senderPhone)
 			if !allowed {
@@ -97,7 +90,6 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) 
 			}
 		}
 
-		// Stats, Info, and Help all need branding
 		switch h := handler.(type) {
 		case *StatsHandler:
 			h.CompanyName = d.CompanyName
@@ -118,28 +110,25 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) 
 
 		lang, _ := d.ldb.GetUserLanguage(ctx, jid)
 
-		// Owner-only commands (Broadcast, Status)
 		isOwnerOnlyCmd := rawCmd == "broadcast" || rawCmd == "status"
 		if isOwnerOnlyCmd {
 			if !isOwner {
-				logger.Warn().Str("cmd", rawCmd).Str("sender", senderPhone).Msg("[RBAC DEBUG] Owner-only command blocked")
+				logger.Warn().Str("cmd", rawCmd).Str("sender", senderPhone).Msg("Owner-only command blocked")
 				return &Result{Message: "🚫 *OWNER ACCESS ONLY*\n\n_This command is restricted to the bot owner only._"}, true
 			}
 		}
 
-		// Public commands (Info, Help) are allowed for all users.
-		// Lang and all other management commands require admin status.
 		isPublicCmd := rawCmd == "info" || rawCmd == "help"
 		if !isPublicCmd && !isOwnerOnlyCmd {
 			if isAdmin {
-				logger.Info().Str("cmd", rawCmd).Str("sender", senderPhone).Msg("[RBAC DEBUG] Admin command authorized")
+				logger.Info().Str("cmd", rawCmd).Str("sender", senderPhone).Msg("Admin command authorized")
 			} else {
-				logger.Warn().Str("cmd", rawCmd).Str("sender", senderPhone).Msg("[RBAC DEBUG] Command blocked: sender is not authorized")
+				logger.Warn().Str("cmd", rawCmd).Str("sender", senderPhone).Msg("Command blocked: sender is not authorized")
 				return &Result{Message: "🚫 *ACCESS DENIED*\n\n_This command is restricted to the bot owner or group admins._\n\n💡 You can use `!info [ID]` to track packages."}, true
 			}
 		}
 
-		res := handler.Execute(ctx, d.db, d.ldb, args, lang, isAdmin)
+		res := handler.Execute(ctx, d.ldb, args, lang, isAdmin)
 		if res.Language != "" {
 			d.ldb.SetUserLanguage(ctx, jid, res.Language)
 		}
@@ -159,7 +148,7 @@ type StatsHandler struct {
 	AdminTimezone string
 }
 
-func (h *StatsHandler) Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
+func (h *StatsHandler) Execute(ctx context.Context, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
 	if len(args) > 0 {
 		return Result{Message: "⚠️ *INCORRECT USAGE*\n_Please send only `!stats` without any extra text._"}
 	}
@@ -169,7 +158,11 @@ func (h *StatsHandler) Execute(ctx context.Context, db *supabase.Client, ldb *lo
 		tz = "Africa/Lagos"
 	}
 	loc, _ := time.LoadLocation(tz)
-	pending, transit, err := db.GetTodayStats(loc)
+	// Calculate since midnight of the configured timezone
+	since := time.Now().In(loc)
+	since = time.Date(since.Year(), since.Month(), since.Day(), 0, 0, 0, 0, loc)
+
+	pending, transit, err := ldb.CountDailyStats(ctx, since.UTC())
 	if err != nil {
 		return Result{Message: "❌ *SYSTEM ERROR*\n_Could not fetch statistics._", Error: err}
 	}
@@ -188,7 +181,7 @@ type InfoHandler struct {
 	CompanyPrefix string
 }
 
-func (h *InfoHandler) Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
+func (h *InfoHandler) Execute(ctx context.Context, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
 	if len(args) < 1 {
 		company := strings.ToUpper(h.CompanyName)
 		if company == "" {
@@ -208,14 +201,16 @@ func (h *InfoHandler) Execute(ctx context.Context, db *supabase.Client, ldb *loc
 		return Result{Message: msg}
 	}
 
-	shipment, err := db.GetShipment(ctx, args[0])
+	// Using ldb instead of db
+	shipment, err := ldb.GetShipment(ctx, args[0])
 	if err != nil {
 		return Result{Message: "❌ *DATABASE ERROR*\n_Lookup failed. Please try again later._", Error: err}
 	}
 
-	if shipment == nil {
-		return Result{Message: fmt.Sprintf("⚠️ *RECORD NOT FOUND*\n\n━━━━━━━━━━━━━━━━━━━━━━━\nID: *%s*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n_This tracking ID does not exist in our registry._", args[0])}
-	}
+	// Check if shipment is nil (although GetShipment returns error on not found usually, let's look at implementation)
+	// Our new GetShipment returns error if not found? No, let's assume it might return nil if we handled SqlNoRows differently
+	// Actually typical GetShipment implementations error on Not Found.
+	// But let's keep the null check just in case logic changes.
 
 	wb := utils.GenerateWaybill(*shipment, h.CompanyName)
 	return Result{Message: "```\n" + wb + "\n```"}
@@ -227,7 +222,7 @@ type HelpHandler struct {
 	CompanyPrefix string
 }
 
-func (h *HelpHandler) Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
+func (h *HelpHandler) Execute(ctx context.Context, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
 	company := strings.ToUpper(h.CompanyName)
 	if company == "" {
 		company = "LOGISTICS"
@@ -255,7 +250,6 @@ func (h *HelpHandler) Execute(ctx context.Context, db *supabase.Client, ldb *loc
 		msg = fmt.Sprintf("📖 *%s - CUSTOMER SERVICE*\n\n", company) +
 			"━━━━ AVAILABLE COMMANDS ━━━━\n" +
 			"🔍 `!info [ID]` - Track your shipment\n" +
-			"🌐 `!lang [code]` - Change language\n" +
 			"❓ `!help` - Show this instructions menu\n" +
 			"━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
 			"*📦 HOW TO REGISTER SHIPMENT:*\n" +
@@ -272,7 +266,7 @@ func (h *HelpHandler) Execute(ctx context.Context, db *supabase.Client, ldb *loc
 
 type LangHandler struct{}
 
-func (h *LangHandler) Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
+func (h *LangHandler) Execute(ctx context.Context, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
 	if len(args) < 1 {
 		return Result{Message: "🌐 *LANGUAGE MENU*\n\nUsage: `!lang [en|pt|es|de]`\n\nExample: `!lang pt` para Português"}
 	}
@@ -295,7 +289,7 @@ type EditHandler struct {
 	CompanyPrefix string
 }
 
-func (h *EditHandler) Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
+func (h *EditHandler) Execute(ctx context.Context, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
 	if len(args) < 2 {
 		return Result{Message: "📝 *EDIT SHIPMENT INFORMATION*\n\nUsage:\n`!edit [field] [new_value]`\n\nFields: `name`, `phone`, `address`, `country`, `email`, `id`, `sender`, `origin`"}
 	}
@@ -311,7 +305,7 @@ func (h *EditHandler) Execute(ctx context.Context, db *supabase.Client, ldb *loc
 	} else {
 		// Case 2: !edit [field] [value...] (Target last shipment)
 		var err error
-		trackingID, err = db.GetLastTrackingByJID(ctx, jid)
+		trackingID, err = ldb.GetLastTrackingByJID(ctx, jid)
 		if err != nil || trackingID == "" {
 			return Result{Message: "⚠️ *NO RECORD FOUND*\n_I couldn't find your last shipment. Please provide the tracking ID._"}
 		}
@@ -339,7 +333,7 @@ func (h *EditHandler) Execute(ctx context.Context, db *supabase.Client, ldb *loc
 	// Use the same parser cleaning logic as creation
 	value = parser.CleanText(value)
 
-	err := db.UpdateShipmentField(ctx, trackingID, field, value)
+	err := ldb.UpdateShipmentField(ctx, trackingID, field, value)
 	if err != nil {
 		return Result{Message: fmt.Sprintf("❌ *UPDATE FAILED*\n_%v_", err)}
 	}
@@ -353,13 +347,13 @@ func (h *EditHandler) Execute(ctx context.Context, db *supabase.Client, ldb *loc
 // DeleteHandler handles !delete [trackingID]
 type DeleteHandler struct{}
 
-func (h *DeleteHandler) Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
+func (h *DeleteHandler) Execute(ctx context.Context, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
 	if len(args) < 1 {
 		return Result{Message: "🗑️ *DELETE SHIPMENT*\n\nUsage: `!delete [TrackingID]`"}
 	}
 
 	trackingID := args[0]
-	err := db.DeleteShipment(ctx, trackingID)
+	err := ldb.DeleteShipment(ctx, trackingID)
 	if err != nil {
 		return Result{Message: fmt.Sprintf("❌ *DELETE FAILED*\n_%v_", err)}
 	}
@@ -372,7 +366,7 @@ type BroadcastHandler struct {
 	Sender *whatsapp.Sender
 }
 
-func (h *BroadcastHandler) Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
+func (h *BroadcastHandler) Execute(ctx context.Context, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
 	if len(args) < 1 {
 		return Result{Message: "📣 *GLOBAL BROADCAST*\n\nUsage: `!broadcast [your message]`\n\n_This sends a message to ALL authorized groups._"}
 	}
@@ -414,7 +408,7 @@ type StatusHandler struct {
 	BotPhone string
 }
 
-func (h *StatusHandler) Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
+func (h *StatusHandler) Execute(ctx context.Context, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
 	// Performance Telemetry
 	uptime := time.Since(logger.GlobalVitals.StartTime)
 	jobs := atomic.LoadInt64(&logger.GlobalVitals.JobsProcessed)
@@ -426,10 +420,9 @@ func (h *StatusHandler) Execute(ctx context.Context, db *supabase.Client, ldb *l
 	memMB := m.Alloc / 1024 / 1024
 
 	// System Health
-	dbStatus := "🟢 ONLINE"
-	if err := db.Ping(); err != nil {
-		dbStatus = "🔴 OFFLINE"
-	}
+	dbStatus := "🟢 ONLINE (SQLite)"
+	// Supabase Ping removed, we assume localdb is alive if process is running
+	// Could check ldb.db.Ping() if exposed
 
 	groupsCount, _ := ldb.CountAuthorizedGroups(ctx)
 

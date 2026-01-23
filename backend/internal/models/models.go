@@ -1,8 +1,6 @@
 package models
 
 import (
-	"time"
-
 	"go.mau.fi/whatsmeow/types"
 )
 
@@ -15,6 +13,7 @@ type Manifest struct {
 	ReceiverID      string   `json:"receiverID"`
 	SenderName      string   `json:"senderName"`
 	SenderCountry   string   `json:"senderCountry"`
+	CargoType       string   `json:"cargoType"`
 	IsAI            bool     `json:"-"`
 	MissingFields   []string `json:"-"`
 }
@@ -55,35 +54,6 @@ func (m *Manifest) Validate() []string {
 
 	m.MissingFields = missing
 	return missing
-}
-
-type Shipment struct {
-	ID              string     `json:"id"`
-	TrackingNumber  string     `json:"trackingNumber"`
-	Status          string     `json:"status"`
-	SenderName      string     `json:"senderName"`
-	SenderCountry   string     `json:"senderCountry"`
-	ReceiverName    string     `json:"receiverName"`
-	ReceiverPhone   string     `json:"receiverPhone"`
-	ReceiverEmail   string     `json:"receiverEmail"`
-	ReceiverID      string     `json:"receiverID"`
-	ReceiverAddress string     `json:"receiverAddress"`
-	ReceiverCountry string     `json:"receiverCountry"`
-	WhatsappFrom    *string    `json:"whatsappFrom"`
-	CreatedAt       time.Time  `json:"createdAt"`
-	UpdatedAt       time.Time  `json:"updatedAt"`
-	LastNotifiedAt  *time.Time `json:"lastNotifiedAt"`
-}
-
-type NotificationJob struct {
-	TrackingNumber string
-	Status         string
-	WhatsappFrom   *string
-}
-
-type UserPreference struct {
-	JID      string `json:"jid"`
-	Language string `json:"language"`
 }
 
 type Job struct {
