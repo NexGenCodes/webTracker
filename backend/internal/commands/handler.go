@@ -90,18 +90,16 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) 
 
 		jid := ctx.Value("jid").(string)
 		senderPhone := ctx.Value("sender_phone").(string)
+		isAdmin, _ := ctx.Value("is_admin").(bool)
 		lang, _ := d.ldb.GetUserLanguage(ctx, jid)
 
-		// RBAC: Check if sender is the bot owner
-		isAdmin := (senderPhone == d.BotPhone)
-
-		// Only !info is public. All other commands require admin.
+		// Only !info is public. All other commands require admin (Bot Owner or Group Admin).
 		if rawCmd != "info" {
 			if isAdmin {
 				logger.Info().Str("cmd", rawCmd).Str("sender", senderPhone).Msg("[RBAC DEBUG] Admin command authorized")
 			} else {
-				logger.Warn().Str("cmd", rawCmd).Str("sender", senderPhone).Msg("[RBAC DEBUG] Command blocked: sender is not the bot owner")
-				return &Result{Message: "🚫 *ACCESS DENIED*\n\n_This command is restricted to the bot owner._\n\n💡 You can use `!info [ID]` to track packages."}, true
+				logger.Warn().Str("cmd", rawCmd).Str("sender", senderPhone).Msg("[RBAC DEBUG] Command blocked: sender is not authorized")
+				return &Result{Message: "🚫 *ACCESS DENIED*\n\n_This command is restricted to the bot owner or group admins._\n\n💡 You can use `!info [ID]` to track packages."}, true
 			}
 		}
 
