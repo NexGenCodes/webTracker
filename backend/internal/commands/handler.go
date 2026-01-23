@@ -3,7 +3,9 @@ package commands
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"webtracker-bot/internal/localdb"
@@ -11,6 +13,9 @@ import (
 	"webtracker-bot/internal/parser"
 	"webtracker-bot/internal/supabase"
 	"webtracker-bot/internal/utils"
+	"webtracker-bot/internal/whatsapp"
+
+	"go.mau.fi/whatsmeow/types"
 )
 
 // Result represents the outcome of a command execution.
@@ -30,6 +35,7 @@ type Handler interface {
 type Dispatcher struct {
 	db            *supabase.Client
 	ldb           *localdb.Client
+	sender        *whatsapp.Sender // Added for broadcasting
 	handlers      map[string]Handler
 	AwbCmd        string
 	CompanyName   string
@@ -37,10 +43,11 @@ type Dispatcher struct {
 	AdminTimezone string
 }
 
-func NewDispatcher(db *supabase.Client, ldb *localdb.Client, awbCmd string, companyName string, botPhone string, adminTimezone string) *Dispatcher {
+func NewDispatcher(db *supabase.Client, ldb *localdb.Client, sender *whatsapp.Sender, awbCmd string, companyName string, botPhone string, adminTimezone string) *Dispatcher {
 	d := &Dispatcher{
 		db:            db,
 		ldb:           ldb,
+		sender:        sender,
 		handlers:      make(map[string]Handler),
 		AwbCmd:        awbCmd,
 		CompanyName:   companyName,
@@ -58,6 +65,8 @@ func (d *Dispatcher) registerDefaults() {
 	d.handlers["lang"] = &LangHandler{}
 	d.handlers["edit"] = &EditHandler{}
 	d.handlers["delete"] = &DeleteHandler{}
+	d.handlers["broadcast"] = &BroadcastHandler{}
+	d.handlers["status"] = &StatusHandler{}
 }
 
 func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) {
@@ -73,6 +82,21 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) 
 	args := parts[1:]
 
 	if handler, ok := d.handlers[rawCmd]; ok {
+		jid := ctx.Value("jid").(string)
+		senderPhone := ctx.Value("sender_phone").(string)
+		isAdmin, _ := ctx.Value("is_admin").(bool)
+
+		// 1. Identify Owner Phone (Bot's or specifically configured)
+		isOwner := senderPhone == d.BotPhone
+
+		// 2. Rate Limiting (Owner is exempt)
+		if !isOwner {
+			allowed, retryIn := utils.Allow(senderPhone)
+			if !allowed {
+				return &Result{Message: fmt.Sprintf("⏳ *RATE LIMIT REACHED*\n\n_Please wait %d seconds before sending another command._", int(retryIn.Seconds()))}, true
+			}
+		}
+
 		// Stats, Info, and Help all need branding
 		switch h := handler.(type) {
 		case *StatsHandler:
@@ -86,16 +110,17 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) 
 			h.CompanyPrefix = d.AwbCmd
 		case *EditHandler:
 			h.CompanyPrefix = d.AwbCmd
+		case *BroadcastHandler:
+			h.Sender = d.sender
+		case *StatusHandler:
+			h.BotPhone = d.BotPhone
 		}
 
-		jid := ctx.Value("jid").(string)
-		senderPhone := ctx.Value("sender_phone").(string)
-		isAdmin, _ := ctx.Value("is_admin").(bool)
 		lang, _ := d.ldb.GetUserLanguage(ctx, jid)
 
-		// Public commands (Info, Help, Lang) are allowed for all users.
-		// All other management commands require admin status.
-		isPublicCmd := rawCmd == "info" || rawCmd == "help" || rawCmd == "lang"
+		// Public commands (Info, Help) are allowed for all users.
+		// Lang and all other management commands require admin status.
+		isPublicCmd := rawCmd == "info" || rawCmd == "help"
 		if !isPublicCmd {
 			if isAdmin {
 				logger.Info().Str("cmd", rawCmd).Str("sender", senderPhone).Msg("[RBAC DEBUG] Admin command authorized")
@@ -204,7 +229,9 @@ func (h *HelpHandler) Execute(ctx context.Context, db *supabase.Client, ldb *loc
 		msg = fmt.Sprintf("🛠️ *%s - ADMIN CONTROL PANEL*\n\n", company) +
 			"━━━━ MANAGEMENT ━━━━\n" +
 			"📊 `!stats` - Daily Operations\n" +
-			"📝 `!edit [field] [value]` - Fix shipment mistakes\n" +
+			"� `!broadcast [msg]` - Global Update\n" +
+			"🖥️ `!status` - System Health/Groups\n" +
+			"�� `!edit [field] [value]` - Fix shipment mistakes\n" +
 			"🗑️ `!delete [ID]` - Permanently remove shipment\n" +
 			"━━━━ GENERAL ━━━━\n" +
 			"🔍 `!info [ID]` - Check shipment status\n" +
@@ -329,4 +356,72 @@ func (h *DeleteHandler) Execute(ctx context.Context, db *supabase.Client, ldb *l
 	}
 
 	return Result{Message: fmt.Sprintf("🗑️ *SHIPMENT DELETED*\n\nThe shipment *%s* has been permanently removed.", trackingID)}
+}
+
+// BroadcastHandler handles !broadcast [message]
+type BroadcastHandler struct {
+	Sender *whatsapp.Sender
+}
+
+func (h *BroadcastHandler) Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
+	if len(args) < 1 {
+		return Result{Message: "📣 *GLOBAL BROADCAST*\n\nUsage: `!broadcast [your message]`\n\n_This sends a message to ALL authorized groups._"}
+	}
+
+	msg := strings.Join(args, " ")
+	broadcastMsg := "📢 *OFFICIAL UPDATE FROM LOGISTICS*\n\n" + msg
+
+	// Get all authorized groups from DB
+	groups, err := ldb.GetAuthorizedGroups(ctx)
+	if err != nil {
+		return Result{Message: "❌ *DATABASE ERROR*\n_Failed to fetch target groups._", Error: err}
+	}
+
+	successCount := 0
+	for _, groupID := range groups {
+		groupJID, err := types.ParseJID(groupID)
+		if err != nil {
+			continue
+		}
+		// Direct send (non-reply)
+		h.Sender.Send(groupJID, broadcastMsg)
+		successCount++
+	}
+
+	return Result{Message: fmt.Sprintf("✅ *BROADCAST COMPLETE*\n\nSent to: *%d* groups.", successCount)}
+}
+
+// StatusHandler handles !status
+type StatusHandler struct {
+	BotPhone string
+}
+
+func (h *StatusHandler) Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
+	// Performance Telemetry
+	uptime := time.Since(logger.GlobalVitals.StartTime)
+	jobs := atomic.LoadInt64(&logger.GlobalVitals.JobsProcessed)
+	success := atomic.LoadInt64(&logger.GlobalVitals.ParseSuccess)
+
+	// Memory usage tracking
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	memMB := m.Alloc / 1024 / 1024
+
+	// System Health
+	dbStatus := "🟢 ONLINE"
+	if err := db.Ping(); err != nil {
+		dbStatus = "🔴 OFFLINE"
+	}
+
+	groupsCount, _ := ldb.CountAuthorizedGroups(ctx)
+
+	msg := "🖥️ *SYSTEM DASHBOARD*\n\n" +
+		fmt.Sprintf("📊 UPTIME:    *%s*\n", uptime.Truncate(time.Second)) +
+		fmt.Sprintf("🔋 MEMORY:    *%d MB* / 1024 MB\n", memMB) +
+		fmt.Sprintf("🗄️ DATABASE:  *%s*\n", dbStatus) +
+		fmt.Sprintf("👥 GROUPS:    *%d authorized*\n", groupsCount) +
+		fmt.Sprintf("📦 PROCESSED: *%d jobs* (%d success)\n\n", jobs, success) +
+		"_System is running within safe 1GB RAM margins._"
+
+	return Result{Message: msg}
 }

@@ -2,9 +2,11 @@ package logger
 
 import (
 	"sync/atomic"
+	"time"
 )
 
 type Vitals struct {
+	StartTime         time.Time
 	JobsProcessed     int64
 	ParseSuccess      int64
 	ParseFailure      int64
@@ -14,7 +16,9 @@ type Vitals struct {
 	TransitionSuccess int64
 }
 
-var GlobalVitals Vitals
+var GlobalVitals = Vitals{
+	StartTime: time.Now(),
+}
 
 func (v *Vitals) IncJobs()          { atomic.AddInt64(&v.JobsProcessed, 1) }
 func (v *Vitals) IncParseSuccess()  { atomic.AddInt64(&v.ParseSuccess, 1) }
