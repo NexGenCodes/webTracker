@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"webtracker-bot/internal/localdb"
+	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/parser"
 	"webtracker-bot/internal/supabase"
 	"webtracker-bot/internal/utils"
@@ -27,20 +28,24 @@ type Handler interface {
 
 // Dispatcher routes messages starting with "!" to the appropriate handler.
 type Dispatcher struct {
-	db          *supabase.Client
-	ldb         *localdb.Client
-	handlers    map[string]Handler
-	AwbCmd      string
-	CompanyName string
+	db            *supabase.Client
+	ldb           *localdb.Client
+	handlers      map[string]Handler
+	AwbCmd        string
+	CompanyName   string
+	AdminPhones   []string
+	AdminTimezone string
 }
 
-func NewDispatcher(db *supabase.Client, ldb *localdb.Client, awbCmd string, companyName string) *Dispatcher {
+func NewDispatcher(db *supabase.Client, ldb *localdb.Client, awbCmd string, companyName string, adminPhones []string, adminTimezone string) *Dispatcher {
 	d := &Dispatcher{
-		db:          db,
-		ldb:         ldb,
-		handlers:    make(map[string]Handler),
-		AwbCmd:      awbCmd,
-		CompanyName: companyName,
+		db:            db,
+		ldb:           ldb,
+		handlers:      make(map[string]Handler),
+		AwbCmd:        awbCmd,
+		CompanyName:   companyName,
+		AdminPhones:   adminPhones,
+		AdminTimezone: adminTimezone,
 	}
 	d.registerDefaults()
 	return d
@@ -72,6 +77,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) 
 		switch h := handler.(type) {
 		case *StatsHandler:
 			h.CompanyName = d.CompanyName
+			h.AdminTimezone = d.AdminTimezone
 		case *InfoHandler:
 			h.CompanyName = d.CompanyName
 			h.CompanyPrefix = d.AwbCmd
@@ -83,7 +89,25 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) 
 		}
 
 		jid := ctx.Value("jid").(string)
+		senderPhone := ctx.Value("sender_phone").(string)
 		lang, _ := d.ldb.GetUserLanguage(ctx, jid)
+
+		// RBAC DEBUG (Log-Only)
+		isAdmin := false
+		for _, admin := range d.AdminPhones {
+			if senderPhone == admin {
+				isAdmin = true
+				break
+			}
+		}
+
+		if rawCmd == "edit" || rawCmd == "delete" {
+			if isAdmin {
+				logger.Info().Str("cmd", rawCmd).Str("sender", senderPhone).Msg("[RBAC DEBUG] Admin command authorized")
+			} else {
+				logger.Warn().Str("cmd", rawCmd).Str("sender", senderPhone).Msg("[RBAC DEBUG] Admin command used by non-admin (NOT BLOCKED YET)")
+			}
+		}
 
 		res := handler.Execute(ctx, d.db, d.ldb, args, lang)
 		if res.Language != "" {
@@ -101,7 +125,8 @@ func presentsAsCommand(text string) bool {
 
 // StatsHandler handles !stats
 type StatsHandler struct {
-	CompanyName string
+	CompanyName   string
+	AdminTimezone string
 }
 
 func (h *StatsHandler) Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string) Result {
@@ -109,7 +134,11 @@ func (h *StatsHandler) Execute(ctx context.Context, db *supabase.Client, ldb *lo
 		return Result{Message: "⚠️ *INCORRECT USAGE*\n_Please send only `!stats` without any extra text._"}
 	}
 
-	loc, _ := time.LoadLocation("Africa/Lagos")
+	tz := h.AdminTimezone
+	if tz == "" {
+		tz = "Africa/Lagos"
+	}
+	loc, _ := time.LoadLocation(tz)
 	pending, transit, err := db.GetTodayStats(loc)
 	if err != nil {
 		return Result{Message: "❌ *SYSTEM ERROR*\n_Could not fetch statistics._", Error: err}
