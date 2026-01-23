@@ -179,8 +179,11 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 				}
 			}
 
-			// Diagnostic mode doesn't block processing yet
-			// if !isAuthorized { return }
+			// STRICT RULE: If bot is not Admin/Owner, it completely ignores the group.
+			if !isAuthorized {
+				logger.Debug().Str("group", chatJID.String()).Msg("[RBAC DEBUG] Bot ignored group: Not an Admin/Owner")
+				return
+			}
 		} else {
 			// Private chat rules
 			if cfg.AllowPrivateChat {
