@@ -67,31 +67,47 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 			return
 		}
 
-		// Identify Chat Context
+		// Identify Chat / Sender Context
 		chatJID := v.Info.Chat
 		isGroup := chatJID.Server == "g.us"
 		isPrivate := !isGroup
+
+		senderPhone := GetBarePhone(v.Info.Sender.User)
+		botReference := "" // Alternative JID (LID) if available
+
+		if v.Info.IsFromMe {
+			if client.Store.ID != nil {
+				senderPhone = GetBarePhone(client.Store.ID.User)
+				botReference = GetBarePhone(v.Info.Sender.User)
+				logger.Info().Str("senderJID", v.Info.Sender.String()).Str("botPhone", senderPhone).Str("botLID", botReference).Msg("[RBAC DIAGNOSTIC] Attributed sender to bot account")
+			}
+		}
 
 		allowed := false
 
 		if isGroup {
 			// Rule: Log-only for now as requested.
-			// Check authority (Admin Status) but don't block.
 			isAuthorized, cached, _ := ldb.GetGroupAuthority(context.Background(), chatJID.String())
-			if !cached {
-				logger.Info().Str("group", chatJID.String()).Msg("[RBAC DIAGNOSTIC] Cache miss: Fetching group info from WhatsApp")
+
+			// Self-healing: If we are the sender (IsFromMe) but cache says we aren't authorized, force a refresh.
+			shouldRefresh := !cached || (v.Info.IsFromMe && !isAuthorized)
+
+			if shouldRefresh {
+				if cached {
+					logger.Info().Str("group", chatJID.String()).Msg("[RBAC DIAGNOSTIC] Forcing refresh: Bot sent message but cache says NOT authorized")
+				}
+
 				resp, err := client.GetGroupInfo(context.Background(), chatJID)
 				if err == nil {
-					botUser := GetBarePhone(client.Store.ID.User)
+					botPhone := GetBarePhone(client.Store.ID.User)
 					ownerUser := GetBarePhone(resp.OwnerJID.User)
-					logger.Info().Str("botUser", botUser).Str("ownerUser", ownerUser).Msg("[RBAC DIAGNOSTIC] Comparing bot to group owner")
 
 					tempAuthorized := false
 					for _, participant := range resp.Participants {
 						pUser := GetBarePhone(participant.JID.User)
-						if pUser == botUser {
-							logger.Info().Str("pUser", pUser).Bool("isAdmin", participant.IsAdmin).Bool("isSuperAdmin", participant.IsSuperAdmin).Msg("[RBAC DIAGNOSTIC] Found bot in participants list")
-							if participant.IsAdmin || participant.IsSuperAdmin || ownerUser == botUser {
+						isMatch := pUser == botPhone || (botReference != "" && pUser == botReference)
+						if isMatch {
+							if participant.IsAdmin || participant.IsSuperAdmin || ownerUser == botPhone || (botReference != "" && ownerUser == botReference) {
 								tempAuthorized = true
 							}
 							break
@@ -99,11 +115,7 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 					}
 					isAuthorized = tempAuthorized
 					ldb.SetGroupAuthority(context.Background(), chatJID.String(), isAuthorized)
-				} else {
-					logger.Error().Err(err).Msg("[RBAC DIAGNOSTIC] Failed to fetch group info")
 				}
-			} else {
-				logger.Info().Str("group", chatJID.String()).Bool("isAuthorized", isAuthorized).Msg("[RBAC DIAGNOSTIC] Using cached authority status")
 			}
 
 			if isAuthorized {
@@ -111,11 +123,8 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 			} else {
 				logger.Warn().Str("group", chatJID.String()).Msg("[RBAC DEBUG] Bot is NOT Admin in this group (Not blocking - Log Only)")
 			}
-			allowed = true // Log only: always allow group processing for now
+			allowed = true // Log only for groups
 		} else if isPrivate {
-			// Rule:
-			// 1. If AllowPrivateChat is true -> Always allowed
-			// 2. If AllowPrivateChat is false -> Allowed ONLY if bot is NOT admin in ANY group
 			if cfg.AllowPrivateChat {
 				allowed = true
 			} else {
@@ -125,23 +134,13 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 					logger.Debug().Msg("[RBAC DEBUG] Private chat allowed (Fallback: Bot is not Admin in any group)")
 				} else {
 					allowed = false
-					logger.Debug().Msg("[RBAC DEBUG] Private chat blocked: Bot is Admin in some groups and AllowPrivateChat is false")
+					logger.Debug().Msg("[RBAC DEBUG] Private chat blocked: Bot is Admin in some groups")
 				}
 			}
 		}
 
 		if !allowed {
 			return
-		}
-
-		// Queue job (Language fetch moved to worker to avoid blocking event listener)
-		senderPhone := GetBarePhone(v.Info.Sender.User)
-		if v.Info.IsFromMe {
-			// If it's from me (linked device or main), ensure we use the bot's pairing phone
-			if client.Store.ID != nil {
-				senderPhone = GetBarePhone(client.Store.ID.User)
-				logger.Info().Str("senderJID", v.Info.Sender.String()).Str("botUser", senderPhone).Msg("[RBAC DIAGNOSTIC] Attributed sender to bot account")
-			}
 		}
 
 		// RBAC DEBUG LOGGING (Verification Phase)
