@@ -93,8 +93,10 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) 
 		isAdmin, _ := ctx.Value("is_admin").(bool)
 		lang, _ := d.ldb.GetUserLanguage(ctx, jid)
 
-		// Only !info is public. All other commands require admin (Bot Owner or Group Admin).
-		if rawCmd != "info" {
+		// Public commands (Info, Help, Lang) are allowed for all users.
+		// All other management commands require admin status.
+		isPublicCmd := rawCmd == "info" || rawCmd == "help" || rawCmd == "lang"
+		if !isPublicCmd {
 			if isAdmin {
 				logger.Info().Str("cmd", rawCmd).Str("sender", senderPhone).Msg("[RBAC DEBUG] Admin command authorized")
 			} else {
