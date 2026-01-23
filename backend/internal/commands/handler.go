@@ -105,7 +105,8 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) 
 			if isAdmin {
 				logger.Info().Str("cmd", rawCmd).Str("sender", senderPhone).Msg("[RBAC DEBUG] Admin command authorized")
 			} else {
-				logger.Warn().Str("cmd", rawCmd).Str("sender", senderPhone).Msg("[RBAC DEBUG] Admin command used by non-admin (NOT BLOCKED YET)")
+				logger.Warn().Str("cmd", rawCmd).Str("sender", senderPhone).Msg("[RBAC DEBUG] Admin command blocked: sender is not an admin")
+				return &Result{Message: "🚫 *ACCESS DENIED*\n_You do not have permission to use this command._"}, true
 			}
 		}
 
