@@ -135,3 +135,23 @@ func (c *Client) HasAuthorizedGroups(ctx context.Context) (bool, error) {
 	err := c.db.QueryRowContext(ctx, query, threshold).Scan(&count)
 	return count > 0, err
 }
+
+// GetAuthorizedGroups returns a list of all group JIDs where the bot is authorized.
+func (c *Client) GetAuthorizedGroups(ctx context.Context) ([]string, error) {
+	query := `SELECT jid FROM GroupAuthority WHERE is_authorized = 1 AND updated_at > ?`
+	threshold := time.Now().Add(-time.Hour)
+	rows, err := c.db.QueryContext(ctx, query, threshold)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var groups []string
+	for rows.Next() {
+		var jid string
+		if err := rows.Scan(&jid); err == nil {
+			groups = append(groups, jid)
+		}
+	}
+	return groups, nil
+}
