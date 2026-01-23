@@ -11,10 +11,14 @@ import (
 	"webtracker-bot/internal/logger"
 
 	"github.com/fogleman/gg"
+	"github.com/golang/freetype/truetype"
+	"golang.org/x/image/font"
 )
 
 var (
 	fontDataMu sync.Mutex
+	faceCache  = make(map[string]font.Face)
+	faceMu     sync.RWMutex
 )
 
 func getFontsPath() string {
@@ -79,8 +83,40 @@ func downloadFile(filepath string, url string) error {
 	return err
 }
 
-// LoadFont helper to safely load a font face
+// LoadFont helper to safely load a font face with caching
 func LoadFont(dc *gg.Context, fontName string, points float64) error {
+	key := fmt.Sprintf("%s:%f", fontName, points)
+
+	faceMu.RLock()
+	cachedFace, ok := faceCache[key]
+	faceMu.RUnlock()
+
+	if ok {
+		dc.SetFontFace(cachedFace)
+		return nil
+	}
+
 	path := filepath.Join(getFontsPath(), fontName)
-	return dc.LoadFontFace(path, points)
+
+	// We need to load it manually to cache the face
+	fontBytes, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	f, err := truetype.Parse(fontBytes)
+	if err != nil {
+		return err
+	}
+
+	face := truetype.NewFace(f, &truetype.Options{
+		Size: points,
+	})
+
+	faceMu.Lock()
+	faceCache[key] = face
+	faceMu.Unlock()
+
+	dc.SetFontFace(face)
+	return nil
 }

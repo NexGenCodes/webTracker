@@ -79,7 +79,7 @@ func RenderReceipt(shipment models.Shipment, companyName string, lang i18n.Langu
 	drawV11Stamps(dc)
 
 	var buf bytes.Buffer
-	err := jpeg.Encode(&buf, dc.Image(), &jpeg.Options{Quality: Quality})
+	err := jpeg.Encode(&buf, dc.Image(), &jpeg.Options{Quality: 80})
 	return buf.Bytes(), err
 }
 
@@ -96,7 +96,7 @@ func drawV11Header(dc *gg.Context, shipment models.Shipment, companyName string,
 		if companyName != "" {
 			text = strings.ToUpper(companyName)
 		}
-		dc.DrawStringAnchored(text, Width/2, yH-5, 0.5, 0.5)
+		dc.DrawStringAnchored(text, Width/2, yH-30, 0.5, 0.5)
 	}
 
 	dc.SetColor(ColorBurgundy)
@@ -481,9 +481,9 @@ func drawGuillochePatterns(dc *gg.Context) {
 	dc.Push()
 	dc.SetRGBA255(139, 0, 0, 8)
 	dc.SetLineWidth(0.4)
-	for y := 450.0; y < 1050.0; y += 45 {
+	for y := 450.0; y < 1050.0; y += 90 { // Reduced frequency for performance
 		dc.MoveTo(40, y)
-		for x := 40.0; x < float64(Width)-40; x += 15 {
+		for x := 40.0; x < float64(Width)-40; x += 30 { // Increased step for performance
 			dy := math.Sin(x/60) * 12
 			dc.LineTo(x, y+dy)
 		}
@@ -537,11 +537,13 @@ func drawLinearBarcodePro(dc *gg.Context, x, y, w, h float64) {
 }
 
 func drawNoisePro(dc *gg.Context) {
-	for i := 0; i < 40000; i++ {
-		dc.SetRGBA(0, 0, 0, 0.02)
+	dc.Push()
+	dc.SetRGBA(0, 0, 0, 0.02)
+	for i := 0; i < 15000; i++ { // Reduced count for performance
 		dc.DrawPoint(rand.Float64()*Width, rand.Float64()*Height, 1)
-		dc.Stroke()
 	}
+	dc.Fill() // Batch fill instead of individual strokes
+	dc.Pop()
 }
 
 func drawWarningV9(dc *gg.Context, x, y, w, h float64) {

@@ -135,11 +135,6 @@ func (c *Client) GetGroupAuthority(ctx context.Context, jid string) (bool, bool,
 		return false, false, err
 	}
 
-	// Cache TTL: 1 hour
-	if time.Since(updatedAt) > time.Hour {
-		return false, false, nil // Treat as "not in cache"
-	}
-
 	return isAuthorized, true, nil
 }
 

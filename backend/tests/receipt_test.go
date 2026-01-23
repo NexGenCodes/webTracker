@@ -28,7 +28,7 @@ func TestRenderReceipt(t *testing.T) {
 		ReceiverName:    "Receiver Name",
 		ReceiverPhone:   "+1234567890",
 		ReceiverAddress: "123 Test St, Test City, Test Country",
-		ReceiverCountry: "Country A",
+		ReceiverCountry: "Country Ab",
 		ReceiverEmail:   "test@example.com",
 		SenderCountry:   "Country B",
 		CreatedAt:       time.Now(),
