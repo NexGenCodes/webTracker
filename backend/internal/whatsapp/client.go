@@ -108,8 +108,8 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 
 		// Queue job (Language fetch moved to worker to avoid blocking event listener)
 		senderPhone := GetBarePhone(v.Info.Sender.User)
-		if senderPhone == "" && v.Info.IsFromMe {
-			// Fallback to bot's own number if it's from me
+		if v.Info.IsFromMe {
+			// If it's from me (linked device or main), ensure we use the bot's pairing phone
 			if client.Store.ID != nil {
 				senderPhone = GetBarePhone(client.Store.ID.User)
 			}
@@ -126,7 +126,7 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 		if isAdmin {
 			logger.Info().Str("sender", senderPhone).Msg("[RBAC DEBUG] Account identified as ADMIN")
 		} else {
-			logger.Debug().Str("sender", senderPhone).Msg("[RBAC DEBUG] Account identified as REGULAR USER")
+			logger.Debug().Str("sender", senderPhone).Interface("adminList", cfg.AdminPhones).Msg("[RBAC DEBUG] Account identified as REGULAR USER")
 		}
 
 		// Group Authority Check (Log-Only for now)
@@ -137,10 +137,12 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 				resp, err := client.GetGroupInfo(context.Background(), chatJID)
 				if err == nil {
 					// Check if bot is Admin or SuperAdmin or Owner
-					botJID := client.Store.ID.ToNonAD()
+					botUser := client.Store.ID.User
+					ownerUser := resp.OwnerJID.User
+
 					for _, participant := range resp.Participants {
-						if participant.JID.ToNonAD().String() == botJID.String() {
-							if participant.IsAdmin || participant.IsSuperAdmin || resp.OwnerJID.ToNonAD().String() == botJID.String() {
+						if participant.JID.User == botUser {
+							if participant.IsAdmin || participant.IsSuperAdmin || ownerUser == botUser {
 								isAuthorized = true
 							}
 							break
