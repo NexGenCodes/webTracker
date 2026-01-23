@@ -3,9 +3,11 @@ package whatsapp
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"webtracker-bot/internal/config"
+	"webtracker-bot/internal/localdb"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/supabase"
@@ -40,7 +42,18 @@ func NewClient(dbPath string) (*whatsmeow.Client, error) {
 	return client, nil
 }
 
-func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.Job, cfg *config.Config, db *supabase.Client) {
+// GetBarePhone extracts only the digits before any device/suffix markers.
+// e.g. "23480...0:12" -> "23480...0"
+func GetBarePhone(jid string) string {
+	if jid == "" {
+		return ""
+	}
+	re := regexp.MustCompile(`^(\d+)`)
+	match := re.FindString(jid)
+	return match
+}
+
+func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.Job, cfg *config.Config, db *supabase.Client, ldb *localdb.Client) {
 	switch v := evt.(type) {
 	case *events.Message:
 		text := ""
@@ -94,17 +107,55 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 		}
 
 		// Queue job (Language fetch moved to worker to avoid blocking event listener)
-		senderPhone := v.Info.Sender.User
+		senderPhone := GetBarePhone(v.Info.Sender.User)
 		if senderPhone == "" && v.Info.IsFromMe {
 			// Fallback to bot's own number if it's from me
 			if client.Store.ID != nil {
-				senderPhone = client.Store.ID.User
+				senderPhone = GetBarePhone(client.Store.ID.User)
 			}
 		}
 
-		// Strip device suffix (e.g., "234...0:12" -> "234...")
-		if strings.Contains(senderPhone, ".") {
-			senderPhone = strings.Split(senderPhone, ".")[0]
+		// RBAC DEBUG LOGGING (Verification Phase)
+		isAdmin := false
+		for _, admin := range cfg.AdminPhones {
+			if senderPhone == admin {
+				isAdmin = true
+				break
+			}
+		}
+		if isAdmin {
+			logger.Info().Str("sender", senderPhone).Msg("[RBAC DEBUG] Account identified as ADMIN")
+		} else {
+			logger.Debug().Str("sender", senderPhone).Msg("[RBAC DEBUG] Account identified as REGULAR USER")
+		}
+
+		// Group Authority Check (Log-Only for now)
+		if isGroup {
+			isAuthorized, cached, _ := ldb.GetGroupAuthority(context.Background(), chatJID.String())
+			if !cached {
+				// Fetch from WhatsApp
+				resp, err := client.GetGroupInfo(context.Background(), chatJID)
+				if err == nil {
+					// Check if bot is Admin or SuperAdmin or Owner
+					botJID := client.Store.ID.ToNonAD()
+					for _, participant := range resp.Participants {
+						if participant.JID.ToNonAD().String() == botJID.String() {
+							if participant.IsAdmin || participant.IsSuperAdmin || resp.OwnerJID.ToNonAD().String() == botJID.String() {
+								isAuthorized = true
+							}
+							break
+						}
+					}
+					ldb.SetGroupAuthority(context.Background(), chatJID.String(), isAuthorized)
+				}
+			}
+
+			if isAuthorized {
+				logger.Info().Str("group", chatJID.String()).Msg("[RBAC DEBUG] Bot authorized in group (Admin/Owner)")
+			} else {
+				logger.Warn().Str("group", chatJID.String()).Msg("[RBAC DEBUG] Bot NOT authorized in group (Regular Member)")
+				// return // Not blocking yet, just logging
+			}
 		}
 
 		queue <- models.Job{

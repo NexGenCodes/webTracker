@@ -95,7 +95,7 @@ func (a *App) Init() error {
 
 func (a *App) Run() error {
 	// Start Workers
-	cmdDispatcher := commands.NewDispatcher(a.DB, a.LocalDB, a.Cfg.CompanyPrefix, a.Cfg.CompanyName)
+	cmdDispatcher := commands.NewDispatcher(a.DB, a.LocalDB, a.Cfg.CompanyPrefix, a.Cfg.CompanyName, a.Cfg.AdminPhones, a.Cfg.AdminTimezone)
 	sender := whatsapp.NewSender(a.WA)
 	for i := 1; i <= 5; i++ {
 		a.WG.Add(1)
@@ -170,7 +170,7 @@ func (a *App) connectWA() error {
 }
 
 func (a *App) handleWAEvent(evt interface{}) {
-	whatsapp.HandleEvent(a.WA, evt, a.Jobs, a.Cfg, a.DB)
+	whatsapp.HandleEvent(a.WA, evt, a.Jobs, a.Cfg, a.DB, a.LocalDB)
 
 	switch evt.(type) {
 	case *events.Connected:

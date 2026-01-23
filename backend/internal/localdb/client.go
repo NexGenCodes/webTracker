@@ -53,6 +53,12 @@ func (c *Client) initSchema(ctx context.Context) error {
 		language TEXT NOT NULL DEFAULT 'en',
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
+
+	CREATE TABLE IF NOT EXISTS GroupAuthority (
+		jid TEXT PRIMARY KEY,
+		is_authorized BOOLEAN NOT NULL DEFAULT 0,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
 	`
 	_, err := c.db.ExecContext(ctx, query)
 	return err
@@ -84,5 +90,38 @@ func (c *Client) SetUserLanguage(ctx context.Context, jid string, lang string) e
 	ON CONFLICT(jid) DO UPDATE SET language = excluded.language, updated_at = CURRENT_TIMESTAMP;
 	`
 	_, err := c.db.ExecContext(ctx, query, jid, lang)
+	return err
+}
+
+// GetGroupAuthority checks the cache for bot authorization in a group.
+// Returns (isAuthorized, exists, error)
+func (c *Client) GetGroupAuthority(ctx context.Context, jid string) (bool, bool, error) {
+	query := `SELECT is_authorized, updated_at FROM GroupAuthority WHERE jid = ?`
+	var isAuthorized bool
+	var updatedAt time.Time
+	err := c.db.QueryRowContext(ctx, query, jid).Scan(&isAuthorized, &updatedAt)
+	if err == sql.ErrNoRows {
+		return false, false, nil
+	}
+	if err != nil {
+		return false, false, err
+	}
+
+	// Cache TTL: 1 hour
+	if time.Since(updatedAt) > time.Hour {
+		return false, false, nil // Treat as "not in cache"
+	}
+
+	return isAuthorized, true, nil
+}
+
+// SetGroupAuthority updates the authority cache for a group.
+func (c *Client) SetGroupAuthority(ctx context.Context, jid string, isAuthorized bool) error {
+	query := `
+	INSERT INTO GroupAuthority (jid, is_authorized, updated_at) 
+	VALUES (?, ?, CURRENT_TIMESTAMP)
+	ON CONFLICT(jid) DO UPDATE SET is_authorized = excluded.is_authorized, updated_at = CURRENT_TIMESTAMP;
+	`
+	_, err := c.db.ExecContext(ctx, query, jid, isAuthorized)
 	return err
 }
