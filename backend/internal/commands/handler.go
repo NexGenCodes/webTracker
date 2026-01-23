@@ -380,6 +380,11 @@ func (h *BroadcastHandler) Execute(ctx context.Context, db *supabase.Client, ldb
 	msg := strings.Join(args, " ")
 	broadcastMsg := "📢 *OFFICIAL UPDATE FROM LOGISTICS*\n\n" + msg
 
+	// Check connection first
+	if !h.Sender.Client.IsConnected() {
+		return Result{Message: "❌ *FAILED*\n_WhatsApp is currently disconnected._"}
+	}
+
 	// Get all authorized groups from DB
 	groups, err := ldb.GetAuthorizedGroups(ctx)
 	if err != nil {
@@ -387,6 +392,10 @@ func (h *BroadcastHandler) Execute(ctx context.Context, db *supabase.Client, ldb
 	}
 
 	successCount := 0
+
+	// Create semaphore to limit concurrent sends (avoid blocking main thread too long)
+	// WhatsApp recommends not flooding
+
 	for _, groupID := range groups {
 		groupJID, err := types.ParseJID(groupID)
 		if err != nil {
