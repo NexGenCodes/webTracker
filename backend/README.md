@@ -1,13 +1,14 @@
-# Production WhatsApp Bot 🤖
+# NexGen WebTracker WhatsApp Bot 🤖
 
-Optimized Go bot using `whatsmeow` + Worker Pools + Direct Supabase API.
+Optimized Go bot for logistics tracking using `whatsmeow` + Worker Pools + Local SQLite.
 
 ## 🏗️ Architecture
 
 - **Protocol**: `whatsmeow` (Multi-Device)
 - **Concurrency**: Worker Pools for scalable message processing
-- **Database**: Supabase (PostgreSQL)
+- **Database**: SQLite (Local storage optimized for 1GB RAM)
 - **Rendering**: Native Go `gg` library (No Chrome required)
+- **Parsing**: Advanced Regex extraction with Gemini AI Fallback
 - **Monitoring**: Built-in health check and vitals monitoring
 
 ## 📂 Project Structure
@@ -15,31 +16,30 @@ Optimized Go bot using `whatsmeow` + Worker Pools + Direct Supabase API.
 - `assets/`: Image and font assets
 - `cmd/bot/`: Application entry point
 - `internal/`: Private library code
-  - `app/`: App lifecycle and initialization
   - `commands/`: Command dispatching logic
   - `config/`: Configuration management
-  - `health/`: Health server and monitoring
+  - `localdb/`: SQLite database client and operations
   - `logger/`: Structured logging
-  - `models/`: Domain models
-  - `parser/`: Manifest parsing (Regex + AI)
-  - `supabase/`: Database interactions
-  - `utils/`: Receipt rendering and helpers
-  - `whatsapp/`: WhatsApp client and events
+  - `models/`: Manifest and domain models
+  - `parser/`: Manifest parsing (Regex + AI) - Now supports ID/Passport extraction
+  - `shipment/`: Core logistics logic and status management
+  - `utils/`: Receipt rendering, waybill generation, and helpers
+  - `whatsapp/`: WhatsApp client and event handling
   - `worker/`: Async job workers
 
-To run this on a standard VPS (Ubuntu/Debian):
+## 🚀 Deployment (VPS)
+
+To build for a standard Linux VPS:
 
 ```bash
-# Set environment for cross-compilation
+# Cross-compile for Linux
 $env:GOOS="linux"; $env:GOARCH="amd64"
-go build -ldflags="-s -w" -o bot-linux-amd64 main.go
+go build -ldflags="-s -w" -o bot-linux ./cmd/bot
 ```
 
-*Note: `-s -w` strips debug symbols to reduce binary size.*
+### Run with PM2
 
-## 🚀 Run with PM2
-
-1. Upload `bot-linux-amd64`, `.env` (or set sys vars), and `ecosystem.config.js` to your VPS.
+1. Upload `bot-linux`, `.env`, and `ecosystem.config.js` to your VPS.
 2. Run with PM2:
 
    ```bash
@@ -47,10 +47,16 @@ go build -ldflags="-s -w" -o bot-linux-amd64 main.go
    pm2 save
    ```
 
-## 🧪 Local Test (Windows)
+## 🧪 Local Dev (Windows)
 
-```bash
-$env:SUPABASE_URL="https://your-project.supabase.co"
-$env:SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
-go run main.go
+```powershell
+go run ./cmd/bot/main.go
 ```
+
+## 📝 Features
+
+- **Automated Manifest Parsing**: Extracts Sender, Receiver, Phone, Address, Email, and ID/Passport numbers.
+- **Dynamic Receipts**: Generates high-quality branded receipts (JPEG) sent directly via WhatsApp.
+- **Local Database**: Fast, embedded SQLite storage with automatic WAL mode management.
+- **Rate Limiting**: Integrated rate limits for AI parsing to prevent API quota exhaustion.
+- **Admin Commands**: `!stats`, `!edit`, `!delete` for control and correction.

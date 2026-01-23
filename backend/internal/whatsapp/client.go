@@ -11,7 +11,6 @@ import (
 	"webtracker-bot/internal/localdb"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
-	"webtracker-bot/internal/supabase"
 
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/store/sqlstore"
@@ -56,15 +55,16 @@ func GetBarePhone(jid string) string {
 }
 
 var (
-	authCache     sync.Map // Map[string]bool (GroupJID -> isAuthorized)
-	identityCache struct {
+	authCache         sync.Map // Map[string]bool (GroupJID -> isAuthorized)
+	participantsCache sync.Map // Map[string]map[string]bool (GroupJID -> BarePhone -> isAdmin)
+	identityCache     struct {
 		sync.RWMutex
 		botPhone string
 		botLID   string
 	}
 )
 
-func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.Job, cfg *config.Config, db *supabase.Client, ldb *localdb.Client) {
+func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.Job, cfg *config.Config, ldb *localdb.Client) {
 	switch v := evt.(type) {
 	case *events.JoinedGroup:
 		logger.Info().Str("chat", v.JID.String()).Msg("[RBAC EVENT] Joined group, re-verifying authority")
@@ -147,33 +147,24 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 				if v.Info.IsFromMe {
 					isSenderAdmin = true
 				} else if strings.HasPrefix(text, "!") || strings.HasPrefix(text, "#") {
-					// We only check for sender admin status on commands
-					resp, err := client.GetGroupInfo(context.Background(), chatJID)
-					if err == nil {
-						ownerUserJID := GetBarePhone(resp.OwnerJID.User)
-						senderBare := GetBarePhone(v.Info.Sender.User)
-
-						// Self-healing: Check if bot is still authorized while we have the info
-						botIsStillAuth := (botPhone != "" && ownerUserJID == botPhone) || (botLID != "" && ownerUserJID == botLID)
-						for _, p := range resp.Participants {
-							pUser := GetBarePhone(p.JID.User)
-							if !botIsStillAuth && (pUser == botPhone || (botLID != "" && pUser == botLID)) {
-								if p.IsAdmin || p.IsSuperAdmin {
-									botIsStillAuth = true
-								}
-							}
-							if pUser == senderBare {
-								if p.IsAdmin || p.IsSuperAdmin || pUser == ownerUserJID {
-									isSenderAdmin = true
-								}
+					// Check Cache First
+					senderBare := GetBarePhone(v.Info.Sender.User)
+					if groupAdmins, ok := participantsCache.Load(chatJID.String()); ok {
+						admins := groupAdmins.(map[string]bool)
+						if isAdminEntry, exist := admins[senderBare]; exist {
+							isSenderAdmin = isAdminEntry
+						} else {
+							// If not in cache, re-verify (group might have changed)
+							verifyGroupAuthority(client, ldb, chatJID)
+							if groupAdminsNew, okNew := participantsCache.Load(chatJID.String()); okNew {
+								isSenderAdmin = groupAdminsNew.(map[string]bool)[senderBare]
 							}
 						}
-
-						if !botIsStillAuth {
-							isAuthorized = false
-							authCache.Store(chatJID.String(), false)
-							ldb.SetGroupAuthority(context.Background(), chatJID.String(), false)
-							logger.Info().Str("group", chatJID.String()).Msg("[RBAC DEBUG] Bot detected it is no longer an Admin/Owner. Demoting itself.")
+					} else {
+						// No cache? Re-verify
+						verifyGroupAuthority(client, ldb, chatJID)
+						if groupAdminsNew, okNew := participantsCache.Load(chatJID.String()); okNew {
+							isSenderAdmin = groupAdminsNew.(map[string]bool)[senderBare]
 						}
 					}
 				}
@@ -242,25 +233,28 @@ func verifyGroupAuthority(client *whatsmeow.Client, ldb *localdb.Client, chat ty
 	ownerUserJID := GetBarePhone(resp.OwnerJID.User)
 	isAuth := (botPhone != "" && ownerUserJID == botPhone) || (botLID != "" && ownerUserJID == botLID)
 
-	if !isAuth {
-		for _, p := range resp.Participants {
-			pUser := GetBarePhone(p.JID.User)
-			if (botPhone != "" && pUser == botPhone) || (botLID != "" && pUser == botLID) {
-				if p.IsAdmin || p.IsSuperAdmin {
-					isAuth = true
-				}
-				break
+	admins := make(map[string]bool)
+	for _, p := range resp.Participants {
+		pBare := GetBarePhone(p.JID.User)
+		isAdmin := p.IsAdmin || p.IsSuperAdmin || pBare == ownerUserJID
+		admins[pBare] = isAdmin
+
+		if !isAuth && (pBare == botPhone || (botLID != "" && pBare == botLID)) {
+			if isAdmin {
+				isAuth = true
 			}
 		}
 	}
 
 	// Update Memory AND Database
 	authCache.Store(chat.String(), isAuth)
+	participantsCache.Store(chat.String(), admins)
 	ldb.SetGroupAuthority(context.Background(), chat.String(), isAuth)
 
 	logger.Info().
 		Str("group", chat.String()).
 		Bool("is_authorized", isAuth).
+		Int("cached_members", len(admins)).
 		Msg("[RBAC EVENT] Authority status synchronized (Memory & DB)")
 
 	return isAuth

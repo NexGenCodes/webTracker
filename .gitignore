@@ -98,3 +98,20 @@ backend/internal/logger/test_logs/
 next.config.js
 front/next.config.js
 front/.next
+
+# --- Unified Backend Ignores ---
+backend/bot
+backend/webtracker.exe
+backend/*.db
+backend/*.db-journal
+backend/*.db-wal
+backend/session.db*
+backend/logs/
+backend/*.log
+backend/ssh.pem
+backend/*.pem
+backend/receipt_test_output.jpg
+backend/waybill_test_output.jpg
+backend/test_output.txt
+backend/internal/logger/test_logs/
+**/assets/fonts/

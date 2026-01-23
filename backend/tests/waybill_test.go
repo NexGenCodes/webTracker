@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 	"webtracker-bot/internal/config"
-	"webtracker-bot/internal/models"
+	"webtracker-bot/internal/shipment"
 	"webtracker-bot/internal/utils"
 )
 
@@ -15,18 +15,18 @@ func TestGenerateWaybill(t *testing.T) {
 		t.Fatalf("Failed to load config: %v", err)
 	}
 
-	shipment := models.Shipment{
-		TrackingNumber:  "AWB-TEST-123",
-		Status:          "PENDING",
-		SenderName:      "Global Sender Org",
-		ReceiverName:    "Local Receiver Person",
-		ReceiverPhone:   "0800-WAYBILL-00",
-		ReceiverAddress: "456 Enterprise Way, District 9",
-		ReceiverCountry: "Nigeria",
-		CreatedAt:       time.Now(),
+	ship := shipment.Shipment{
+		TrackingID:     "AWB-TEST-123",
+		Status:         "PENDING",
+		SenderName:     "Global Sender Org",
+		RecipientName:  "Local Receiver Person",
+		RecipientPhone: "0800-WAYBILL-00",
+		Destination:    "456 Enterprise Way, District 9",
+		Origin:         "Nigeria",
+		CreatedAt:      time.Now(),
 	}
 
-	got := utils.GenerateWaybill(shipment, cfg.CompanyName)
+	got := utils.GenerateWaybill(ship, cfg.CompanyName)
 
 	// Check for key elements and formatting
 	checks := []string{
@@ -52,11 +52,11 @@ func TestGenerateWaybillEmptyFields(t *testing.T) {
 		companyName = cfg.CompanyName
 	}
 
-	shipment := models.Shipment{
-		TrackingNumber: "EMPTY-TEST",
+	ship := shipment.Shipment{
+		TrackingID: "EMPTY-TEST",
 	}
 
-	got := utils.GenerateWaybill(shipment, companyName)
+	got := utils.GenerateWaybill(ship, companyName)
 	if !strings.Contains(got, "EMPTY-TEST") {
 		t.Error("Waybill should at least contain the tracking number even if other fields are empty")
 	}

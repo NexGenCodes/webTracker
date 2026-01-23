@@ -2,7 +2,7 @@
 // BRANDING CONSTANTS (Plug and Play)
 // ============================================
 // Change APP_NAME to rebrand the entire application
-export const APP_NAME = "Airway Bill";
+export const APP_NAME = process.env.NEXT_PUBLIC_COMPANY_NAME || "Airway Bill";
 
 /**
  * Auto-generate tracking prefix from company name
@@ -106,19 +106,15 @@ export const COUNTRY_COORDS: Record<string, [number, number]> = {
 export const ADMIN_TIMEZONE = process.env.ADMIN_TIMEZONE || "Africa/Lagos";
 
 /**
- * Validates tracking number format: Exactly 9 characters total.
- * Prefix-Random Alphanumeric (excluding I, 1, O, 0)
+ * Validates tracking number format.
+ * Matches backend: PREFIX-123456789 (Prefix + '-' + 9 digits)
  */
 export function isValidTrackingNumber(id: string): boolean {
-    if (!id || id.length !== 9) return false;
-    
-    // Construct regex dynamic based on the TRACKING_PREFIX
-    // Standard charset: ABCDEFGHJKLMNPQRSTUVWXYZ23456789
-    const randomPartLen = 9 - TRACKING_PREFIX.length - 1;
-    if (randomPartLen < 3) return true; // Minimal length check if prefix is huge
-    
-    const charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    const regex = new RegExp(`^${TRACKING_PREFIX}-[${charset}]{${randomPartLen}}$`);
-    
+    if (!id) return false;
+
+    // More lenient regex to handle various potential prefix lengths
+    // and ensuring it matches the backend pattern of Prefix-XXXXXXXXX (9 digits)
+    const regex = /^[A-Z0-9]{2,6}-[0-9]{5,12}$/i;
+
     return regex.test(id);
 }

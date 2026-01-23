@@ -6,7 +6,7 @@ import (
 	"time"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/i18n"
-	"webtracker-bot/internal/models"
+	"webtracker-bot/internal/shipment"
 	"webtracker-bot/internal/utils"
 )
 
@@ -22,19 +22,18 @@ func TestRenderReceipt(t *testing.T) {
 		t.Fatalf("Failed to load config: %v", err)
 	}
 
-	shipment := models.Shipment{
-		TrackingNumber:  "AWB-TEST-12345",
-		SenderName:      "Sender Name",
-		ReceiverName:    "Receiver Name",
-		ReceiverPhone:   "+1234567890",
-		ReceiverAddress: "123 Test St, Test City, Test Country",
-		ReceiverCountry: "Country Ab",
-		ReceiverEmail:   "test@example.com",
-		SenderCountry:   "Country B",
-		CreatedAt:       time.Now(),
+	ship := shipment.Shipment{
+		TrackingID:     "AWB-TEST-12345",
+		SenderName:     "Sender Name",
+		RecipientName:  "Receiver Name",
+		RecipientPhone: "+1234567890",
+		Destination:    "123 Test St, Test City, Test Country",
+		RecipientEmail: "test@example.com",
+		Origin:         "Country B",
+		CreatedAt:      time.Now(),
 	}
 
-	imgBytes, err := utils.RenderReceipt(shipment, cfg.CompanyName, i18n.EN)
+	imgBytes, err := utils.RenderReceipt(ship, cfg.CompanyName, i18n.EN)
 	if err != nil {
 		t.Fatalf("RenderReceipt failed: %v", err)
 	}

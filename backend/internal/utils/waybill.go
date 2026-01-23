@@ -3,10 +3,10 @@ package utils
 import (
 	"fmt"
 	"strings"
-	"webtracker-bot/internal/models"
+	"webtracker-bot/internal/shipment"
 )
 
-func GenerateWaybill(s models.Shipment, companyName string) string {
+func GenerateWaybill(s shipment.Shipment, companyName string) string {
 	var b strings.Builder
 
 	if companyName == "" {
@@ -23,25 +23,24 @@ func GenerateWaybill(s models.Shipment, companyName string) string {
 	b.WriteString(strings.Repeat(" ", padding) + "⚡ " + header + "\n")
 	b.WriteString(border + "\n\n")
 
-	b.WriteString(fmt.Sprintf("🆔 [TRACKING ID]: %s\n", s.TrackingNumber))
-	b.WriteString(fmt.Sprintf("📍 [STATUS]: %s\n", s.Status))
+	b.WriteString(fmt.Sprintf("🆔 [TRACKING ID]: %s\n", s.TrackingID))
+	b.WriteString(fmt.Sprintf("📍 [STATUS]: %s\n", strings.ToUpper(s.Status)))
 	b.WriteString(fmt.Sprintf("📅 [DATE]:   %s\n\n", s.CreatedAt.Format("02 Jan 2006, 15:04")))
 
 	b.WriteString("👤 [SENDER INFORMATION]\n")
 	b.WriteString(fmt.Sprintf("   • Name:    %s\n", s.SenderName))
-	b.WriteString(fmt.Sprintf("   • Country: %s\n\n", s.SenderCountry))
+	b.WriteString(fmt.Sprintf("   • Origin:  %s\n\n", s.Origin))
 
 	b.WriteString("🎯 [RECEIVER INFORMATION]\n")
-	b.WriteString(fmt.Sprintf("   • Name:    %s\n", s.ReceiverName))
-	b.WriteString(fmt.Sprintf("   • Phone:   %s\n", s.ReceiverPhone))
-	if s.ReceiverEmail != "" {
-		b.WriteString(fmt.Sprintf("   • Email:   %s\n", s.ReceiverEmail))
+	b.WriteString(fmt.Sprintf("   • Name:    %s\n", s.RecipientName))
+	b.WriteString(fmt.Sprintf("   • Phone:   %s\n", s.RecipientPhone))
+	if s.RecipientEmail != "" {
+		b.WriteString(fmt.Sprintf("   • Email:   %s\n", s.RecipientEmail))
 	}
-	if s.ReceiverID != "" {
-		b.WriteString(fmt.Sprintf("   • ID/NIN:  %s\n", s.ReceiverID))
+	if s.RecipientID != "" {
+		b.WriteString(fmt.Sprintf("   • ID/PP:   %s\n", s.RecipientID))
 	}
-	b.WriteString(fmt.Sprintf("   • Address: %s\n", s.ReceiverAddress))
-	b.WriteString(fmt.Sprintf("   • Country: %s\n\n", s.ReceiverCountry))
+	b.WriteString(fmt.Sprintf("   • Destination: %s\n\n", s.Destination))
 
 	b.WriteString(border + "\n")
 	b.WriteString("  *THANK YOU FOR YOUR PATRONAGE*  \n")

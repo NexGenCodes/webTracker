@@ -8,6 +8,13 @@ export interface ShipmentEvent {
     notes?: string | null;
 }
 
+export interface TimelineEvent {
+    status: string;
+    timestamp: string;
+    description: string;
+    is_completed: boolean;
+}
+
 export interface ShipmentData {
     id: string;
     trackingNumber: string;
@@ -18,12 +25,14 @@ export interface ShipmentData {
     receiverAddress: string | null;
     receiverCountry: string | null;
     receiverPhone: string | null;
+    receiverEmail: string | null;
     isArchived: boolean;
     events: ShipmentEvent[];
     originCoords?: [number, number];
     destinationCoords?: [number, number];
     createdAt?: string | Date;
     estimatedDelivery?: string | Date;
+    timeline?: TimelineEvent[];
     // Added for WhatsApp context in services
     whatsappMessageId?: string | null;
     whatsappFrom?: string | null;
@@ -34,6 +43,7 @@ export interface CreateShipmentDto {
     receiverAddress: string;
     receiverCountry: string;
     receiverPhone: string;
+    receiverEmail: string;
     senderName: string;
     senderCountry: string;
 }

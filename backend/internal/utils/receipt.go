@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"webtracker-bot/internal/i18n"
-	"webtracker-bot/internal/models"
+	"webtracker-bot/internal/shipment"
 
 	"github.com/fogleman/gg"
 )
@@ -52,7 +52,7 @@ func InitReceiptRenderer() error {
 	return EnsureFontsDownloader()
 }
 
-func RenderReceipt(shipment models.Shipment, companyName string, lang i18n.Language) ([]byte, error) {
+func RenderReceipt(s shipment.Shipment, companyName string, lang i18n.Language) ([]byte, error) {
 	dc := ctxPool.Get().(*gg.Context)
 	defer ctxPool.Put(dc)
 
@@ -71,10 +71,10 @@ func RenderReceipt(shipment models.Shipment, companyName string, lang i18n.Langu
 		dc.Pop()
 	}
 
-	drawV11Header(dc, shipment, companyName, lang)
-	drawV11Grid(dc, shipment, lang)
-	drawV11AuthArea(dc, shipment)
-	drawSecurityFooter(dc, shipment, companyName)
+	drawV11Header(dc, s, companyName, lang)
+	drawV11Grid(dc, s, lang)
+	drawV11AuthArea(dc, s)
+	drawSecurityFooter(dc, s, companyName)
 	drawSecurityFoilPro(dc, Width-100, Height-100)
 	drawV11Stamps(dc)
 
@@ -83,7 +83,7 @@ func RenderReceipt(shipment models.Shipment, companyName string, lang i18n.Langu
 	return buf.Bytes(), err
 }
 
-func drawV11Header(dc *gg.Context, shipment models.Shipment, companyName string, lang i18n.Language) {
+func drawV11Header(dc *gg.Context, shipment shipment.Shipment, companyName string, lang i18n.Language) {
 	margin := 20.0
 	yH := 160.0
 	if logoImg := loadCompanyLogo(); logoImg != nil {
@@ -110,12 +110,12 @@ func drawV11Header(dc *gg.Context, shipment models.Shipment, companyName string,
 
 	dc.SetColor(ColorDarkText)
 	if err := LoadFont(dc, FontArialBold, 26); err == nil {
-		dc.DrawStringAnchored(shipment.TrackingNumber, Width/2, yH+100, 0.5, 0.5)
+		dc.DrawStringAnchored(shipment.TrackingID, Width/2, yH+100, 0.5, 0.5)
 	}
 
 	if err := LoadFont(dc, FontArialBold, 40); err == nil {
 		dc.SetHexColor("#cc0000")
-		dc.DrawString(fmt.Sprintf("№ 00%s", shipment.TrackingNumber), Width-margin-420, 105)
+		dc.DrawString(fmt.Sprintf("№ 00%s", shipment.TrackingID), Width-margin-420, 105)
 	}
 
 	drawLinearBarcodePro(dc, Width/2, yH+165, 520, 70)
@@ -124,7 +124,7 @@ func drawV11Header(dc *gg.Context, shipment models.Shipment, companyName string,
 	}
 }
 
-func drawV11Grid(dc *gg.Context, shipment models.Shipment, lang i18n.Language) {
+func drawV11Grid(dc *gg.Context, shipment shipment.Shipment, lang i18n.Language) {
 	gX, gY := 20.0, 420.0
 	gW := Width - 40.0
 	gH := 624.0
@@ -146,17 +146,17 @@ func drawV11Grid(dc *gg.Context, shipment models.Shipment, lang i18n.Language) {
 	dc.DrawLine(gX+c1W+c2W+c3W, gY, gX+c1W+c2W+c3W, gY+gH)
 	dc.Stroke()
 
-	drawSmartCellV10(dc, gX, gY, c1W, rowH, i18n.T(lang, "receipt_destination"), shipment.ReceiverCountry)
-	drawSmartCellV10(dc, gX+c1W+c2W+c3W, gY, c4W, rowH, i18n.T(lang, "receipt_origin"), shipment.SenderCountry)
+	drawSmartCellV10(dc, gX, gY, c1W, rowH, i18n.T(lang, "receipt_destination"), shipment.Destination)
+	drawSmartCellV10(dc, gX+c1W+c2W+c3W, gY, c4W, rowH, i18n.T(lang, "receipt_origin"), shipment.Origin)
 
 	nameH := rowH * 2
-	drawSmartCellV10(dc, gX, gY+rowH, c1W, nameH, i18n.T(lang, "receipt_receiver"), shipment.ReceiverName)
+	drawSmartCellV10(dc, gX, gY+rowH, c1W, nameH, i18n.T(lang, "receipt_receiver"), shipment.RecipientName)
 	drawSmartCellV10(dc, gX+c1W+c2W+c3W, gY+rowH, c4W, nameH, i18n.T(lang, "receipt_sender"), shipment.SenderName)
 
-	drawSmartCellV10(dc, gX, gY+rowH+nameH, c1W, rowH, i18n.T(lang, "receipt_email"), shipment.ReceiverEmail)
+	drawSmartCellV10(dc, gX, gY+rowH+nameH, c1W, rowH, i18n.T(lang, "receipt_email"), shipment.RecipientEmail)
 
-	drawSmartCellV10(dc, gX, gY+rowH*2+nameH, c1W, rowH, i18n.T(lang, "receipt_content"), "DIPLOMATIC CONSIGNMENT")
-	drawSmartCellV10(dc, gX, gY+rowH*3+nameH, c1W, rowH, i18n.T(lang, "receipt_weight"), "15.00 KGS")
+	drawSmartCellV10(dc, gX, gY+rowH*2+nameH, c1W, rowH, i18n.T(lang, "receipt_content"), shipment.CargoType)
+	drawSmartCellV10(dc, gX, gY+rowH*3+nameH, c1W, rowH, i18n.T(lang, "receipt_weight"), fmt.Sprintf("%.2f KGS", shipment.Weight))
 
 	selectorH := rowH * 4
 	drawSelectorV10(dc, gX+c1W, gY, c2W, selectorH, i18n.T(lang, "receipt_service"), []string{"EXPRESS", "DIPLOMATIC", "DOMESTIC", "OVERNIGHT"}, "DIPLOMATIC")
@@ -179,11 +179,12 @@ func drawV11Grid(dc *gg.Context, shipment models.Shipment, lang i18n.Language) {
 	drawWarningV9(dc, gX+c1W+c2W+c3W, gY+rowH*3+rowH, c4W, rowH*2)
 
 	addressH := 200.0
-	drawSmartCellV10(dc, gX, gY+gH, c1W+c2W+c3W, addressH, i18n.T(lang, "receipt_address"), shipment.ReceiverAddress)
-	drawSmartCellV10(dc, gX+c1W+c2W+c3W, gY+gH, c4W, addressH, i18n.T(lang, "receipt_phone"), shipment.ReceiverPhone)
+	// For now, map Destination as Address since we don't have separate address field yet
+	drawSmartCellV10(dc, gX, gY+gH, c1W+c2W+c3W, addressH, i18n.T(lang, "receipt_address"), shipment.Destination)
+	drawSmartCellV10(dc, gX+c1W+c2W+c3W, gY+gH, c4W, addressH, i18n.T(lang, "receipt_phone"), shipment.RecipientPhone)
 }
 
-func drawV11AuthArea(dc *gg.Context, shipment models.Shipment) {
+func drawV11AuthArea(dc *gg.Context, shipment shipment.Shipment) {
 	yA := 1250.0
 	margin := 20.0
 
@@ -238,11 +239,11 @@ func drawV11AuthArea(dc *gg.Context, shipment models.Shipment) {
 	drawQRCodePro(dc, Width-margin-80, yA+10, 80)
 }
 
-func drawSecurityFooter(dc *gg.Context, shipment models.Shipment, companyName string) {
+func drawSecurityFooter(dc *gg.Context, shipment shipment.Shipment, companyName string) {
 	if err := LoadFont(dc, FontArialBold, 10); err == nil {
 		dc.SetRGBA255(20, 20, 20, 100)
 		footerText := fmt.Sprintf("SECURE DOCUMENT ID: %s | %s | VERIFIED BY  %s",
-			shipment.TrackingNumber, time.Now().Format("2006-01-02"), strings.ToUpper(companyName))
+			shipment.TrackingID, time.Now().Format("2006-01-02"), strings.ToUpper(companyName))
 		dc.DrawString(footerText, 60, Height-25)
 	}
 }

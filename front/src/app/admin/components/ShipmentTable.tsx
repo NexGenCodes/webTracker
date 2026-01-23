@@ -55,10 +55,11 @@ export const ShipmentTable: React.FC<ShipmentTableProps> = ({
                                     <td className="p-3 sm:p-4">
                                         <span className={`px-2 sm:px-3 py-1 rounded-lg text-[10px] sm:text-xs font-black uppercase ${s.isArchived ? 'bg-success/10 text-success' :
                                             s.status === 'IN_TRANSIT' ? 'bg-accent/10 text-accent' :
-                                                s.status === 'PENDING' ? 'bg-warning/10 text-warning' :
-                                                    'bg-surface text-text-muted'
+                                                s.status === 'OUT_FOR_DELIVERY' ? 'bg-primary/10 text-primary' :
+                                                    s.status === 'PENDING' ? 'bg-warning/10 text-warning' :
+                                                        'bg-surface text-text-muted'
                                             }`}>
-                                            {s.isArchived ? dict.admin.delivered : s.status.replace('_', ' ')}
+                                            {s.isArchived ? dict.admin.delivered : s.status.replace(/_/g, ' ')}
                                         </span>
                                     </td>
                                     <td className="p-3 sm:p-4">

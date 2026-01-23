@@ -24,6 +24,7 @@ type Config struct {
 	WorkerPoolSize int
 	BufferSize     int
 	PairingPhone   string
+	BotOwnerPhone  string // New field for notifications
 	// Notification Config
 	SMTPHost     string
 	SMTPPort     int
@@ -37,6 +38,13 @@ type Config struct {
 
 	// Session Storage
 	WhatsAppSessionPath string
+
+	// API Auth
+	ApiAuthToken string
+	APIPort      string
+
+	// Public Tracking URL
+	TrackingBaseURL string
 }
 
 func GetWorkDir() string {
@@ -181,7 +189,16 @@ func LoadFromEnv() (*Config, error) {
 
 		AllowPrivateChat:    os.Getenv("WHATSAPP_ALLOW_PRIVATE_CHAT") == "true",
 		AdminPhones:         adminPhones,
+		BotOwnerPhone:       os.Getenv("BOT_OWNER_PHONE"), // Load from env
 		WhatsAppSessionPath: os.Getenv("WHATSAPP_SESSION_PATH"),
+		ApiAuthToken:        os.Getenv("API_AUTH_TOKEN"),
+		APIPort:             os.Getenv("API_PORT"),
+		TrackingBaseURL:     os.Getenv("TRACKING_BASE_URL"),
+	}
+
+	// Default BotOwnerPhone to first admin if not set
+	if cfg.BotOwnerPhone == "" && len(adminPhones) > 0 {
+		cfg.BotOwnerPhone = adminPhones[0]
 	}
 
 	if cfg.PairingPhone != "" {
