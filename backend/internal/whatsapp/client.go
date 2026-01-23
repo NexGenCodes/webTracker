@@ -72,32 +72,51 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 		isGroup := chatJID.Server == "g.us"
 		isPrivate := !isGroup
 
-		// Access Control Logic
 		allowed := false
 
-		// Rule: "If the message is a private chat, allow it only if AllowPrivateChat is true."
-		if isPrivate {
+		if isGroup {
+			// Rule: Log-only for now as requested.
+			// Check authority (Admin Status) but don't block.
+			isAuthorized, cached, _ := ldb.GetGroupAuthority(context.Background(), chatJID.String())
+			if !cached {
+				resp, err := client.GetGroupInfo(context.Background(), chatJID)
+				if err == nil {
+					botUser := client.Store.ID.User
+					ownerUser := resp.OwnerJID.User
+					tempAuthorized := false
+					for _, participant := range resp.Participants {
+						if participant.JID.User == botUser {
+							if participant.IsAdmin || participant.IsSuperAdmin || ownerUser == botUser {
+								tempAuthorized = true
+							}
+							break
+						}
+					}
+					isAuthorized = tempAuthorized
+					ldb.SetGroupAuthority(context.Background(), chatJID.String(), isAuthorized)
+				}
+			}
+
+			if isAuthorized {
+				logger.Info().Str("group", chatJID.String()).Msg("[RBAC DEBUG] Bot is Admin/Owner in this group")
+			} else {
+				logger.Warn().Str("group", chatJID.String()).Msg("[RBAC DEBUG] Bot is NOT Admin in this group (Not blocking - Log Only)")
+			}
+			allowed = true // Log only: always allow group processing for now
+		} else if isPrivate {
+			// Rule:
+			// 1. If AllowPrivateChat is true -> Always allowed
+			// 2. If AllowPrivateChat is false -> Allowed ONLY if bot is NOT admin in ANY group
 			if cfg.AllowPrivateChat {
 				allowed = true
-			} else if len(cfg.AllowedGroups) == 0 {
-				// User Rule: "Exception: If AllowedGroups is empty AND AllowPrivateChat is false, the bot SHOULD work in private chats anyway."
-				allowed = true
 			} else {
-				allowed = false // Specifically blocked because AllowedGroups has entries
-			}
-		}
-
-		// Rule: "Group Chats: The bot must only respond if in AllowedGroups list"
-		if isGroup {
-			if len(cfg.AllowedGroups) == 0 {
-				allowed = false
-			} else {
-				// Check if group is in the allowed list
-				for _, g := range cfg.AllowedGroups {
-					if chatJID.String() == g {
-						allowed = true
-						break
-					}
+				hasGroups, _ := ldb.HasAuthorizedGroups(context.Background())
+				if !hasGroups {
+					allowed = true // Fallback
+					logger.Debug().Msg("[RBAC DEBUG] Private chat allowed (Fallback: Bot is not Admin in any group)")
+				} else {
+					allowed = false
+					logger.Debug().Msg("[RBAC DEBUG] Private chat blocked: Bot is Admin in some groups and AllowPrivateChat is false")
 				}
 			}
 		}
@@ -127,37 +146,6 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 			logger.Info().Str("sender", senderPhone).Msg("[RBAC DEBUG] Account identified as ADMIN")
 		} else {
 			logger.Debug().Str("sender", senderPhone).Interface("adminList", cfg.AdminPhones).Msg("[RBAC DEBUG] Account identified as REGULAR USER")
-		}
-
-		// Group Authority Check (Log-Only for now)
-		if isGroup {
-			isAuthorized, cached, _ := ldb.GetGroupAuthority(context.Background(), chatJID.String())
-			if !cached {
-				// Fetch from WhatsApp
-				resp, err := client.GetGroupInfo(context.Background(), chatJID)
-				if err == nil {
-					// Check if bot is Admin or SuperAdmin or Owner
-					botUser := client.Store.ID.User
-					ownerUser := resp.OwnerJID.User
-
-					for _, participant := range resp.Participants {
-						if participant.JID.User == botUser {
-							if participant.IsAdmin || participant.IsSuperAdmin || ownerUser == botUser {
-								isAuthorized = true
-							}
-							break
-						}
-					}
-					ldb.SetGroupAuthority(context.Background(), chatJID.String(), isAuthorized)
-				}
-			}
-
-			if isAuthorized {
-				logger.Info().Str("group", chatJID.String()).Msg("[RBAC DEBUG] Bot authorized in group (Admin/Owner)")
-			} else {
-				logger.Warn().Str("group", chatJID.String()).Msg("[RBAC DEBUG] Bot NOT authorized in group (Regular Member)")
-				// return // Not blocking yet, just logging
-			}
 		}
 
 		queue <- models.Job{

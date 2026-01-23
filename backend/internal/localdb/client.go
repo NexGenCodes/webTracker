@@ -125,3 +125,13 @@ func (c *Client) SetGroupAuthority(ctx context.Context, jid string, isAuthorized
 	_, err := c.db.ExecContext(ctx, query, jid, isAuthorized)
 	return err
 }
+
+// HasAuthorizedGroups checks if the bot is admin in at least one cached group.
+func (c *Client) HasAuthorizedGroups(ctx context.Context) (bool, error) {
+	query := `SELECT COUNT(*) FROM GroupAuthority WHERE is_authorized = 1 AND updated_at > ?`
+	var count int
+	// Use same TTL as GetGroupAuthority (1 hour)
+	threshold := time.Now().Add(-time.Hour)
+	err := c.db.QueryRowContext(ctx, query, threshold).Scan(&count)
+	return count > 0, err
+}
