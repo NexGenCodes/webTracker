@@ -79,17 +79,18 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 			// Check authority (Admin Status) but don't block.
 			isAuthorized, cached, _ := ldb.GetGroupAuthority(context.Background(), chatJID.String())
 			if !cached {
+				logger.Info().Str("group", chatJID.String()).Msg("[RBAC DIAGNOSTIC] Cache miss: Fetching group info from WhatsApp")
 				resp, err := client.GetGroupInfo(context.Background(), chatJID)
 				if err == nil {
 					botUser := GetBarePhone(client.Store.ID.User)
 					ownerUser := GetBarePhone(resp.OwnerJID.User)
-					logger.Debug().Str("botUser", botUser).Str("ownerUser", ownerUser).Msg("[RBAC DIAGNOSTIC] Checking group admin status")
+					logger.Info().Str("botUser", botUser).Str("ownerUser", ownerUser).Msg("[RBAC DIAGNOSTIC] Comparing bot to group owner")
 
 					tempAuthorized := false
 					for _, participant := range resp.Participants {
 						pUser := GetBarePhone(participant.JID.User)
 						if pUser == botUser {
-							logger.Debug().Str("pUser", pUser).Bool("isAdmin", participant.IsAdmin).Bool("isSuperAdmin", participant.IsSuperAdmin).Msg("[RBAC DIAGNOSTIC] Found bot in participants list")
+							logger.Info().Str("pUser", pUser).Bool("isAdmin", participant.IsAdmin).Bool("isSuperAdmin", participant.IsSuperAdmin).Msg("[RBAC DIAGNOSTIC] Found bot in participants list")
 							if participant.IsAdmin || participant.IsSuperAdmin || ownerUser == botUser {
 								tempAuthorized = true
 							}
@@ -101,6 +102,8 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 				} else {
 					logger.Error().Err(err).Msg("[RBAC DIAGNOSTIC] Failed to fetch group info")
 				}
+			} else {
+				logger.Info().Str("group", chatJID.String()).Bool("isAuthorized", isAuthorized).Msg("[RBAC DIAGNOSTIC] Using cached authority status")
 			}
 
 			if isAuthorized {
@@ -133,13 +136,11 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 
 		// Queue job (Language fetch moved to worker to avoid blocking event listener)
 		senderPhone := GetBarePhone(v.Info.Sender.User)
-		logger.Debug().Str("senderJID", v.Info.Sender.String()).Bool("isFromMe", v.Info.IsFromMe).Msg("[RBAC DIAGNOSTIC] Incoming message sender")
-
 		if v.Info.IsFromMe {
 			// If it's from me (linked device or main), ensure we use the bot's pairing phone
 			if client.Store.ID != nil {
 				senderPhone = GetBarePhone(client.Store.ID.User)
-				logger.Debug().Str("botStoreID", client.Store.ID.String()).Str("attributedPhone", senderPhone).Msg("[RBAC DIAGNOSTIC] Attributed sender to bot account")
+				logger.Info().Str("senderJID", v.Info.Sender.String()).Str("botUser", senderPhone).Msg("[RBAC DIAGNOSTIC] Attributed sender to bot account")
 			}
 		}
 
