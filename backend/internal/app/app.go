@@ -95,7 +95,7 @@ func (a *App) Init() error {
 
 func (a *App) Run() error {
 	// Start Workers
-	cmdDispatcher := commands.NewDispatcher(a.DB, a.LocalDB, a.Cfg.CompanyPrefix, a.Cfg.CompanyName, a.Cfg.AdminPhones, a.Cfg.AdminTimezone)
+	cmdDispatcher := commands.NewDispatcher(a.DB, a.LocalDB, a.Cfg.CompanyPrefix, a.Cfg.CompanyName, a.Cfg.PairingPhone, a.Cfg.AdminTimezone)
 	sender := whatsapp.NewSender(a.WA)
 	for i := 1; i <= 5; i++ {
 		a.WG.Add(1)
@@ -116,7 +116,7 @@ func (a *App) Run() error {
 	}
 
 	// Start Scheduler
-	scheduler.StartDailySummary(a.WA, a.DB, a.Cfg.AdminTimezone, a.Cfg.AllowedGroups)
+	scheduler.StartDailySummary(a.WA, a.DB, a.LocalDB, a.Cfg.AdminTimezone)
 	a.Cron = scheduler.NewManager(a.Cfg, a.DB, a.WA)
 	a.Cron.Start()
 

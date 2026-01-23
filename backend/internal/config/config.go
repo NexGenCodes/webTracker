@@ -15,7 +15,6 @@ import (
 
 type Config struct {
 	DatabaseURL    string
-	AllowedGroups  []string
 	CompanyPrefix  string
 	GeminiAPIKey   string
 	AdminTimezone  string
@@ -134,15 +133,6 @@ func LoadFromEnv() (*Config, error) {
 	_ = godotenv.Load(".env.local")
 	_ = godotenv.Load()
 
-	allowedStr := os.Getenv("WHATSAPP_ALLOWED_GROUPS")
-	var allowedGroups []string
-	if allowedStr != "" {
-		allowedGroups = strings.Split(allowedStr, ",")
-		for i, s := range allowedGroups {
-			allowedGroups[i] = strings.TrimSpace(s)
-		}
-	}
-
 	companyNameEnv := os.Getenv("COMPANY_NAME")
 	companyName := strings.ReplaceAll(companyNameEnv, " ", "")
 	if companyName == "" {
@@ -173,7 +163,6 @@ func LoadFromEnv() (*Config, error) {
 
 	cfg := &Config{
 		DatabaseURL:    os.Getenv("DIRECT_URL"),
-		AllowedGroups:  allowedGroups,
 		CompanyPrefix:  companyPrefix,
 		GeminiAPIKey:   os.Getenv("GEMINI_API_KEY"),
 		AdminTimezone:  os.Getenv("ADMIN_TIMEZONE"),

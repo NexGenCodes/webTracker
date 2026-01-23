@@ -33,18 +33,18 @@ type Dispatcher struct {
 	handlers      map[string]Handler
 	AwbCmd        string
 	CompanyName   string
-	AdminPhones   []string
+	BotPhone      string
 	AdminTimezone string
 }
 
-func NewDispatcher(db *supabase.Client, ldb *localdb.Client, awbCmd string, companyName string, adminPhones []string, adminTimezone string) *Dispatcher {
+func NewDispatcher(db *supabase.Client, ldb *localdb.Client, awbCmd string, companyName string, botPhone string, adminTimezone string) *Dispatcher {
 	d := &Dispatcher{
 		db:            db,
 		ldb:           ldb,
 		handlers:      make(map[string]Handler),
 		AwbCmd:        awbCmd,
 		CompanyName:   companyName,
-		AdminPhones:   adminPhones,
+		BotPhone:      botPhone,
 		AdminTimezone: adminTimezone,
 	}
 	d.registerDefaults()
@@ -92,21 +92,16 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) 
 		senderPhone := ctx.Value("sender_phone").(string)
 		lang, _ := d.ldb.GetUserLanguage(ctx, jid)
 
-		// RBAC DEBUG (Log-Only)
-		isAdmin := false
-		for _, admin := range d.AdminPhones {
-			if senderPhone == admin {
-				isAdmin = true
-				break
-			}
-		}
+		// RBAC: Check if sender is the bot owner
+		isAdmin := (senderPhone == d.BotPhone)
 
-		if rawCmd == "edit" || rawCmd == "delete" {
+		// Only !info is public. All other commands require admin.
+		if rawCmd != "info" {
 			if isAdmin {
 				logger.Info().Str("cmd", rawCmd).Str("sender", senderPhone).Msg("[RBAC DEBUG] Admin command authorized")
 			} else {
-				logger.Warn().Str("cmd", rawCmd).Str("sender", senderPhone).Msg("[RBAC DEBUG] Admin command blocked: sender is not an admin")
-				return &Result{Message: "🚫 *ACCESS DENIED*\n_You do not have permission to use this command._"}, true
+				logger.Warn().Str("cmd", rawCmd).Str("sender", senderPhone).Msg("[RBAC DEBUG] Command blocked: sender is not the bot owner")
+				return &Result{Message: "🚫 *ACCESS DENIED*\n\n_This command is restricted to the bot owner._\n\n💡 You can use `!info [ID]` to track packages."}, true
 			}
 		}
 

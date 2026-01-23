@@ -89,8 +89,10 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 			// Rule: Log-only for now as requested.
 			isAuthorized, cached, _ := ldb.GetGroupAuthority(context.Background(), chatJID.String())
 
-			// Self-healing: If we are the sender (IsFromMe) but cache says we aren't authorized, force a refresh.
-			shouldRefresh := !cached || (v.Info.IsFromMe && !isAuthorized)
+			// Self-healing: Refresh if cache is empty, OR if we are not authorized and a command is sent,
+			// OR if we are the sender (IsFromMe) but cache says we aren't authorized.
+			isCommand := strings.HasPrefix(text, "!") || strings.HasPrefix(text, "#")
+			shouldRefresh := !cached || (isCommand && !isAuthorized) || (v.Info.IsFromMe && !isAuthorized)
 
 			if shouldRefresh {
 				if cached {
@@ -102,19 +104,58 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 					botPhone := GetBarePhone(client.Store.ID.User)
 					ownerUser := GetBarePhone(resp.OwnerJID.User)
 
+					pList := []string{}
+					for i, p := range resp.Participants {
+						if i < 10 {
+							pList = append(pList, GetBarePhone(p.JID.User))
+						}
+					}
+					logger.Info().Str("botPhone", botPhone).Str("botLID", botReference).Str("owner", ownerUser).Interface("participantsSubset", pList).Msg("[RBAC DIAGNOSTIC] Detailed group info")
+
 					tempAuthorized := false
-					for _, participant := range resp.Participants {
-						pUser := GetBarePhone(participant.JID.User)
-						isMatch := pUser == botPhone || (botReference != "" && pUser == botReference)
-						if isMatch {
-							if participant.IsAdmin || participant.IsSuperAdmin || ownerUser == botPhone || (botReference != "" && ownerUser == botReference) {
-								tempAuthorized = true
+					if (botPhone != "" && ownerUser == botPhone) || (botReference != "" && ownerUser == botReference) {
+						logger.Info().Msg("[RBAC DIAGNOSTIC] Bot identified as group OWNER")
+						tempAuthorized = true
+					} else {
+						logger.Info().Int("totalParticipants", len(resp.Participants)).Msg("[RBAC DIAGNOSTIC] Searching for bot in participants")
+						for i, participant := range resp.Participants {
+							pUser := GetBarePhone(participant.JID.User)
+							pUserRaw := participant.JID.User
+							isMatch := (botPhone != "" && pUser == botPhone) || (botReference != "" && pUser == botReference)
+
+							// Log first 5 participants for debugging
+							if i < 5 {
+								logger.Info().
+									Int("index", i).
+									Str("pUserRaw", pUserRaw).
+									Str("pUser", pUser).
+									Str("botPhone", botPhone).
+									Str("botLID", botReference).
+									Bool("isMatch", isMatch).
+									Bool("isAdmin", participant.IsAdmin).
+									Msg("[RBAC DIAGNOSTIC] Participant comparison")
 							}
-							break
+
+							if isMatch {
+								logger.Info().Str("pUser", pUser).Bool("isAdmin", participant.IsAdmin).Bool("isSuperAdmin", participant.IsSuperAdmin).Msg("[RBAC DIAGNOSTIC] Found bot in participants list")
+								if participant.IsAdmin || participant.IsSuperAdmin {
+									tempAuthorized = true
+								}
+								break
+							}
+						}
+
+						if !tempAuthorized {
+							logger.Warn().
+								Str("botPhone", botPhone).
+								Str("botLID", botReference).
+								Msg("[RBAC DIAGNOSTIC] Bot NOT found in any participant - check phone number format")
 						}
 					}
 					isAuthorized = tempAuthorized
 					ldb.SetGroupAuthority(context.Background(), chatJID.String(), isAuthorized)
+				} else {
+					logger.Error().Err(err).Msg("[RBAC DIAGNOSTIC] Failed to fetch group info")
 				}
 			}
 
@@ -144,17 +185,14 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 		}
 
 		// RBAC DEBUG LOGGING (Verification Phase)
-		isAdmin := false
-		for _, admin := range cfg.AdminPhones {
-			if senderPhone == admin {
-				isAdmin = true
-				break
-			}
-		}
+		// The bot owner is the only admin (identified by pairing phone)
+		botPhone := GetBarePhone(client.Store.ID.User)
+		isAdmin := (senderPhone == botPhone)
+
 		if isAdmin {
-			logger.Info().Str("sender", senderPhone).Msg("[RBAC DEBUG] Account identified as ADMIN")
+			logger.Info().Str("sender", senderPhone).Msg("[RBAC DEBUG] Account identified as ADMIN (Bot Owner)")
 		} else {
-			logger.Debug().Str("sender", senderPhone).Interface("adminList", cfg.AdminPhones).Msg("[RBAC DEBUG] Account identified as REGULAR USER")
+			logger.Debug().Str("sender", senderPhone).Str("botPhone", botPhone).Msg("[RBAC DEBUG] Account identified as REGULAR USER")
 		}
 
 		queue <- models.Job{

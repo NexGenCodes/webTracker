@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"webtracker-bot/internal/localdb"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/supabase"
@@ -14,7 +15,7 @@ import (
 	"go.mau.fi/whatsmeow/types"
 )
 
-func StartDailySummary(client *whatsmeow.Client, db *supabase.Client, timezone string, allowedGroups []string) {
+func StartDailySummary(client *whatsmeow.Client, db *supabase.Client, ldb *localdb.Client, timezone string) {
 	location, err := time.LoadLocation(timezone)
 	if err != nil {
 		logger.Warn().Str("timezone", timezone).Err(err).Msg("Invalid timezone, using UTC")
@@ -27,6 +28,19 @@ func StartDailySummary(client *whatsmeow.Client, db *supabase.Client, timezone s
 			now := time.Now().In(location)
 			if now.Hour() == 23 && now.Minute() == 0 {
 				logger.Info().Msg("Triggering daily summary")
+
+				// Fetch currently authorized groups
+				allowedGroups, err := ldb.GetAuthorizedGroups(context.Background())
+				if err != nil {
+					logger.Error().Err(err).Msg("Failed to fetch authorized groups for daily summary")
+					continue
+				}
+
+				if len(allowedGroups) == 0 {
+					logger.Info().Msg("No authorized groups found for daily summary. Skipping.")
+					continue
+				}
+
 				pending, transit, err := db.GetTodayStats(location)
 				if err != nil {
 					logger.Error().Err(err).Msg("Failed to get daily stats")
