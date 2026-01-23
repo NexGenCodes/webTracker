@@ -58,6 +58,7 @@ func (w *Worker) process(job models.Job) {
 	// 2. Check for Commands (Explicit)
 	ctx := context.WithValue(context.Background(), "jid", job.SenderJID.String())
 	ctx = context.WithValue(ctx, "sender_phone", job.SenderPhone)
+	ctx = context.WithValue(ctx, "is_admin", job.IsAdmin)
 	if res, ok := w.Cmd.Dispatch(ctx, job.Text); ok {
 		w.Sender.Reply(job.ChatJID, job.SenderJID, res.Message, job.MessageID, job.Text)
 

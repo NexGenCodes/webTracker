@@ -59,8 +59,36 @@ func (c *Client) initSchema(ctx context.Context) error {
 		is_authorized BOOLEAN NOT NULL DEFAULT 0,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
+
+	CREATE TABLE IF NOT EXISTS SystemConfig (
+		key TEXT PRIMARY KEY,
+		value TEXT NOT NULL,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
 	`
 	_, err := c.db.ExecContext(ctx, query)
+	return err
+}
+
+// GetSystemConfig fetches a persistent configuration value.
+func (c *Client) GetSystemConfig(ctx context.Context, key string) (string, error) {
+	query := `SELECT value FROM SystemConfig WHERE key = ?`
+	var val string
+	err := c.db.QueryRowContext(ctx, query, key).Scan(&val)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return val, err
+}
+
+// SetSystemConfig updates or inserts a persistent configuration value.
+func (c *Client) SetSystemConfig(ctx context.Context, key string, value string) error {
+	query := `
+	INSERT INTO SystemConfig (key, value, updated_at) 
+	VALUES (?, ?, CURRENT_TIMESTAMP)
+	ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP;
+	`
+	_, err := c.db.ExecContext(ctx, query, key, value)
 	return err
 }
 

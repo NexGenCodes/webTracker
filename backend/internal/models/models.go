@@ -93,6 +93,7 @@ type Job struct {
 	Text        string
 	SenderPhone string
 	Language    string
+	IsAdmin     bool
 }
 
 func StrPtr(s string) *string {

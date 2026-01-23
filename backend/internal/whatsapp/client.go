@@ -70,127 +70,105 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 		// Identify Chat / Sender Context
 		chatJID := v.Info.Chat
 		isGroup := chatJID.Server == "g.us"
-		isPrivate := !isGroup
 
 		senderPhone := GetBarePhone(v.Info.Sender.User)
-		botReference := "" // Alternative JID (LID) if available
 
-		if v.Info.IsFromMe {
-			if client.Store.ID != nil {
-				senderPhone = GetBarePhone(client.Store.ID.User)
-				botReference = GetBarePhone(v.Info.Sender.User)
-				logger.Info().Str("senderJID", v.Info.Sender.String()).Str("botPhone", senderPhone).Str("botLID", botReference).Msg("[RBAC DIAGNOSTIC] Attributed sender to bot account")
+		// 1. Identify Bot Identity (Phone & LID)
+		botPhone := ""
+		if client.Store.ID != nil {
+			botPhone = GetBarePhone(client.Store.ID.User)
+		}
+
+		// 2. Persistent Bot LID Mapping
+		botLID, _ := ldb.GetSystemConfig(context.Background(), "bot_lid")
+		if v.Info.IsFromMe && client.Store.ID != nil {
+			senderPhone = botPhone
+			newLID := GetBarePhone(v.Info.Sender.User)
+			if newLID != "" && newLID != botLID {
+				botLID = newLID
+				_ = ldb.SetSystemConfig(context.Background(), "bot_lid", botLID)
+				logger.Info().Str("botLID", botLID).Msg("[RBAC DIAGNOSTIC] Discovered and persisted bot LID")
 			}
 		}
 
-		allowed := false
+		isAuthorized := false  // Bot's permission in group
+		isSenderAdmin := false // Sender's permission to control bot
 
 		if isGroup {
-			// Rule: Log-only for now as requested.
-			isAuthorized, cached, _ := ldb.GetGroupAuthority(context.Background(), chatJID.String())
+			cachedAuth, cached, _ := ldb.GetGroupAuthority(context.Background(), chatJID.String())
 
-			// Self-healing: Refresh if cache is empty, OR if we are not authorized and a command is sent,
-			// OR if we are the sender (IsFromMe) but cache says we aren't authorized.
+			// Force refresh if first time, OR if bot owner/admin is interacting but cache says unauthorized
 			isCommand := strings.HasPrefix(text, "!") || strings.HasPrefix(text, "#")
-			shouldRefresh := !cached || (isCommand && !isAuthorized) || (v.Info.IsFromMe && !isAuthorized)
+			shouldRefresh := !cached || (isCommand && !cachedAuth) || (v.Info.IsFromMe && !cachedAuth)
 
 			if shouldRefresh {
-				if cached {
-					logger.Info().Str("group", chatJID.String()).Msg("[RBAC DIAGNOSTIC] Forcing refresh: Bot sent message but cache says NOT authorized")
-				}
-
 				resp, err := client.GetGroupInfo(context.Background(), chatJID)
 				if err == nil {
-					botPhone := GetBarePhone(client.Store.ID.User)
 					ownerUser := GetBarePhone(resp.OwnerJID.User)
-
-					pList := []string{}
-					for i, p := range resp.Participants {
-						if i < 10 {
-							pList = append(pList, GetBarePhone(p.JID.User))
-						}
-					}
-					logger.Info().Str("botPhone", botPhone).Str("botLID", botReference).Str("owner", ownerUser).Interface("participantsSubset", pList).Msg("[RBAC DIAGNOSTIC] Detailed group info")
-
 					tempAuthorized := false
-					if (botPhone != "" && ownerUser == botPhone) || (botReference != "" && ownerUser == botReference) {
-						logger.Info().Msg("[RBAC DIAGNOSTIC] Bot identified as group OWNER")
+
+					// Bot is authorized if it's the owner or an admin
+					if (botPhone != "" && ownerUser == botPhone) || (botLID != "" && ownerUser == botLID) {
 						tempAuthorized = true
-					} else {
-						logger.Info().Int("totalParticipants", len(resp.Participants)).Msg("[RBAC DIAGNOSTIC] Searching for bot in participants")
-						for i, participant := range resp.Participants {
-							pUser := GetBarePhone(participant.JID.User)
-							pUserRaw := participant.JID.User
-							isMatch := (botPhone != "" && pUser == botPhone) || (botReference != "" && pUser == botReference)
+					}
 
-							// Log first 5 participants for debugging
-							if i < 5 {
-								logger.Info().
-									Int("index", i).
-									Str("pUserRaw", pUserRaw).
-									Str("pUser", pUser).
-									Str("botPhone", botPhone).
-									Str("botLID", botReference).
-									Bool("isMatch", isMatch).
-									Bool("isAdmin", participant.IsAdmin).
-									Msg("[RBAC DIAGNOSTIC] Participant comparison")
-							}
-
-							if isMatch {
-								logger.Info().Str("pUser", pUser).Bool("isAdmin", participant.IsAdmin).Bool("isSuperAdmin", participant.IsSuperAdmin).Msg("[RBAC DIAGNOSTIC] Found bot in participants list")
-								if participant.IsAdmin || participant.IsSuperAdmin {
-									tempAuthorized = true
-								}
-								break
+					for _, p := range resp.Participants {
+						pUser := GetBarePhone(p.JID.User)
+						isBot := (botPhone != "" && pUser == botPhone) || (botLID != "" && pUser == botLID)
+						if isBot {
+							if p.IsAdmin || p.IsSuperAdmin {
+								tempAuthorized = true
 							}
 						}
 
-						if !tempAuthorized {
-							logger.Warn().
-								Str("botPhone", botPhone).
-								Str("botLID", botReference).
-								Msg("[RBAC DIAGNOSTIC] Bot NOT found in any participant - check phone number format")
+						// Is this participant the SENDER?
+						if GetBarePhone(v.Info.Sender.User) == pUser {
+							if p.IsAdmin || p.IsSuperAdmin || pUser == ownerUser {
+								isSenderAdmin = true
+							}
 						}
 					}
 					isAuthorized = tempAuthorized
 					ldb.SetGroupAuthority(context.Background(), chatJID.String(), isAuthorized)
-				} else {
-					logger.Error().Err(err).Msg("[RBAC DIAGNOSTIC] Failed to fetch group info")
+				}
+			} else {
+				isAuthorized = cachedAuth
+				if v.Info.IsFromMe {
+					isSenderAdmin = true
 				}
 			}
 
-			if isAuthorized {
-				logger.Info().Str("group", chatJID.String()).Msg("[RBAC DEBUG] Bot is Admin/Owner in this group")
-			} else {
-				logger.Warn().Str("group", chatJID.String()).Msg("[RBAC DEBUG] Bot is NOT Admin in this group (Not blocking - Log Only)")
+			if !isAuthorized && !isSenderAdmin {
+				logger.Warn().Str("group", chatJID.String()).Msg("[RBAC DEBUG] Bot NOT authorized and sender is not admin")
+				return
 			}
-			allowed = true // Log only for groups
-		} else if isPrivate {
+		} else {
+			// Private chat rules
 			if cfg.AllowPrivateChat {
-				allowed = true
+				isAuthorized = true
 			} else {
 				hasGroups, _ := ldb.HasAuthorizedGroups(context.Background())
-				if !hasGroups {
-					allowed = true // Fallback
-					logger.Debug().Msg("[RBAC DEBUG] Private chat allowed (Fallback: Bot is not Admin in any group)")
-				} else {
-					allowed = false
-					logger.Debug().Msg("[RBAC DEBUG] Private chat blocked: Bot is Admin in some groups")
-				}
+				isAuthorized = !hasGroups
+			}
+			if senderPhone == botPhone || (botLID != "" && senderPhone == botLID) {
+				isSenderAdmin = true
 			}
 		}
 
-		if !allowed {
+		if v.Info.IsFromMe {
+			isSenderAdmin = true // Always trust self
+		}
+
+		// Final check - we either need the bot to be authorized in the group,
+		// OR the sender to be an admin/owner who can override.
+		if !isAuthorized && !isSenderAdmin {
 			return
 		}
 
-		// RBAC DEBUG LOGGING (Verification Phase)
-		// The bot owner is the only admin (identified by pairing phone)
-		botPhone := GetBarePhone(client.Store.ID.User)
-		isAdmin := (senderPhone == botPhone)
+		isAdmin := isSenderAdmin || (senderPhone == botPhone)
 
 		if isAdmin {
-			logger.Info().Str("sender", senderPhone).Msg("[RBAC DEBUG] Account identified as ADMIN (Bot Owner)")
+			logger.Info().Str("sender", senderPhone).Msg("[RBAC DEBUG] Account identified as ADMIN (Bot Owner or Group Admin)")
 		} else {
 			logger.Debug().Str("sender", senderPhone).Str("botPhone", botPhone).Msg("[RBAC DEBUG] Account identified as REGULAR USER")
 		}
@@ -201,6 +179,7 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 			MessageID:   v.Info.ID,
 			Text:        strings.TrimSpace(text),
 			SenderPhone: senderPhone,
+			IsAdmin:     isAdmin,
 		}
 	}
 }
