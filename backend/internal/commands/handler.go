@@ -118,10 +118,19 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) 
 
 		lang, _ := d.ldb.GetUserLanguage(ctx, jid)
 
+		// Owner-only commands (Broadcast, Status)
+		isOwnerOnlyCmd := rawCmd == "broadcast" || rawCmd == "status"
+		if isOwnerOnlyCmd {
+			if !isOwner {
+				logger.Warn().Str("cmd", rawCmd).Str("sender", senderPhone).Msg("[RBAC DEBUG] Owner-only command blocked")
+				return &Result{Message: "🚫 *OWNER ACCESS ONLY*\n\n_This command is restricted to the bot owner only._"}, true
+			}
+		}
+
 		// Public commands (Info, Help) are allowed for all users.
 		// Lang and all other management commands require admin status.
 		isPublicCmd := rawCmd == "info" || rawCmd == "help"
-		if !isPublicCmd {
+		if !isPublicCmd && !isOwnerOnlyCmd {
 			if isAdmin {
 				logger.Info().Str("cmd", rawCmd).Str("sender", senderPhone).Msg("[RBAC DEBUG] Admin command authorized")
 			} else {
