@@ -81,11 +81,15 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 			if !cached {
 				resp, err := client.GetGroupInfo(context.Background(), chatJID)
 				if err == nil {
-					botUser := client.Store.ID.User
-					ownerUser := resp.OwnerJID.User
+					botUser := GetBarePhone(client.Store.ID.User)
+					ownerUser := GetBarePhone(resp.OwnerJID.User)
+					logger.Debug().Str("botUser", botUser).Str("ownerUser", ownerUser).Msg("[RBAC DIAGNOSTIC] Checking group admin status")
+
 					tempAuthorized := false
 					for _, participant := range resp.Participants {
-						if participant.JID.User == botUser {
+						pUser := GetBarePhone(participant.JID.User)
+						if pUser == botUser {
+							logger.Debug().Str("pUser", pUser).Bool("isAdmin", participant.IsAdmin).Bool("isSuperAdmin", participant.IsSuperAdmin).Msg("[RBAC DIAGNOSTIC] Found bot in participants list")
 							if participant.IsAdmin || participant.IsSuperAdmin || ownerUser == botUser {
 								tempAuthorized = true
 							}
@@ -94,6 +98,8 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 					}
 					isAuthorized = tempAuthorized
 					ldb.SetGroupAuthority(context.Background(), chatJID.String(), isAuthorized)
+				} else {
+					logger.Error().Err(err).Msg("[RBAC DIAGNOSTIC] Failed to fetch group info")
 				}
 			}
 
@@ -127,10 +133,13 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 
 		// Queue job (Language fetch moved to worker to avoid blocking event listener)
 		senderPhone := GetBarePhone(v.Info.Sender.User)
+		logger.Debug().Str("senderJID", v.Info.Sender.String()).Bool("isFromMe", v.Info.IsFromMe).Msg("[RBAC DIAGNOSTIC] Incoming message sender")
+
 		if v.Info.IsFromMe {
 			// If it's from me (linked device or main), ensure we use the bot's pairing phone
 			if client.Store.ID != nil {
 				senderPhone = GetBarePhone(client.Store.ID.User)
+				logger.Debug().Str("botStoreID", client.Store.ID.String()).Str("attributedPhone", senderPhone).Msg("[RBAC DIAGNOSTIC] Attributed sender to bot account")
 			}
 		}
 
