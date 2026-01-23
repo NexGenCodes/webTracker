@@ -104,14 +104,15 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 			if shouldRefresh {
 				resp, err := client.GetGroupInfo(context.Background(), chatJID)
 				if err == nil {
-					ownerUser := GetBarePhone(resp.OwnerJID.User)
+					ownerUserJID := GetBarePhone(resp.OwnerJID.User)
 					tempAuthorized := false
 
-					// Bot is authorized if it's the owner or an admin
-					if (botPhone != "" && ownerUser == botPhone) || (botLID != "" && ownerUser == botLID) {
+					// 1. Is the BOT the creator/owner of the group?
+					if (botPhone != "" && ownerUserJID == botPhone) || (botLID != "" && ownerUserJID == botLID) {
 						tempAuthorized = true
 					}
 
+					// 2. Scan participants for Bot admin status
 					for _, p := range resp.Participants {
 						pUser := GetBarePhone(p.JID.User)
 						isBot := (botPhone != "" && pUser == botPhone) || (botLID != "" && pUser == botLID)
@@ -119,27 +120,55 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 							if p.IsAdmin || p.IsSuperAdmin {
 								tempAuthorized = true
 							}
+							break
 						}
+					}
 
-						// Is this participant the SENDER?
-						if GetBarePhone(v.Info.Sender.User) == pUser {
-							if p.IsAdmin || p.IsSuperAdmin || pUser == ownerUser {
-								isSenderAdmin = true
+					// Update cache
+					isAuthorized = tempAuthorized
+					ldb.SetGroupAuthority(context.Background(), chatJID.String(), isAuthorized)
+
+					// 3. If Bot IS authorized, scan for Sender permissions
+					if isAuthorized {
+						for _, p := range resp.Participants {
+							pUser := GetBarePhone(p.JID.User)
+							if GetBarePhone(v.Info.Sender.User) == pUser {
+								if p.IsAdmin || p.IsSuperAdmin || pUser == ownerUserJID {
+									isSenderAdmin = true
+								}
+								break
 							}
 						}
 					}
-					isAuthorized = tempAuthorized
-					ldb.SetGroupAuthority(context.Background(), chatJID.String(), isAuthorized)
 				}
 			} else {
 				isAuthorized = cachedAuth
-				if v.Info.IsFromMe {
-					isSenderAdmin = true
+				// If authorized, check sender admin status if it's a command
+				if isAuthorized {
+					if v.Info.IsFromMe {
+						isSenderAdmin = true
+					} else if isCommand {
+						// Need full info to check if SENDER is an admin
+						resp, err := client.GetGroupInfo(context.Background(), chatJID)
+						if err == nil {
+							ownerUserJID := GetBarePhone(resp.OwnerJID.User)
+							senderBare := GetBarePhone(v.Info.Sender.User)
+							for _, p := range resp.Participants {
+								if GetBarePhone(p.JID.User) == senderBare {
+									if p.IsAdmin || p.IsSuperAdmin || GetBarePhone(p.JID.User) == ownerUserJID {
+										isSenderAdmin = true
+									}
+									break
+								}
+							}
+						}
+					}
 				}
 			}
 
-			if !isAuthorized && !isSenderAdmin {
-				logger.Warn().Str("group", chatJID.String()).Msg("[RBAC DEBUG] Bot NOT authorized and sender is not admin")
+			// STRICT RULE: If bot is not Admin/Owner, it completely ignores the group.
+			if !isAuthorized {
+				logger.Debug().Str("group", chatJID.String()).Msg("[RBAC DEBUG] Bot ignored group: Not an Admin/Owner")
 				return
 			}
 		} else {
