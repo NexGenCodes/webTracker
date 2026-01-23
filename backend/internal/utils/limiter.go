@@ -6,6 +6,7 @@ import (
 )
 
 type UserLimit struct {
+	sync.Mutex
 	Count      int
 	LastAccess time.Time
 }
@@ -27,6 +28,8 @@ func Allow(userID string) (bool, time.Duration) {
 	}
 
 	limit := val.(*UserLimit)
+	limit.Lock()
+	defer limit.Unlock()
 
 	// Reset window if expired
 	if now.Sub(limit.LastAccess) > window {

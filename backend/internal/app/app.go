@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
 	"webtracker-bot/internal/commands"
 	"webtracker-bot/internal/config"
@@ -119,6 +120,20 @@ func (a *App) Run() error {
 	scheduler.StartDailySummary(a.WA, a.DB, a.LocalDB, a.Cfg.AdminTimezone)
 	a.Cron = scheduler.NewManager(a.Cfg, a.DB, a.WA)
 	a.Cron.Start()
+
+	// Start Rate Limiter Cleanup (every 5 minutes)
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				utils.CleanupLimits()
+			case <-a.Context.Done():
+				return
+			}
+		}
+	}()
 
 	// Connect to WhatsApp
 	if err := a.connectWA(); err != nil {
