@@ -151,19 +151,16 @@ func (c *Client) SetGroupAuthority(ctx context.Context, jid string, isAuthorized
 
 // HasAuthorizedGroups checks if the bot is admin in at least one cached group.
 func (c *Client) HasAuthorizedGroups(ctx context.Context) (bool, error) {
-	query := `SELECT COUNT(*) FROM GroupAuthority WHERE is_authorized = 1 AND updated_at > ?`
+	query := `SELECT COUNT(*) FROM GroupAuthority WHERE is_authorized = 1`
 	var count int
-	// Use same TTL as GetGroupAuthority (1 hour)
-	threshold := time.Now().Add(-time.Hour)
-	err := c.db.QueryRowContext(ctx, query, threshold).Scan(&count)
+	err := c.db.QueryRowContext(ctx, query).Scan(&count)
 	return count > 0, err
 }
 
 // GetAuthorizedGroups returns a list of all group JIDs where the bot is authorized.
 func (c *Client) GetAuthorizedGroups(ctx context.Context) ([]string, error) {
-	query := `SELECT jid FROM GroupAuthority WHERE is_authorized = 1 AND updated_at > ?`
-	threshold := time.Now().Add(-time.Hour)
-	rows, err := c.db.QueryContext(ctx, query, threshold)
+	query := `SELECT jid FROM GroupAuthority WHERE is_authorized = 1`
+	rows, err := c.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -177,4 +174,12 @@ func (c *Client) GetAuthorizedGroups(ctx context.Context) ([]string, error) {
 		}
 	}
 	return groups, nil
+}
+
+// CountAuthorizedGroups returns the total number of authorized groups.
+func (c *Client) CountAuthorizedGroups(ctx context.Context) (int, error) {
+	query := `SELECT COUNT(*) FROM GroupAuthority WHERE is_authorized = 1`
+	var count int
+	err := c.db.QueryRowContext(ctx, query).Scan(&count)
+	return count, err
 }
