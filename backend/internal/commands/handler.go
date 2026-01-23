@@ -23,7 +23,7 @@ type Result struct {
 
 // Handler defines the interface all bot commands must implement.
 type Handler interface {
-	Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string) Result
+	Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result
 }
 
 // Dispatcher routes messages starting with "!" to the appropriate handler.
@@ -103,7 +103,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) 
 			}
 		}
 
-		res := handler.Execute(ctx, d.db, d.ldb, args, lang)
+		res := handler.Execute(ctx, d.db, d.ldb, args, lang, isAdmin)
 		if res.Language != "" {
 			d.ldb.SetUserLanguage(ctx, jid, res.Language)
 		}
@@ -123,7 +123,7 @@ type StatsHandler struct {
 	AdminTimezone string
 }
 
-func (h *StatsHandler) Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string) Result {
+func (h *StatsHandler) Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
 	if len(args) > 0 {
 		return Result{Message: "⚠️ *INCORRECT USAGE*\n_Please send only `!stats` without any extra text._"}
 	}
@@ -152,16 +152,20 @@ type InfoHandler struct {
 	CompanyPrefix string
 }
 
-func (h *InfoHandler) Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string) Result {
+func (h *InfoHandler) Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
 	if len(args) < 1 {
 		company := strings.ToUpper(h.CompanyName)
 		if company == "" {
 			company = "COMMAND"
 		}
 		msg := fmt.Sprintf("🚀 *%s COMMAND CENTER*\n\n", company) +
-			"━━━━━━━━━━━━━━━━━━━━━━━\n" +
-			"1️⃣ `!stats` - Daily Operations\n" +
-			"2️⃣ `!info [TrackingID]` - Shipment Information Tracker\n" +
+			"━━━━━━━━━━━━━━━━━━━━━━━\n"
+
+		if isAdmin {
+			msg += "1️⃣ `!stats` - Daily Operations Summary\n"
+		}
+
+		msg += "2️⃣ `!info [TrackingID]` - Shipment Information Tracker\n" +
 			"━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
 			"*PRO TIP:*\n" +
 			fmt.Sprintf("_Use `!info %s-123456789` for full details._", h.CompanyPrefix)
@@ -187,41 +191,50 @@ type HelpHandler struct {
 	CompanyPrefix string
 }
 
-func (h *HelpHandler) Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string) Result {
+func (h *HelpHandler) Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
 	company := strings.ToUpper(h.CompanyName)
 	if company == "" {
 		company = "LOGISTICS"
 	}
 
-	msg := fmt.Sprintf("📖 *%s SERVICE MENU*\n\n", company) +
-		"━━━━ COMMANDS ━━━━\n" +
-		"1️⃣ `!stats` - Daily Operations\n" +
-		"2️⃣ `!info [ID]` - Check Status\n" +
-		"3️⃣ `!edit [field] [value]` - Fix mistakes (Admin)\n" +
-		"4️⃣ `!delete [ID]` - Remove shipment (Admin)\n" +
-		"5️⃣ `!lang [code]` - Switch language (en, pt, es, de)\n" +
-		"6️⃣ `!help` - Show this menu\n" +
-		"━━━━━━━━━━━━━━━━━━━\n\n" +
-		"*📦 HOW TO REGISTER SHIPMENT INFORMATION:*\n" +
-		"_Simply send a message with these details:_\n\n" +
-		"Sender: John Doe\n" +
-		"Receiver Name: Jane Smith\n" +
-		"Receiver Phone: +234 800 123 4567\n" +
-		"Receiver Address: 123 Main St, Lagos\n" +
-		"Receiver Country: Nigeria\n" +
-		"Sender Country: UK\n\n" +
-		"*🛠️ HOW TO EDIT:*\n" +
-		"`!edit name Jane Doe` (Fixes last shipment)\n" +
-		fmt.Sprintf("`!edit %s-123 name Jane Doe` (Fixes specific ID)\n", h.CompanyPrefix) +
-		"_Fields: name, phone, address, country, email, id, sender, origin_\n\n" +
-		"*PRO TIP:* _You can use shortcuts like #stats or #edit._"
+	var msg string
+	if isAdmin {
+		msg = fmt.Sprintf("🛠️ *%s - ADMIN CONTROL PANEL*\n\n", company) +
+			"━━━━ MANAGEMENT ━━━━\n" +
+			"📊 `!stats` - Daily Operations\n" +
+			"📝 `!edit [field] [value]` - Fix shipment mistakes\n" +
+			"🗑️ `!delete [ID]` - Permanently remove shipment\n" +
+			"━━━━ GENERAL ━━━━\n" +
+			"🔍 `!info [ID]` - Check shipment status\n" +
+			"🌐 `!lang [code]` - Switch language (en, pt, es, de)\n" +
+			"❓ `!help` - Show this admin menu\n" +
+			"━━━━━━━━━━━━━━━━━━━\n\n" +
+			"*🛠️ HOW TO EDIT:*\n" +
+			"`!edit name Jane Doe` (Fixes last shipment)\n" +
+			fmt.Sprintf("`!edit %s-123 name Jane Doe` (Fixes specific ID)\n", h.CompanyPrefix) +
+			"_Fields: name, phone, address, country, email, id, sender, origin_"
+	} else {
+		msg = fmt.Sprintf("📖 *%s - CUSTOMER SERVICE*\n\n", company) +
+			"━━━━ AVAILABLE COMMANDS ━━━━\n" +
+			"🔍 `!info [ID]` - Track your shipment\n" +
+			"🌐 `!lang [code]` - Change language\n" +
+			"❓ `!help` - Show this instructions menu\n" +
+			"━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
+			"*📦 HOW TO REGISTER SHIPMENT:*\n" +
+			"_Send a message with these details:_\n\n" +
+			"Sender: John Doe\n" +
+			"Receiver Name: Jane Smith\n" +
+			"Receiver Phone: +234 800 123 4567\n" +
+			"Receiver Address: 123 Main St, Lagos\n\n" +
+			"*PRO TIP:* _You can use shortcuts like #info or #help._"
+	}
 
 	return Result{Message: msg}
 }
 
 type LangHandler struct{}
 
-func (h *LangHandler) Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string) Result {
+func (h *LangHandler) Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
 	if len(args) < 1 {
 		return Result{Message: "🌐 *LANGUAGE MENU*\n\nUsage: `!lang [en|pt|es|de]`\n\nExample: `!lang pt` para Português"}
 	}
@@ -244,7 +257,7 @@ type EditHandler struct {
 	CompanyPrefix string
 }
 
-func (h *EditHandler) Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string) Result {
+func (h *EditHandler) Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
 	if len(args) < 2 {
 		return Result{Message: "📝 *EDIT SHIPMENT INFORMATION*\n\nUsage:\n`!edit [field] [new_value]`\n\nFields: `name`, `phone`, `address`, `country`, `email`, `id`, `sender`, `origin`"}
 	}
@@ -302,7 +315,7 @@ func (h *EditHandler) Execute(ctx context.Context, db *supabase.Client, ldb *loc
 // DeleteHandler handles !delete [trackingID]
 type DeleteHandler struct{}
 
-func (h *DeleteHandler) Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string) Result {
+func (h *DeleteHandler) Execute(ctx context.Context, db *supabase.Client, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
 	if len(args) < 1 {
 		return Result{Message: "🗑️ *DELETE SHIPMENT*\n\nUsage: `!delete [TrackingID]`"}
 	}
