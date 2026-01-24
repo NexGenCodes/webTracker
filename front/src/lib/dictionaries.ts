@@ -1311,6 +1311,7 @@ export const dictionaries = {
             createNew: "إنشاء جديد",
             totalShipments: "إجمالي الشحنات",
             inTransit: "قيد النقل",
+            outForDelivery: "جاري التوصيل",
             delivered: "تم التسليم",
             pending: "قيد الانتظار",
             canceled: "ملغى",
