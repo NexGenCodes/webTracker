@@ -234,18 +234,11 @@ func LoadFromEnv() (*Config, error) {
 	if cfg.LogPath == "" {
 		cfg.LogPath = filepath.Join(workDir, "logs")
 	}
-
-	if cfg.DatabaseURL == "" {
-		return nil, fmt.Errorf("DATABASE_URL or DIRECT_URL must be set")
-	}
-
 	return cfg, nil
 }
 
 func (cfg *Config) Validate() error {
-	if cfg.DatabaseURL == "" {
-		return fmt.Errorf("DIRECT_URL or DATABASE_URL is missing")
-	}
+	// SQLite is used locally, no DATABASE_URL needed
 	if cfg.GeminiAPIKey == "" {
 		return fmt.Errorf("GEMINI_API_KEY is missing")
 	}
