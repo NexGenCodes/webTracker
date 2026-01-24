@@ -144,32 +144,33 @@ function HomeContent() {
             <div className="glass-panel p-5 md:p-14 shadow-3xl border-border/50 overflow-hidden relative">
               <div className="absolute top-0 right-0 w-96 h-96 bg-accent/5 rounded-full -mr-48 -mt-48 blur-3xl pointer-events-none" />
 
-              {/* Status Header */}
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 md:gap-10 mb-8 md:mb-16 pb-8 md:pb-12 border-b border-border relative z-10">
-                <div className="flex items-center gap-6">
+              {/* Status Header - Mobile First */}
+              <div className="flex flex-col gap-6 md:flex-row md:justify-between md:items-center mb-8 md:mb-16 pb-8 md:pb-12 border-b border-border relative z-10">
+                <div className="flex items-center gap-4 md:gap-6">
                   <div className="relative">
                     <div className="absolute inset-0 bg-accent blur-3xl opacity-20 animate-pulse" />
-                    <div className="relative w-24 h-24 bg-accent rounded-[2.5rem] flex items-center justify-center text-white shadow-2xl shadow-accent/40">
-                      <Package size={36} strokeWidth={2.5} />
+                    <div className="relative w-16 h-16 md:w-24 md:h-24 bg-accent rounded-[2rem] md:rounded-[2.5rem] flex items-center justify-center text-white shadow-2xl shadow-accent/40">
+                      <Package size={28} strokeWidth={2.5} className="md:hidden" />
+                      <Package size={36} strokeWidth={2.5} className="hidden md:block" />
                     </div>
                   </div>
-                  <div>
-                    <span className="text-accent text-[11px] font-black uppercase tracking-[0.4em] mb-2 block">{dict.shipment.status}</span>
-                    <h2 className="text-2xl md:text-6xl font-black text-text-main tracking-tighter uppercase leading-none">
+                  <div className="flex-1">
+                    <span className="text-accent text-[10px] md:text-[11px] font-black uppercase tracking-[0.3em] md:tracking-[0.4em] mb-1 md:mb-2 block">{dict.shipment.status}</span>
+                    <h2 className="text-xl md:text-4xl lg:text-6xl font-black text-text-main tracking-tighter uppercase leading-none">
                       {shippingData.isArchived ? dict.shipment.finalized : shippingData.status.replace(/_/g, ' ')}
                     </h2>
                   </div>
                 </div>
 
-                <div className="flex flex-col items-start md:items-end">
-                  <span className="text-text-muted text-[11px] font-black uppercase tracking-[0.4em] mb-3">{dict.shipment.trackingId}</span>
-                  <div className="flex items-center gap-4 bg-surface-muted px-4 md:px-6 py-4 rounded-3xl border border-border group/copy transition-all hover:border-accent/30 shadow-inner">
-                    <span className="font-mono text-lg md:text-2xl font-black tracking-wide md:tracking-widest text-text-main group-hover:text-accent transition-colors break-all md:break-normal">{shippingData.trackingNumber}</span>
+                <div className="flex flex-col items-start md:items-end w-full md:w-auto">
+                  <span className="text-text-muted text-[10px] md:text-[11px] font-black uppercase tracking-[0.3em] md:tracking-[0.4em] mb-2 md:mb-3">{dict.shipment.trackingId}</span>
+                  <div className="flex items-center gap-2 md:gap-4 bg-surface-muted px-3 md:px-6 py-3 md:py-4 rounded-2xl md:rounded-3xl border border-border group/copy transition-all hover:border-accent/30 shadow-inner w-full md:w-auto">
+                    <span className="font-mono text-sm md:text-lg lg:text-2xl font-black tracking-wide md:tracking-widest text-text-main group-hover:text-accent transition-colors break-all">{shippingData.trackingNumber}</span>
                     <button
                       onClick={() => copyToClipboard(shippingData.trackingNumber)}
-                      className="p-2.5 hover:bg-accent/10 rounded-2xl text-text-muted hover:text-accent transition-all active:scale-90"
+                      className="p-2 md:p-2.5 hover:bg-accent/10 rounded-xl md:rounded-2xl text-text-muted hover:text-accent transition-all active:scale-90 shrink-0"
                     >
-                      {copied ? <Check size={20} className="text-success" /> : <Copy size={20} strokeWidth={2.5} />}
+                      {copied ? <Check size={18} className="text-success md:w-5 md:h-5" /> : <Copy size={18} strokeWidth={2.5} className="md:w-5 md:h-5" />}
                     </button>
                   </div>
                 </div>
@@ -230,29 +231,59 @@ function HomeContent() {
                       {dict.shipment.latestUpdates}
                       <span className="h-px flex-1 bg-accent/20" />
                     </h4>
-                    <div className="space-y-12 relative border-l-2 border-border ml-3 pl-10 py-2">
+                    <div className="space-y-8 md:space-y-12 relative border-l-2 border-border ml-2 md:ml-3 pl-6 md:pl-10 py-2">
                       {shippingData.timeline ? (
                         shippingData.timeline.map((event, i) => (
                           <div key={i} className="relative group/event">
                             <div className={cn(
-                              "absolute left-[-47px] top-1.5 w-6 h-6 rounded-full border-4 border-bg transition-all duration-500",
+                              "absolute left-[-35px] md:left-[-47px] top-1.5 w-5 h-5 md:w-6 md:h-6 rounded-full border-3 md:border-4 border-bg transition-all duration-500",
                               event.is_completed ? "bg-accent scale-125 shadow-lg shadow-accent/40" : "bg-border opacity-50"
                             )} />
-                            <div className="flex items-center gap-4 mb-2">
-                              <p className={cn("font-black text-lg md:text-xl tracking-tight leading-none uppercase", event.is_completed ? "text-text-main" : "text-text-muted opacity-50")}>
+                            <div className="flex flex-wrap items-center gap-2 md:gap-4 mb-2">
+                              <p className={cn("font-black text-base md:text-lg lg:text-xl tracking-tight leading-none uppercase", event.is_completed ? "text-text-main" : "text-text-muted opacity-50")}>
                                 {event.status}
                               </p>
                               {event.is_completed && !shippingData.timeline?.[i + 1]?.is_completed && (
-                                <span className="bg-accent text-white text-[9px] font-black uppercase px-2.5 py-1 rounded-lg animate-pulse tracking-widest">{dict.shipment.live}</span>
+                                <span className="bg-accent text-white text-[8px] md:text-[9px] font-black uppercase px-2 md:px-2.5 py-0.5 md:py-1 rounded-lg animate-pulse tracking-wider md:tracking-widest">{dict.shipment.live}</span>
                               )}
                             </div>
-                            <span className="text-[10px] font-black text-accent/60 uppercase tracking-[0.2em]">
+                            <span className="text-[9px] md:text-[10px] font-black text-accent/60 uppercase tracking-[0.15em] md:tracking-[0.2em] block mb-3">
                               {new Date(event.timestamp).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
                             </span>
-                            <div className="mt-4 flex items-center gap-3 text-sm font-bold text-text-muted bg-surface-muted/50 p-4 rounded-2xl border border-border group-hover/event:border-accent/20 transition-colors">
-                              <Package size={16} className="text-accent/60" />
-                              {event.description}
+                            <div className="mt-3 md:mt-4 flex items-start gap-2 md:gap-3 text-xs md:text-sm font-bold text-text-muted bg-surface-muted/50 p-3 md:p-4 rounded-xl md:rounded-2xl border border-border group-hover/event:border-accent/20 transition-colors">
+                              <Package size={14} className="text-accent/60 mt-0.5 md:w-4 md:h-4 shrink-0" />
+                              <span className="leading-relaxed">{event.description}</span>
                             </div>
+                            {/* Additional Timeline Detail Layers */}
+                            {event.is_completed && (
+                              <>
+                                {/* First Detail Layer: Location & Date */}
+                                <div className="mt-2 md:mt-3 flex items-center gap-2 text-[10px] md:text-xs font-bold text-text-muted/70 bg-surface/30 px-3 py-2 rounded-lg border border-border/50">
+                                  <MapPin size={12} className="text-accent/50 shrink-0 md:w-3.5 md:h-3.5" />
+                                  <span className="truncate">
+                                    {event.status.toLowerCase().includes('delivered') || event.status.toLowerCase().includes('arrival')
+                                      ? `${shippingData.receiverCountry} (Destination)`
+                                      : event.status.toLowerCase().includes('depart') || event.status.toLowerCase().includes('origin')
+                                        ? `${shippingData.senderCountry} (Origin)`
+                                        : 'In Transit'}
+                                  </span>
+                                  <span className="text-accent/30">•</span>
+                                  <span className="text-[9px] md:text-[10px] opacity-60 truncate">{new Date(event.timestamp).toLocaleDateString()}</span>
+                                </div>
+
+                                {/* Second Detail Layer: Carrier & Handler Info */}
+                                <div className="mt-2 flex items-center justify-between gap-2 text-[9px] md:text-[10px] text-text-muted/60 bg-surface/20 px-3 py-1.5 rounded-md border border-border/30">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-accent/60"></span>
+                                    <span className="font-bold uppercase tracking-wider">Air Freight</span>
+                                  </div>
+                                  <span className="opacity-50">|</span>
+                                  <div className="flex items-center gap-1">
+                                    <span className="font-mono">ID: #{shippingData.trackingNumber.slice(-6)}</span>
+                                  </div>
+                                </div>
+                              </>
+                            )}
                           </div>
                         ))
                       ) : (
