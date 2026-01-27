@@ -183,11 +183,8 @@ func drawV11Grid(dc *gg.Context, shipment shipment.Shipment, lang i18n.Language)
 	drawWarningV9(dc, gX+c1W+c2W+c3W, gY+rowH*3+rowH, c4W, rowH*2)
 
 	addressH := 200.0
-	// Use RecipientAddress if available, otherwise fallback to Destination (Country)
+	// Use RecipientAddress explicitly
 	addrVal := shipment.RecipientAddress
-	if addrVal == "" {
-		addrVal = shipment.Destination
-	}
 	drawSmartCellV10(dc, gX, gY+gH, c1W+c2W+c3W, addressH, i18n.T(lang, "receipt_address"), addrVal)
 	drawSmartCellV10(dc, gX+c1W+c2W+c3W, gY+gH, c4W, addressH, i18n.T(lang, "receipt_phone"), shipment.RecipientPhone)
 }

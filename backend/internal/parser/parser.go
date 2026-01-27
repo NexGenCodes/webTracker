@@ -26,7 +26,7 @@ func ParseRegex(text string) models.Manifest {
 	text = CleanText(text)
 
 	// Receiver Variations (Fuzzy)
-	rxLabel := `(?i)(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|to|dest|destination|consignment|consignee)[s']*`
+	rxLabel := `(?i)(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee)[s']*`
 	// Sender Variations (Fuzzy)
 	sxLabel := `(?i)(?:sender|sendr|origin|from|shippr|shipper|sent by)[s']*`
 
@@ -51,7 +51,7 @@ func ParseRegex(text string) models.Manifest {
 	}
 
 	// 4. Receiver Country
-	countryLabel := `(?:country|nation|state|origin|city|pais|land)`
+	countryLabel := `(?:country|nation|state|origin|city|pais|land|dest|destination)`
 	m.ReceiverCountry = extractField(text, rxLabel+`[\s:']*`+countryLabel+`[\s:']*`, `([^\n]+)`)
 	if m.ReceiverCountry == "" {
 		// Only pick if not sender's
