@@ -117,12 +117,14 @@ func (s *Server) handleShipments(w http.ResponseWriter, r *http.Request) {
 
 	case "POST":
 		var input struct {
-			SenderName     string `json:"senderName"`
-			Origin         string `json:"senderCountry"`
-			RecipientName  string `json:"receiverName"`
-			RecipientPhone string `json:"receiverPhone"`
-			Destination    string `json:"receiverAddress"`
-			CargoType      string `json:"cargoType"`
+			SenderName      string `json:"senderName"`
+			SenderCountry   string `json:"senderCountry"`
+			ReceiverName    string `json:"receiverName"`
+			ReceiverCountry string `json:"country"`
+			ReceiverNumber  string `json:"number"`
+			ReceiverEmail   string `json:"email"`
+			ReceiverAddress string `json:"address"`
+			CargoType       string `json:"cargoType"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 			http.Error(w, `{"error": "invalid input"}`, http.StatusBadRequest)
@@ -131,23 +133,28 @@ func (s *Server) handleShipments(w http.ResponseWriter, r *http.Request) {
 
 		trackingID := utils.GenerateTrackingID("AWB")
 		nowUTC := time.Now().UTC()
-		transitTime, outForDeliveryTime, deliveryTime := shipment.CalculateSchedule(nowUTC, input.Origin, input.Destination)
+		transitTime, outForDeliveryTime, deliveryTime := shipment.CalculateSchedule(nowUTC, input.SenderCountry, input.ReceiverCountry)
 
 		newShip := &shipment.Shipment{
 			TrackingID:           trackingID,
-			UserJID:              "admin-ui", // Marker for UI created ones
+			UserJID:              "admin-ui",
 			Status:               shipment.StatusPending,
 			CreatedAt:            nowUTC,
 			ScheduledTransitTime: transitTime,
 			OutForDeliveryTime:   outForDeliveryTime,
 			ExpectedDeliveryTime: deliveryTime,
-			SenderName:           input.SenderName,
-			Origin:               input.Origin,
-			RecipientName:        input.RecipientName,
-			RecipientPhone:       input.RecipientPhone,
-			Destination:          input.Destination,
-			CargoType:            input.CargoType,
-			Weight:               1.0,
+
+			SenderName: input.SenderName,
+			Origin:     input.SenderCountry,
+
+			RecipientName:    input.ReceiverName,
+			RecipientPhone:   input.ReceiverNumber,
+			RecipientEmail:   input.ReceiverEmail,
+			RecipientAddress: input.ReceiverAddress,
+			Destination:      input.ReceiverCountry,
+
+			CargoType: input.CargoType, // Will be overridden in receipt visually, but stored here
+			Weight:    15.0,            // Default 15.0 as requested
 		}
 
 		if err := s.ldb.CreateShipment(r.Context(), newShip); err != nil {

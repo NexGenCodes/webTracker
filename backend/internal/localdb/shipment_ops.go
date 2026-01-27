@@ -17,16 +17,16 @@ func (c *Client) CreateShipment(ctx context.Context, s *shipment.Shipment) error
 		created_at, scheduled_transit_time, outfordelivery_time, expected_delivery_time,
 		sender_timezone, recipient_timezone,
 		sender_name, sender_phone, origin,
-		recipient_name, recipient_phone, recipient_email, recipient_id, destination,
+		recipient_name, recipient_phone, recipient_email, recipient_id, recipient_address, destination,
 		cargo_type, weight, cost
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	_, err := c.db.ExecContext(ctx, query,
 		s.TrackingID, s.UserJID, s.Status,
 		s.CreatedAt, s.ScheduledTransitTime, s.OutForDeliveryTime, s.ExpectedDeliveryTime,
 		s.SenderTimezone, s.RecipientTimezone,
 		s.SenderName, s.SenderPhone, s.Origin,
-		s.RecipientName, s.RecipientPhone, s.RecipientEmail, s.RecipientID, s.Destination,
+		s.RecipientName, s.RecipientPhone, s.RecipientEmail, s.RecipientID, s.RecipientAddress, s.Destination,
 		s.CargoType, s.Weight, s.Cost,
 	)
 	return err
@@ -38,7 +38,7 @@ func (c *Client) GetShipment(ctx context.Context, trackingID string) (*shipment.
 		tracking_id, status, created_at, scheduled_transit_time, outfordelivery_time, expected_delivery_time,
 		sender_timezone, recipient_timezone,
 		sender_name, sender_phone, origin,
-		recipient_name, recipient_phone, recipient_email, recipient_id, destination,
+		recipient_name, recipient_phone, recipient_email, recipient_id, recipient_address, destination,
 		cargo_type, weight, cost
 		FROM Shipment WHERE tracking_id = ?`
 
@@ -47,7 +47,7 @@ func (c *Client) GetShipment(ctx context.Context, trackingID string) (*shipment.
 		&s.TrackingID, &s.Status, &s.CreatedAt, &s.ScheduledTransitTime, &s.OutForDeliveryTime, &s.ExpectedDeliveryTime,
 		&s.SenderTimezone, &s.RecipientTimezone,
 		&s.SenderName, &s.SenderPhone, &s.Origin,
-		&s.RecipientName, &s.RecipientPhone, &s.RecipientEmail, &s.RecipientID, &s.Destination,
+		&s.RecipientName, &s.RecipientPhone, &s.RecipientEmail, &s.RecipientID, &s.RecipientAddress, &s.Destination,
 		&s.CargoType, &s.Weight, &s.Cost,
 	)
 	if err != nil {
@@ -185,7 +185,7 @@ func (c *Client) UpdateShipmentField(ctx context.Context, trackingID, field, val
 	// Allow-list fields to prevent SQL injection
 	allowedFields := map[string]bool{
 		"sender_name": true, "sender_phone": true, "origin": true,
-		"recipient_name": true, "recipient_phone": true, "recipient_email": true, "recipient_id": true, "destination": true,
+		"recipient_name": true, "recipient_phone": true, "recipient_email": true, "recipient_id": true, "recipient_address": true, "destination": true,
 		"cargo_type": true,
 	}
 
@@ -210,7 +210,7 @@ func (c *Client) ListShipments(ctx context.Context) ([]shipment.Shipment, error)
 		tracking_id, status, created_at, scheduled_transit_time, outfordelivery_time, expected_delivery_time,
 		sender_timezone, recipient_timezone,
 		sender_name, sender_phone, origin,
-		recipient_name, recipient_phone, recipient_email, recipient_id, destination,
+		recipient_name, recipient_phone, recipient_email, recipient_id, recipient_address, destination,
 		cargo_type, weight, cost
 		FROM Shipment ORDER BY created_at DESC`
 
@@ -227,7 +227,7 @@ func (c *Client) ListShipments(ctx context.Context) ([]shipment.Shipment, error)
 			&s.TrackingID, &s.Status, &s.CreatedAt, &s.ScheduledTransitTime, &s.OutForDeliveryTime, &s.ExpectedDeliveryTime,
 			&s.SenderTimezone, &s.RecipientTimezone,
 			&s.SenderName, &s.SenderPhone, &s.Origin,
-			&s.RecipientName, &s.RecipientPhone, &s.RecipientEmail, &s.RecipientID, &s.Destination,
+			&s.RecipientName, &s.RecipientPhone, &s.RecipientEmail, &s.RecipientID, &s.RecipientAddress, &s.Destination,
 			&s.CargoType, &s.Weight, &s.Cost,
 		)
 		if err == nil {
@@ -242,7 +242,7 @@ func (c *Client) UpdateShipment(ctx context.Context, s *shipment.Shipment) error
 	query := `UPDATE Shipment SET 
 		status = ?, 
 		sender_name = ?, sender_phone = ?, origin = ?,
-		recipient_name = ?, recipient_phone = ?, recipient_email = ?, recipient_id = ?, destination = ?,
+		recipient_name = ?, recipient_phone = ?, recipient_email = ?, recipient_id = ?, recipient_address = ?, destination = ?,
 		cargo_type = ?, weight = ?, cost = ?,
 		updated_at = CURRENT_TIMESTAMP
 		WHERE tracking_id = ?`
@@ -250,7 +250,7 @@ func (c *Client) UpdateShipment(ctx context.Context, s *shipment.Shipment) error
 	_, err := c.db.ExecContext(ctx, query,
 		s.Status,
 		s.SenderName, s.SenderPhone, s.Origin,
-		s.RecipientName, s.RecipientPhone, s.RecipientEmail, s.RecipientID, s.Destination,
+		s.RecipientName, s.RecipientPhone, s.RecipientEmail, s.RecipientID, s.RecipientAddress, s.Destination,
 		s.CargoType, s.Weight, s.Cost,
 		s.TrackingID,
 	)

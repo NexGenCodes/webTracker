@@ -45,6 +45,7 @@ func NewClient(dbPath string) (*Client, error) {
 	// Minor migration for existing DBs
 	_, _ = db.Exec("ALTER TABLE Shipment ADD COLUMN recipient_email TEXT")
 	_, _ = db.Exec("ALTER TABLE Shipment ADD COLUMN recipient_id TEXT")
+	_, _ = db.Exec("ALTER TABLE Shipment ADD COLUMN recipient_address TEXT")
 
 	logger.Info().Str("path", dbPath).Msg("Local DB (SQLite) initialized")
 	return client, nil
@@ -90,6 +91,7 @@ func (c *Client) initSchema(ctx context.Context) error {
 		recipient_phone TEXT,
 		recipient_email TEXT,
 		recipient_id TEXT,
+		recipient_address TEXT,
 		destination TEXT,
 		cargo_type TEXT,
 		weight REAL,

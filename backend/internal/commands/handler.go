@@ -317,6 +317,31 @@ func (h *EditHandler) Execute(ctx context.Context, ldb *localdb.Client, args []s
 		return Result{Message: "⚠️ *MISSING VALUE*\n_Please provide the new information for the field._"}
 	}
 
+	// Normalize Field Names (Aliases)
+	normField := strings.ToLower(field)
+	switch normField {
+	case "receiver", "receivername", "receiver_name", "recipient", "reciever", "recieve", "recievers", "receivers", "recipientname":
+		field = "recipient_name"
+	case "sender", "sendername", "sender_name", "senders":
+		field = "sender_name"
+	case "phone", "phones", "receiverphone", "receiver_phone", "recipient_phone", "mobile", "mobiles", "number", "numbers", "receivernumber", "cell", "contact":
+		field = "recipient_phone"
+	case "email", "emails", "mail", "mails", "receiveremail", "receiver_email", "recipient_email":
+		field = "recipient_email"
+	case "country", "countries", "receivercountry", "receiver_country", "dest", "destination", "destinations", "location":
+		field = "destination"
+	case "address", "addresses", "addr", "receiveraddress", "receiver_address", "recipient_address":
+		field = "recipient_address"
+	case "sendercountry", "sender_country", "origin", "origins", "from", "source":
+		field = "origin"
+	case "senderphone", "sender_phone", "sendernumber", "sender_number":
+		field = "sender_phone"
+	case "type", "types", "cargotype", "cargo_type", "content", "contents":
+		field = "cargo_type" // Though hardcoded in receipt, useful for data
+	case "weight", "weights", "kgs", "kg":
+		field = "weight"
+	}
+
 	// Validation Logic
 	if strings.Contains(strings.ToLower(field), "email") {
 		if !parser.ValidateEmail(value) {
