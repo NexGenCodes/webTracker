@@ -94,8 +94,12 @@ func (s *Server) handleTrack(w http.ResponseWriter, r *http.Request) {
 		"destination": ship.Destination,
 		"timeline":    timeline,
 
-		"sender_name":    ship.SenderName,
-		"recipient_name": ship.RecipientName,
+		"sender_name":       ship.SenderName,
+		"recipient_name":    ship.RecipientName,
+		"recipient_address": ship.RecipientAddress,
+		"recipient_phone":   ship.RecipientPhone,
+		"recipient_email":   ship.RecipientEmail,
+		"weight":            ship.Weight,
 	}
 
 	json.NewEncoder(w).Encode(response)
@@ -117,14 +121,15 @@ func (s *Server) handleShipments(w http.ResponseWriter, r *http.Request) {
 
 	case "POST":
 		var input struct {
-			SenderName      string `json:"senderName"`
-			SenderCountry   string `json:"senderCountry"`
-			ReceiverName    string `json:"receiverName"`
-			ReceiverCountry string `json:"country"`
-			ReceiverNumber  string `json:"number"`
-			ReceiverEmail   string `json:"email"`
-			ReceiverAddress string `json:"address"`
-			CargoType       string `json:"cargoType"`
+			SenderName      string  `json:"senderName"`
+			SenderCountry   string  `json:"senderCountry"`
+			ReceiverName    string  `json:"receiverName"`
+			ReceiverCountry string  `json:"receiverCountry"`
+			ReceiverNumber  string  `json:"number"`
+			ReceiverEmail   string  `json:"email"`
+			ReceiverAddress string  `json:"address"`
+			CargoType       string  `json:"cargoType"`
+			Weight          float64 `json:"weight"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 			http.Error(w, `{"error": "invalid input"}`, http.StatusBadRequest)
@@ -153,9 +158,11 @@ func (s *Server) handleShipments(w http.ResponseWriter, r *http.Request) {
 			RecipientAddress: input.ReceiverAddress,
 			Destination:      input.ReceiverCountry,
 
-			CargoType: input.CargoType, // Will be overridden in receipt visually, but stored here
-			Weight:    15.0,            // Default 15.0 as requested
+			CargoType: input.CargoType,
+			Weight:    input.Weight,
 		}
+
+		newShip.Weight = 15.0 // STRICT: Always 15kg as per policy
 
 		if err := s.ldb.CreateShipment(r.Context(), newShip); err != nil {
 			http.Error(w, fmt.Sprintf(`{"error": "%v"}`, err), http.StatusInternalServerError)

@@ -50,9 +50,8 @@ export const ShipmentForm: React.FC<ShipmentFormProps> = ({ onSubmit, loading, e
                 return;
             }
 
-            // Step 3: Auto-Submit if everything is valid
-            // We pass the parsed data to the parent component which handles the DB creation
-            onSubmit(result.data);
+            // Step 3: Auto-Submit if everything is valid (Strictly 15KG)
+            onSubmit({ ...result.data, weight: 15 });
             setAiText(''); // Clear input on success
             setSuccessMessage(`Manifest processed successfully for ${result.data.receiverName}`);
 
@@ -84,7 +83,7 @@ export const ShipmentForm: React.FC<ShipmentFormProps> = ({ onSubmit, loading, e
                     Paste raw shipment details below. The system will automatically parse, validate, and create the manifest.
                 </p>
 
-                <div className="relative group mb-6">
+                <div className="relative group mb-4">
                     <div className="absolute -inset-0.5 bg-linear-to-r from-accent/20 to-primary/20 rounded-xl blur opacity-20 group-focus-within:opacity-100 transition duration-500" />
                     <textarea
                         value={aiText}
@@ -93,6 +92,7 @@ export const ShipmentForm: React.FC<ShipmentFormProps> = ({ onSubmit, loading, e
                         className="relative w-full h-40 bg-bg/50 backdrop-blur-sm p-4 rounded-xl border border-border/50 text-sm focus:border-accent/50 outline-none resize-none transition-all font-mono leading-relaxed"
                     />
                 </div>
+
 
                 {parseError && (
                     <div className="mb-6 p-4 bg-error/10 border border-error/20 rounded-xl flex items-start gap-3 text-error text-xs font-bold animate-fade-in">

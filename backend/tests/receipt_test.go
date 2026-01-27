@@ -23,14 +23,15 @@ func TestRenderReceipt(t *testing.T) {
 	}
 
 	ship := shipment.Shipment{
-		TrackingID:     "AWB-TEST-12345",
-		SenderName:     "Sender Name",
-		RecipientName:  "Receiver Name",
-		RecipientPhone: "+1234567890",
-		Destination:    "123 Test St, Test City, Test Country",
-		RecipientEmail: "test@example.com",
-		Origin:         "Country B",
-		CreatedAt:      time.Now(),
+		TrackingID:       "AWB-TEST-12345",
+		SenderName:       "Sender Name",
+		RecipientName:    "Receiver Name",
+		RecipientPhone:   "+1234567890",
+		Destination:      "Test Country",
+		RecipientAddress: "123 Test St, Test City, Test Country",
+		RecipientEmail:   "test@example.com",
+		Origin:           "Country B",
+		CreatedAt:        time.Now(),
 	}
 
 	imgBytes, err := utils.RenderReceipt(ship, cfg.CompanyName, i18n.EN)

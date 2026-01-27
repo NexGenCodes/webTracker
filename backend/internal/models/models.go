@@ -14,6 +14,7 @@ type Manifest struct {
 	SenderName      string   `json:"senderName"`
 	SenderCountry   string   `json:"senderCountry"`
 	CargoType       string   `json:"cargoType"`
+	Weight          float64  `json:"weight"`
 	IsAI            bool     `json:"-"`
 	MissingFields   []string `json:"-"`
 }
@@ -28,6 +29,9 @@ func (m *Manifest) Merge(other Manifest) {
 	fillIfEmpty(&m.ReceiverID, other.ReceiverID)
 	fillIfEmpty(&m.SenderName, other.SenderName)
 	fillIfEmpty(&m.SenderCountry, other.SenderCountry)
+	if m.Weight == 0 && other.Weight > 0 {
+		m.Weight = other.Weight
+	}
 }
 
 func fillIfEmpty(target *string, val string) {

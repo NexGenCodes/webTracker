@@ -337,9 +337,11 @@ func (h *EditHandler) Execute(ctx context.Context, ldb *localdb.Client, args []s
 	case "senderphone", "sender_phone", "sendernumber", "sender_number":
 		field = "sender_phone"
 	case "type", "types", "cargotype", "cargo_type", "content", "contents":
-		field = "cargo_type" // Though hardcoded in receipt, useful for data
-	case "weight", "weights", "kgs", "kg":
-		field = "weight"
+		field = "cargo_type"
+	}
+
+	if field == "weight" {
+		return Result{Message: "🚫 *ACCESS DENIED*\n_The weight policy is strictly set to 15KG and cannot be modified._"}
 	}
 
 	// Validation Logic
