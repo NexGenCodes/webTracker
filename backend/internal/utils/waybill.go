@@ -40,7 +40,8 @@ func GenerateWaybill(s shipment.Shipment, companyName string) string {
 	if s.RecipientID != "" {
 		b.WriteString(fmt.Sprintf("   • ID/PP:   %s\n", s.RecipientID))
 	}
-	b.WriteString(fmt.Sprintf("   • Destination: %s\n\n", s.Destination))
+	b.WriteString(fmt.Sprintf("   • Destination: %s\n", s.Destination))
+	b.WriteString(fmt.Sprintf("   • Weight:      %.2f KGS\n\n", s.Weight))
 
 	b.WriteString(border + "\n")
 	b.WriteString("  *THANK YOU FOR YOUR PATRONAGE*  \n")

@@ -25,6 +25,7 @@ export interface ShipmentData {
     receiverAddress: string | null;
     receiverCountry: string | null;
     receiverPhone: string | null;
+    weight?: number;
     receiverEmail: string | null;
     isArchived: boolean;
     events: ShipmentEvent[];
@@ -46,6 +47,7 @@ export interface CreateShipmentDto {
     receiverEmail: string;
     senderName: string;
     senderCountry: string;
+    weight?: number;
 }
 
 export interface ServiceResult<T = any> {

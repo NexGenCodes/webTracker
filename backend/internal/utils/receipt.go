@@ -155,7 +155,11 @@ func drawV11Grid(dc *gg.Context, shipment shipment.Shipment, lang i18n.Language)
 
 	drawSmartCellV10(dc, gX, gY+rowH+nameH, c1W, rowH, i18n.T(lang, "receipt_email"), shipment.RecipientEmail)
 
-	drawSmartCellV10(dc, gX, gY+rowH*2+nameH, c1W, rowH, i18n.T(lang, "receipt_content"), "Consignment Box")
+	cargoType := shipment.CargoType
+	if cargoType == "" {
+		cargoType = "Consignment Box"
+	}
+	drawSmartCellV10(dc, gX, gY+rowH*2+nameH, c1W, rowH, i18n.T(lang, "receipt_content"), cargoType)
 	drawSmartCellV10(dc, gX, gY+rowH*3+nameH, c1W, rowH, i18n.T(lang, "receipt_weight"), fmt.Sprintf("%.2f KGS", shipment.Weight))
 
 	selectorH := rowH * 4

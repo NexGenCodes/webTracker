@@ -215,6 +215,7 @@ function HomeContent() {
                           { label: dict.shipment.destination, value: shippingData.receiverCountry, italic: true },
                           { label: dict.shipment.from, value: shippingData.senderName },
                           { label: dict.shipment.origin, value: shippingData.senderCountry },
+                          { label: "Weight", value: `${shippingData.weight || 15} KGS` },
                         ].map((detail, idx) => (
                           <div key={idx} className="flex justify-between items-center py-6 border-b border-border last:border-0 group/item">
                             <span className="text-text-muted font-black text-xs uppercase tracking-widest">{detail.label}</span>

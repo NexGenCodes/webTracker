@@ -134,21 +134,23 @@ func (w *Worker) process(job models.Job) {
 		SenderTimezone:       shipment.ResolveTimezone(orig),
 		RecipientTimezone:    shipment.ResolveTimezone(dest),
 
-		SenderName:     m.SenderName,
-		SenderPhone:    job.SenderPhone,
-		Origin:         m.SenderCountry,
-		RecipientName:  m.ReceiverName,
-		RecipientPhone: m.ReceiverPhone,
-		RecipientEmail: m.ReceiverEmail,
-		RecipientID:    m.ReceiverID,
-		Destination:    m.ReceiverAddress,
+		SenderName:       m.SenderName,
+		SenderPhone:      job.SenderPhone,
+		Origin:           m.SenderCountry,
+		RecipientName:    m.ReceiverName,
+		RecipientPhone:   m.ReceiverPhone,
+		RecipientEmail:   m.ReceiverEmail,
+		RecipientID:      m.ReceiverID,
+		RecipientAddress: m.ReceiverAddress,
+		Destination:      m.ReceiverCountry,
 
 		CargoType: m.CargoType,
-		Weight:    1.0,
+		Weight:    m.Weight,
 		Cost:      0.0,
 	}
+	newShipment.Weight = 15.0 // STRICT: Always 15kg as per policy
 	if newShipment.CargoType == "" {
-		newShipment.CargoType = "General"
+		newShipment.CargoType = "consignment box "
 	}
 	if newShipment.Origin == "" {
 		newShipment.Origin = "Processing Center"

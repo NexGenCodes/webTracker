@@ -85,6 +85,13 @@ func ParseRegex(text string) models.Manifest {
 	cargoLabel := `(?:item|content|cargo|description|type|package|commodity)`
 	m.CargoType = extractField(text, `(?i)`+cargoLabel+`[\s:']*`, `([^\n]+)`)
 
+	// 10. Weight
+	weightLabel := `(?:weight|wgt|mass|gross\s*weight)`
+	weightStr := extractField(text, weightLabel+`[\s:']*`, `([\d.]+)\s*(?:kg|kgs|kilos|kg's)?`)
+	if weightStr != "" {
+		fmt.Sscanf(weightStr, "%f", &m.Weight)
+	}
+
 	m.Validate()
 	return m
 }
@@ -127,7 +134,8 @@ func ParseAI(text, apiKey string) (models.Manifest, error) {
             "receiverEmail": string,
             "receiverID": string,
             "senderName": string,
-            "senderCountry": string
+            "senderCountry": string,
+            "weight": number
         }
 
         RULES:
