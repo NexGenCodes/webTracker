@@ -928,6 +928,8 @@ export const dictionaries = {
             currentLocation: "Localização Atual:",
             origin: "Origem",
             estimatedDelivery: "Entrega Est.",
+            created: "Criado",
+            address: "Endereço",
         },
         errors: {
             unauthorized: "Não autorizado",
@@ -1100,6 +1102,7 @@ export const dictionaries = {
             currentLocation: "Posizione Attuale:",
             origin: "Origine",
             estimatedDelivery: "Consegna Stim.",
+            address: "Indirizzo",
         },
         errors: {
             unauthorized: "Non autorizzato",
@@ -1272,6 +1275,7 @@ export const dictionaries = {
             currentLocation: "الموقع الحالي:",
             origin: "الأصل",
             estimatedDelivery: "التسليم المقدر",
+            address: "العنوان",
         },
         errors: {
             unauthorized: "غير مصرح",
