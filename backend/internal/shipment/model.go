@@ -33,17 +33,18 @@ type Shipment struct {
 	RecipientTimezone string `json:"recipient_timezone"`
 
 	// Shipment Details
-	SenderName     string  `json:"sender_name"`
-	SenderPhone    string  `json:"sender_phone"`
-	Origin         string  `json:"origin"`
-	RecipientName  string  `json:"recipient_name"`
-	RecipientPhone string  `json:"recipient_phone"`
-	RecipientID    string  `json:"recipient_id"`
-	RecipientEmail string  `json:"recipient_email"`
-	Destination    string  `json:"destination"`
-	CargoType      string  `json:"cargo_type"`
-	Weight         float64 `json:"weight"`
-	Cost           float64 `json:"cost"`
+	SenderName       string  `json:"sender_name"`
+	SenderPhone      string  `json:"sender_phone"`
+	Origin           string  `json:"origin"`
+	RecipientName    string  `json:"recipient_name"`
+	RecipientPhone   string  `json:"recipient_phone"`
+	RecipientID      string  `json:"recipient_id"`
+	RecipientEmail   string  `json:"recipient_email"`
+	RecipientAddress string  `json:"recipient_address"`
+	Destination      string  `json:"destination"`
+	CargoType        string  `json:"cargo_type"`
+	Weight           float64 `json:"weight"`
+	Cost             float64 `json:"cost"`
 }
 
 // TimelineEvent represents a single step in the tracking history

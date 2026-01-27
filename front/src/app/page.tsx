@@ -203,7 +203,7 @@ function HomeContent() {
               ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-20 relative z-10">
                   {/* Left Column: Details */}
-                  <div className="space-y-16">
+                  <div className="space-y-16 order-2 lg:order-1">
                     <div className="space-y-8">
                       <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-accent flex items-center gap-4">
                         {dict.shipment.details}
@@ -212,8 +212,8 @@ function HomeContent() {
                       <div className="space-y-2">
                         {[
                           { label: dict.shipment.receiver, value: shippingData.receiverName },
-                          { label: dict.shipment.from, value: shippingData.senderName },
                           { label: dict.shipment.destination, value: shippingData.receiverCountry, italic: true },
+                          { label: dict.shipment.from, value: shippingData.senderName },
                           { label: dict.shipment.origin, value: shippingData.senderCountry },
                         ].map((detail, idx) => (
                           <div key={idx} className="flex justify-between items-center py-6 border-b border-border last:border-0 group/item">
@@ -226,7 +226,7 @@ function HomeContent() {
                   </div>
 
                   {/* Right Column: Timeline */}
-                  <div className="space-y-8">
+                  <div className="space-y-8 order-1 lg:order-2">
                     <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-accent flex items-center gap-4">
                       {dict.shipment.latestUpdates}
                       <span className="h-px flex-1 bg-accent/20" />

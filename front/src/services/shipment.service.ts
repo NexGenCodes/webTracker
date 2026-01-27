@@ -176,7 +176,7 @@ export class ShipmentService {
                 receiverName: data.recipient_name || 'N/A',
                 receiverPhone: data.recipient_phone || null,
                 receiverEmail: data.recipient_email || null,
-                receiverAddress: data.destination || null,
+                receiverAddress: data.recipient_address || null,
                 receiverCountry: data.destination || 'N/A',
                 senderCountry: data.origin || 'N/A',
                 timeline: data.timeline || [],

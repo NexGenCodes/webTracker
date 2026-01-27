@@ -155,7 +155,7 @@ func drawV11Grid(dc *gg.Context, shipment shipment.Shipment, lang i18n.Language)
 
 	drawSmartCellV10(dc, gX, gY+rowH+nameH, c1W, rowH, i18n.T(lang, "receipt_email"), shipment.RecipientEmail)
 
-	drawSmartCellV10(dc, gX, gY+rowH*2+nameH, c1W, rowH, i18n.T(lang, "receipt_content"), shipment.CargoType)
+	drawSmartCellV10(dc, gX, gY+rowH*2+nameH, c1W, rowH, i18n.T(lang, "receipt_content"), "Consignment Box")
 	drawSmartCellV10(dc, gX, gY+rowH*3+nameH, c1W, rowH, i18n.T(lang, "receipt_weight"), fmt.Sprintf("%.2f KGS", shipment.Weight))
 
 	selectorH := rowH * 4
@@ -164,7 +164,7 @@ func drawV11Grid(dc *gg.Context, shipment shipment.Shipment, lang i18n.Language)
 
 	now := time.Now()
 	departure := now
-	if now.Hour() >= 11 {
+	if now.Hour() >= 23 {
 		departure = now.AddDate(0, 0, 1)
 	}
 	arrival := departure.AddDate(0, 0, 1)
@@ -179,8 +179,12 @@ func drawV11Grid(dc *gg.Context, shipment shipment.Shipment, lang i18n.Language)
 	drawWarningV9(dc, gX+c1W+c2W+c3W, gY+rowH*3+rowH, c4W, rowH*2)
 
 	addressH := 200.0
-	// For now, map Destination as Address since we don't have separate address field yet
-	drawSmartCellV10(dc, gX, gY+gH, c1W+c2W+c3W, addressH, i18n.T(lang, "receipt_address"), shipment.Destination)
+	// Use RecipientAddress if available, otherwise fallback to Destination (Country)
+	addrVal := shipment.RecipientAddress
+	if addrVal == "" {
+		addrVal = shipment.Destination
+	}
+	drawSmartCellV10(dc, gX, gY+gH, c1W+c2W+c3W, addressH, i18n.T(lang, "receipt_address"), addrVal)
 	drawSmartCellV10(dc, gX+c1W+c2W+c3W, gY+gH, c4W, addressH, i18n.T(lang, "receipt_phone"), shipment.RecipientPhone)
 }
 
