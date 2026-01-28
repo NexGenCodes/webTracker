@@ -45,6 +45,9 @@ type Config struct {
 
 	// Public Tracking URL
 	TrackingBaseURL string
+
+	// CORS
+	AllowedOrigin string
 }
 
 func GetWorkDir() string {
@@ -70,10 +73,6 @@ func GenerateAbbreviation(name string) string {
 		return "AWB"
 	}
 
-	// Use the first word if there are multiple, or join them?
-	// The requirement says "split the company name by syllable",
-	// which implies treating the whole thing as a sequence.
-	// We'll clean it first.
 	reg := regexp.MustCompile("[^a-zA-Z]")
 	clean := reg.ReplaceAllString(name, "")
 	if clean == "" {
@@ -194,6 +193,7 @@ func LoadFromEnv() (*Config, error) {
 		ApiAuthToken:        os.Getenv("API_AUTH_TOKEN"),
 		APIPort:             os.Getenv("API_PORT"),
 		TrackingBaseURL:     os.Getenv("TRACKING_BASE_URL"),
+		AllowedOrigin:       os.Getenv("ALLOWED_ORIGIN"),
 	}
 
 	// Default BotOwnerPhone to first admin if not set

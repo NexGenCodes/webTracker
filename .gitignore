@@ -114,4 +114,5 @@ backend/receipt_test_output.jpg
 backend/waybill_test_output.jpg
 backend/test_output.txt
 backend/internal/logger/test_logs/
+backend/tests/receipt_test_output.jpg
 **/assets/fonts/

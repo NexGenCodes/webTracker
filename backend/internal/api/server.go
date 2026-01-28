@@ -14,13 +14,14 @@ import (
 )
 
 type Server struct {
-	ldb       *localdb.Client
-	token     string
-	geminiKey string
+	ldb           *localdb.Client
+	token         string
+	geminiKey     string
+	allowedOrigin string
 }
 
-func NewServer(ldb *localdb.Client, token string, geminiKey string) *Server {
-	return &Server{ldb: ldb, token: token, geminiKey: geminiKey}
+func NewServer(ldb *localdb.Client, token string, geminiKey string, allowedOrigin string) *Server {
+	return &Server{ldb: ldb, token: token, geminiKey: geminiKey, allowedOrigin: allowedOrigin}
 }
 
 // Start launches the HTTP server
@@ -46,7 +47,11 @@ func (s *Server) Start(port string) error {
 
 func (s *Server) middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		origin := s.allowedOrigin
+		if origin == "" {
+			origin = "*"
+		}
+		w.Header().Set("Access-Control-Allow-Origin", origin)
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
@@ -55,7 +60,7 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		if strings.HasPrefix(r.URL.Path, "/api/shipments") || strings.HasPrefix(r.URL.Path, "/api/stats") {
+		if strings.HasPrefix(r.URL.Path, "/api/shipments") || strings.HasPrefix(r.URL.Path, "/api/stats") || strings.HasPrefix(r.URL.Path, "/api/parse") {
 			authHeader := r.Header.Get("Authorization")
 			expected := "Bearer " + s.token
 
@@ -88,21 +93,31 @@ func (s *Server) handleTrack(w http.ResponseWriter, r *http.Request) {
 	timeline := s.generateTimeline(ship)
 
 	response := map[string]interface{}{
-		"tracking_id": ship.TrackingID,
-		"status":      ship.Status,
-		"origin":      ship.Origin,
-		"destination": ship.Destination,
-		"timeline":    timeline,
-
-		"sender_name":       ship.SenderName,
-		"recipient_name":    ship.RecipientName,
-		"recipient_address": ship.RecipientAddress,
-		"recipient_phone":   ship.RecipientPhone,
-		"recipient_email":   ship.RecipientEmail,
+		"tracking_id":       ship.TrackingID,
+		"status":            ship.Status,
+		"origin":            ship.Origin,
+		"destination":       ship.Destination,
+		"recipient_country": ship.Destination,
+		"timeline":          timeline,
 		"weight":            ship.Weight,
+		// Redact sensitive fields for public tracking
+		"sender_name":       redactName(ship.SenderName),
+		"recipient_name":    redactName(ship.RecipientName),
+		"recipient_address": "Redacted for privacy",
 	}
 
 	json.NewEncoder(w).Encode(response)
+}
+
+func redactName(name string) string {
+	if name == "" {
+		return "N/A"
+	}
+	parts := strings.Split(name, " ")
+	if len(parts[0]) <= 2 {
+		return parts[0] + "***"
+	}
+	return parts[0][:2] + "******"
 }
 
 func (s *Server) handlePublicStatus(w http.ResponseWriter, r *http.Request) {
