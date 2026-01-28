@@ -103,7 +103,7 @@ func (a *App) Run() error {
 		port = "8080"
 	}
 
-	a.API = api.NewServer(a.LocalDB, a.Cfg.ApiAuthToken, a.Cfg.GeminiAPIKey)
+	a.API = api.NewServer(a.LocalDB, a.Cfg.ApiAuthToken, a.Cfg.GeminiAPIKey, a.Cfg.AllowedOrigin)
 	go func() {
 		logger.Info().Str("port", port).Msg("API Server starting")
 		if err := a.API.Start(port); err != nil {
