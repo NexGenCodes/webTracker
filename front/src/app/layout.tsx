@@ -30,6 +30,7 @@ import { ClientTransitionProvider } from "@/components/ClientTransitionProvider"
 import AuthProvider from "@/components/AuthProvider";
 import { LayoutHeader } from "@/components/LayoutHeader";
 import { Toaster } from "react-hot-toast";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 export default function RootLayout({
   children,
@@ -82,6 +83,7 @@ export default function RootLayout({
             </ClientTransitionProvider>
           </I18nProvider>
         </ThemeProvider>
+        <SpeedInsights />
       </body>
     </html>
   );
