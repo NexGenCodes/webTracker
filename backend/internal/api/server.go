@@ -177,6 +177,24 @@ func (s *Server) handleShipments(w http.ResponseWriter, r *http.Request) {
 			Weight:    input.Weight,
 		}
 
+		// Deduplication Layer
+		// Check for existing shipments for this user/recipient combo created recently (using existing FindSimilar logic)
+		existingID, err := s.ldb.FindSimilarShipment(r.Context(), "admin-ui", input.ReceiverNumber)
+		if err == nil && existingID != "" {
+			existingShip, err := s.ldb.GetShipment(r.Context(), existingID)
+			if err == nil {
+				// Window: 2 minutes (120 seconds) - prevent double clicks or quick re-submits
+				if time.Since(existingShip.CreatedAt) < 2*time.Minute {
+					// Strict check: Same SenderName and ReceiverName
+					if existingShip.SenderName == input.SenderName && existingShip.RecipientName == input.ReceiverName {
+						fmt.Printf("[Deduplication] Prevented duplicate for %s -> %s\n", input.SenderName, input.ReceiverName)
+						json.NewEncoder(w).Encode(map[string]string{"tracking_id": existingID})
+						return
+					}
+				}
+			}
+		}
+
 		newShip.Weight = 15.0 // STRICT: Always 15kg as per policy
 
 		if err := s.ldb.CreateShipment(r.Context(), newShip); err != nil {

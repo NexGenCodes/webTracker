@@ -6,7 +6,7 @@ import { CreateShipmentDto } from '@/types/shipment';
 import { Dictionary } from '@/lib/dictionaries';
 
 interface ShipmentFormProps {
-    onSubmit: (data: CreateShipmentDto) => void;
+    onSubmit: (data: CreateShipmentDto) => Promise<void>;
     loading: boolean;
     error: string | null;
     marketingDict: Dictionary;
@@ -51,7 +51,7 @@ export const ShipmentForm: React.FC<ShipmentFormProps> = ({ onSubmit, loading, e
             }
 
             // Step 3: Auto-Submit if everything is valid (Strictly 15KG)
-            onSubmit({ ...result.data, weight: 15 });
+            await onSubmit({ ...result.data, weight: 15 });
             setAiText(''); // Clear input on success
             setSuccessMessage(`Manifest processed successfully for ${result.data.receiverName}`);
 
