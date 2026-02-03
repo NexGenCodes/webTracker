@@ -177,14 +177,23 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 			}
 		} else {
 			// Private chat rules
-			if cfg.AllowPrivateChat {
+			isSelfChat := chatJID.User == botPhone || (botLID != "" && chatJID.User == botLID)
+
+			if isSelfChat {
+				isAuthorized = true // Always allow Note to Self
+			} else if cfg.AllowPrivateChat {
 				isAuthorized = true
 			} else {
 				hasGroups, _ := ldb.HasAuthorizedGroups(context.Background())
-				isAuthorized = !hasGroups
+				isAuthorized = !hasGroups // Failover: Allow private if no groups exist
 			}
-			if senderPhone == botPhone || (botLID != "" && senderPhone == botLID) {
-				isSenderAdmin = true
+
+			if !isAuthorized {
+				logger.Debug().
+					Str("chat", chatJID.String()).
+					Str("sender", senderPhone).
+					Msg("[RBAC DEBUG] Ignoring unauthorized private chat")
+				return
 			}
 		}
 
