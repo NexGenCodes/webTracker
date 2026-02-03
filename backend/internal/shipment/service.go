@@ -73,3 +73,10 @@ func (c *Calculator) CalculateSchedule(nowUTC time.Time, originCountry, destCoun
 
 	return localTransitStart.UTC(), localOutForDelivery.UTC(), localDelivery.UTC()
 }
+
+// CalculateSchedule is a package-level helper that uses a default Calculator.
+// This allows calling shipment.CalculateSchedule directly.
+func CalculateSchedule(nowUTC time.Time, originCountry, destCountry string) (transitTimeUTC, outForDeliveryUTC, deliveryTimeUTC time.Time) {
+	calc := &Calculator{}
+	return calc.CalculateSchedule(nowUTC, originCountry, destCountry)
+}
