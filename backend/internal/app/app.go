@@ -18,6 +18,7 @@ import (
 	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/notif"
 	"webtracker-bot/internal/scheduler"
+	"webtracker-bot/internal/shipment"
 	"webtracker-bot/internal/utils"
 	"webtracker-bot/internal/whatsapp"
 	"webtracker-bot/internal/worker"
@@ -80,6 +81,10 @@ func (a *App) Run() error {
 	// Start Workers
 	sender := whatsapp.NewSender(a.WA)
 	cmdDispatcher := commands.NewDispatcher(a.LocalDB, sender, a.Cfg.CompanyPrefix, a.Cfg.CompanyName, a.Cfg.PairingPhone, a.Cfg.AdminTimezone)
+
+	// Create Shipment Service
+	shipmentService := &shipment.Calculator{}
+
 	for i := 1; i <= 5; i++ {
 		a.WG.Add(1)
 		w := &worker.Worker{
@@ -94,6 +99,7 @@ func (a *App) Run() error {
 			Cmd:             cmdDispatcher,
 			LocalDB:         a.LocalDB,
 			TrackingBaseURL: a.Cfg.TrackingBaseURL,
+			ShipmentService: shipmentService,
 		}
 		go w.Start()
 	}

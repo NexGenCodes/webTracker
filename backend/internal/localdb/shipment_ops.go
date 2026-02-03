@@ -256,3 +256,20 @@ func (c *Client) UpdateShipment(ctx context.Context, s *shipment.Shipment) error
 	)
 	return err
 }
+
+// FindSimilarShipment checks for an existing shipment with the same recipient phone for this user.
+func (c *Client) FindSimilarShipment(ctx context.Context, userJID, recipientPhone string) (string, error) {
+	// Simple duplicate check: Same User, Same Recipient Phone
+	// We ignore strict time windows as requested
+	query := `SELECT tracking_id FROM Shipment 
+			  WHERE user_jid = ? 
+			  AND recipient_phone = ?
+			  ORDER BY created_at DESC LIMIT 1`
+
+	var id string
+	err := c.db.QueryRowContext(ctx, query, userJID, recipientPhone).Scan(&id)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return id, err
+}

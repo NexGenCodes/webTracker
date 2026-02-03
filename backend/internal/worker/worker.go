@@ -32,6 +32,7 @@ type Worker struct {
 	CompanyName     string
 	TrackingBaseURL string
 	Cmd             *commands.Dispatcher
+	ShipmentService shipment.Service
 }
 
 func (w *Worker) Start() {
@@ -121,7 +122,7 @@ func (w *Worker) process(job models.Job) {
 	orig := m.SenderCountry
 	dest := m.ReceiverCountry
 
-	transitTime, outForDeliveryTime, deliveryTime := shipment.CalculateSchedule(nowUTC, orig, dest)
+	transitTime, outForDeliveryTime, deliveryTime := w.ShipmentService.CalculateSchedule(nowUTC, orig, dest)
 
 	newShipment := &shipment.Shipment{
 		TrackingID:           trackingID,
@@ -131,8 +132,8 @@ func (w *Worker) process(job models.Job) {
 		ScheduledTransitTime: transitTime,
 		OutForDeliveryTime:   outForDeliveryTime,
 		ExpectedDeliveryTime: deliveryTime,
-		SenderTimezone:       shipment.ResolveTimezone(orig),
-		RecipientTimezone:    shipment.ResolveTimezone(dest),
+		SenderTimezone:       w.ShipmentService.ResolveTimezone(orig),
+		RecipientTimezone:    w.ShipmentService.ResolveTimezone(dest),
 
 		SenderName:       m.SenderName,
 		SenderPhone:      job.SenderPhone,
@@ -157,6 +158,14 @@ func (w *Worker) process(job models.Job) {
 	}
 	if newShipment.Destination == "" {
 		newShipment.Destination = "Local Delivery"
+	}
+
+	// 5b. Deduplication Check (Strict Phone Match)
+	if existingID, err := w.LocalDB.FindSimilarShipment(context.Background(), job.SenderJID.String(), newShipment.RecipientPhone); err == nil && existingID != "" {
+		logger.Info().Str("existing_id", existingID).Msg("Duplicate shipment blocked")
+		dupMsg := fmt.Sprintf("⚠️ *SHIPMENT ALREADY EXISTS*\n\nA shipment for this recipient phone is already in the system.\n\n🆔 *%s*\n\n🔹 Use `!edit %s ...` to update.\n🔹 Use `!delete %s` to remove.", existingID, existingID, existingID)
+		w.Sender.Reply(job.ChatJID, job.SenderJID, dupMsg, job.MessageID, job.Text)
+		return
 	}
 
 	// Insert into LocalDB

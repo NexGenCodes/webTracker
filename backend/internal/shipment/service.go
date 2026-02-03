@@ -4,10 +4,19 @@ import (
 	"time"
 )
 
+// Service defines the interface for shipment calculations
+type Service interface {
+	CalculateSchedule(nowUTC time.Time, originCountry, destCountry string) (transitTimeUTC, outForDeliveryUTC, deliveryTimeUTC time.Time)
+	ResolveTimezone(country string) string
+}
+
 // Calculator handles the business logic for shipment scheduling
 type Calculator struct {
 	// We can inject a timezone mapper interface here if needed later
 }
+
+// Ensure Calculator implements Service
+var _ Service = (*Calculator)(nil)
 
 // CountryTimezoneMap is a simple static map for MVP.
 // In a refined version, this could be a proper database or external lib.
@@ -19,19 +28,18 @@ var CountryTimezoneMap = map[string]string{
 	"china":          "Asia/Shanghai",
 	"dubai":          "Asia/Dubai",
 	"uae":            "Asia/Dubai",
-	// Add more as default fallbacks
 }
 
 // ResolveTimezone attempts to find a valid timezone for a country name
-func ResolveTimezone(country string) string {
+func (c *Calculator) ResolveTimezone(country string) string {
 	if tz, ok := CountryTimezoneMap[country]; ok {
 		return tz
 	}
 	return "UTC" // Safe fallback
 }
 
-func CalculateSchedule(nowUTC time.Time, originCountry, destCountry string) (transitTimeUTC, outForDeliveryUTC, deliveryTimeUTC time.Time) {
-	originTZ := ResolveTimezone(originCountry)
+func (c *Calculator) CalculateSchedule(nowUTC time.Time, originCountry, destCountry string) (transitTimeUTC, outForDeliveryUTC, deliveryTimeUTC time.Time) {
+	originTZ := c.ResolveTimezone(originCountry)
 	loc, err := time.LoadLocation(originTZ)
 	if err != nil {
 		loc = time.UTC
