@@ -120,6 +120,10 @@ func ParseRegex(text string) models.Manifest {
 		val := strings.TrimSpace(text[start:end])
 		// Optimization: if the value is empty or just punctuation, don't overwrite
 		if val != "" {
+			// User request: remove trailing periods from saved values
+			val = strings.TrimRight(val, ".")
+			val = strings.TrimSpace(val)
+
 			if _, exists := results[a.field]; !exists || a.priority > 1 {
 				results[a.field] = val
 			}
