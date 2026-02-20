@@ -109,6 +109,7 @@ func (w *Worker) process(job models.Job) {
 			Str("jid", job.SenderJID.String()).
 			Strs("missing_fields", m.MissingFields).
 			Str("raw_text", job.Text).
+			Interface("parsed_values", m).
 			Msg("Information incomplete after parsing")
 
 		msg := "📝 *INFORMATION INCOMPLETE*\n\n━━━━━━━━━━━━━━━━━━━━━━━\n" +
@@ -191,6 +192,7 @@ func (w *Worker) process(job models.Job) {
 		Str("tracking_id", trackingID).
 		Str("jid", job.SenderJID.String()).
 		Str("raw_text", job.Text).
+		Interface("parsed_values", m).
 		Msg("Shipment created successfully")
 
 	// 10. Send tracking ID and link as follow-up message
