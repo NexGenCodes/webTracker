@@ -91,6 +91,75 @@ func TestParseRegex(t *testing.T) {
 			wantName:  "Bruce Wayne",
 			wantPhone: "080-999-888",
 		},
+		{
+			name:      "Double Colon Separator",
+			input:     "Receiver Name:: Clark Kent\nPhone:: 070-111-222",
+			wantName:  "Clark Kent",
+			wantPhone: "070-111-222",
+		},
+		{
+			name:      "Hyphen Separator",
+			input:     "Receiver-Name- Peter Parker\nPhone- 08012344321",
+			wantName:  "Peter Parker",
+			wantPhone: "08012344321",
+		},
+		{
+			name:       "Mixed Case and Separators",
+			input:      "reCeiVer nAMe: Tony Stark\nSENDER-NAME:: Steve Rogers\nITEM- box",
+			wantName:   "Tony Stark",
+			wantSender: "Steve Rogers",
+		},
+		{
+			name:       "User Request - Spaces and Mixed Case",
+			input:      "receiver Name: Peter Parker\nRECEIVER ADDRESS:: Queens\nreceiver phone - 555-0199\nSENDER Name: May Parker\nsender country: USA\nweight: 70",
+			wantName:   "Peter Parker",
+			wantAddr:   "Queens",
+			wantPhone:  "555-0199",
+			wantSender: "May Parker",
+		},
+		{
+			name:      "User Request - Double Colon and Hyphen",
+			input:     "receiver ID:: ID12345\nreceiver-Email- spidey@example.com",
+			wantID:    "ID12345",
+			wantEmail: "spidey@example.com",
+		},
+		{
+			name:      "Same Line Mixed Fields",
+			input:     "Receiver Name: Bruce Banner Phone: 555-0000 ID: HULK1",
+			wantName:  "Bruce Banner",
+			wantPhone: "555-0000",
+			wantID:    "HULK1",
+		},
+		{
+			name:     "Label as part of value",
+			input:    "Receiver Name: John Address Lover\nAddress: Lagos",
+			wantName: "John Address Lover",
+			wantAddr: "Lagos",
+		},
+		{
+			name:     "Missing labels",
+			input:    "John Doe\n08012345678\nNigeria",
+			wantName: "", // Currently parser requires a label or starts with 'name'
+		},
+		{
+			name:     "Field swallows next label (name)",
+			input:    "Receiver Address: 123 Main St name: Jane Doe",
+			wantAddr: "123 Main St",
+			wantName: "Jane Doe",
+		},
+		{
+			name:      "Multi-line Address",
+			input:     "Receiver Name: John Doe\nAddress: 123 Main St\nLagos Island\nNigeria\nPhone: 08012345678",
+			wantName:  "John Doe",
+			wantAddr:  "123 Main St\nLagos Island\nNigeria",
+			wantPhone: "08012345678",
+		},
+		{
+			name:      "Label-less Extraction (Fallback)",
+			input:     "Jane Smith, Lagos, +2348011122233, john@example.com, weight 75.5",
+			wantPhone: "+2348011122233",
+			wantEmail: "john@example.com",
+		},
 	}
 
 	for _, tt := range tests {
