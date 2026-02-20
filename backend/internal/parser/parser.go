@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -20,80 +21,154 @@ import (
 // AI rate limiter: 5 requests per second
 var aiRateLimiter = rate.NewLimiter(rate.Every(200*time.Millisecond), 5)
 
-// ParseRegex extracts manifest data using fuzzy regex patterns to minimize AI reliance.
+var stopLabels = `(?:receiver|reciver|sender|sendr|phone|mobile|tel|num|contact|address|addr|country|nation|state|city|id|passport|email|cargo|item|content|weight|wgt|name|to|from|origin|dest|destination)`
+var sep = `[\s\-:]*`
+var labelSep = `[\s]*[:\-]+[\s]*`
+
+type anchor struct {
+	field    string
+	start    int
+	end      int
+	priority int // Higher priority labels win if they overlap
+}
+
+// ParseRegex extracts manifest data using a segmented heuristic approach.
 func ParseRegex(text string) models.Manifest {
 	m := models.Manifest{}
 	text = CleanText(text)
 
-	// Receiver Variations (Fuzzy)
-	rxLabel := `(?i)(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee)[s']*`
-	// Sender Variations (Fuzzy)
-	sxLabel := `(?i)(?:sender|sendr|origin|from|shippr|shipper|sent by)[s']*`
-
-	// 1. Receiver Name
-	m.ReceiverName = extractField(text, rxLabel+`[\s:']*(?:name[\s:']*)?`, `([^\n]+)`)
-	if m.ReceiverName == "" {
-		m.ReceiverName = extractField(text, `(?i)(?:^|\n)\s*name[\s:']*`, `([^\n]+)`)
+	// 1. Define Label Mappings
+	// Priority: 2 (Specific Label like 'Receiver Name'), 1 (Generic Label like 'Name')
+	labelMaps := []struct {
+		field    string
+		pattern  string
+		priority int
+	}{
+		{"ReceiverName", `(?i)\b(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee)[s']*\b[\s\-:]+name\b[\s\-:]*`, 2},
+		{"ReceiverName", `(?i)\b(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee)[s']*\b[\s\-:]*`, 2},
+		{"ReceiverName", `(?i)\bname\b[\s\-:]*`, 1},
+		{"ReceiverPhone", `(?i)\b(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee)[s']*\b[\s\-:]+\b(?:phone|mobile|tel|num|contact|telephone|mobil|number|ph|cell|whatsapp)\b[\s\-:]*`, 2},
+		{"ReceiverPhone", `(?i)\b(?:phone|mobile|tel|num|contact|telephone|mobil|number|ph|cell|whatsapp)\b[\s\-:]*`, 1},
+		{"ReceiverAddress", `(?i)\b(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee)[s']*\b[\s\-:]+\b(?:address|addr|street|location|addres|addrs|dir|direction)\b[\s\-:]*`, 2},
+		{"ReceiverAddress", `(?i)\b(?:address|addr|street|location|addres|addrs|dir|direction)\b[\s\-:]*`, 1},
+		{"ReceiverCountry", `(?i)\b(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee)[s']*\b[\s\-:]+\b(?:country|nation|state|city|pais|land|dest|destination)\b[\s\-:]*`, 2},
+		{"ReceiverCountry", `(?i)\b(?:country|nation|state|city|pais|land|dest|destination)\b[\s\-:]*`, 1},
+		{"ReceiverID", `(?i)\b(?:id|passport|passport\s*num|id\s*num|identity|identification|tin|nin|ssn)\b[\s\-:]*`, 1},
+		{"ReceiverID", `(?i)\b(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee)[s']*\b[\s\-:]+\b(?:id|passport|passport\s*num|id\s*num|identity|identification|tin|nin|ssn)\b[\s\-:]*`, 2},
+		{"ReceiverEmail", `(?i)\b(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee)[s']*\b[\s\-:]+\b(?:email|mail|e-mail)\b[\s\-:]*`, 2},
+		{"ReceiverEmail", `(?i)\b(?:email|mail|e-mail)\b[\s\-:]*`, 1},
+		{"SenderName", `(?i)\b(?:sender|sendr|origin|from|shippr|shipper|sent by)[s']*\b[\s\-:]+name\b[\s\-:]*`, 2},
+		{"SenderName", `(?i)\b(?:sender|sendr|origin|from|shippr|shipper|sent by)[s']*\b[\s\-:]*`, 2},
+		{"SenderCountry", `(?i)\b(?:sender|sendr|origin|from|shippr|shipper|sent by)[s']*\b[\s\-:]+\b(?:country|nation|state|city|pais|land|dest|destination)\b[\s\-:]*`, 2},
+		{"CargoType", `(?i)\b(?:item|content|cargo|description|type|package|commodity)\b[\s\-:]*`, 1},
+		{"Weight", `(?i)\b(?:weight|wgt|mass|gross\s*weight)\b[\s\-:]*`, 1},
 	}
 
-	// 2. Receiver Phone
-	phoneLabel := `(?:phone|mobile|tel|num|contact|telephone|mobil|number|ph|cell|whatsapp)`
-	m.ReceiverPhone = extractField(text, rxLabel+`[\s:']*`+phoneLabel+`[\s:']*`, `([\+\d\s\-\(\).]+)`)
-	if m.ReceiverPhone == "" {
-		m.ReceiverPhone = extractField(text, `(?i)`+phoneLabel+`[\s:']*`, `([\+\d\s\-\(\).]+)`)
-	}
+	// 2. Identify Anchors
+	var anchors []anchor
+	for _, lm := range labelMaps {
+		re := regexp.MustCompile(lm.pattern)
+		matches := re.FindAllStringIndex(text, -1)
+		for _, match := range matches {
+			anchorStart := match[0]
+			anchorText := text[match[0]:match[1]]
 
-	// 3. Receiver Address
-	addrLabel := `(?:address|addr|street|location|addres|addrs|dir|direction)`
-	m.ReceiverAddress = extractField(text, rxLabel+`[\s:']*`+addrLabel+`[\s:']*`, `(.+?)(?:\n|$)`)
-	if m.ReceiverAddress == "" {
-		m.ReceiverAddress = extractField(text, `(?i)`+addrLabel+`[\s:']*`, `(.+?)(?:\n|$)`)
-	}
+			// Quality Check:
+			// A label in the middle of a line should generally have a colon/hyphen
+			// to be considered a robust label, unless it's a very specific one.
+			isStartOfLine := anchorStart == 0 || text[anchorStart-1] == '\n' || (anchorStart > 1 && text[anchorStart-1] == ' ' && text[anchorStart-2] == '\n')
+			hasStrongSep := regexp.MustCompile(labelSep).MatchString(anchorText)
 
-	// 4. Receiver Country
-	countryLabel := `(?:country|nation|state|origin|city|pais|land|dest|destination)`
-	m.ReceiverCountry = extractField(text, rxLabel+`[\s:']*`+countryLabel+`[\s:']*`, `([^\n]+)`)
-	if m.ReceiverCountry == "" {
-		// Only pick if not sender's
-		match := extractField(text, `(?i)`+countryLabel+`[\s:']*`, `([^\n]+)`)
-		if match != "" && !strings.Contains(strings.ToLower(text), "sender") {
-			m.ReceiverCountry = match
+			if isStartOfLine || hasStrongSep || lm.priority > 1 {
+				anchors = append(anchors, anchor{
+					field:    lm.field,
+					start:    match[0],
+					end:      match[1],
+					priority: lm.priority,
+				})
+			}
 		}
 	}
 
-	// 5. Receiver ID
-	idLabel := `(?:id|passport|passport\s*num|id\s*num|identity|identification|tin|nin|ssn)`
-	m.ReceiverID = extractField(text, rxLabel+`[\s:']*`+idLabel+`[\s:']*`, `([A-Z0-9\s-]+)`)
-	if m.ReceiverID == "" {
-		m.ReceiverID = extractField(text, `(?i)`+idLabel+`[\s:']*`, `([A-Z0-9\s-]+)`)
+	// 3. Filter and Sort Anchors
+	// Remove overlapping anchors (keep higher priority or earlier match)
+	sort.Slice(anchors, func(i, j int) bool {
+		if anchors[i].start != anchors[j].start {
+			return anchors[i].start < anchors[j].start
+		}
+		return anchors[i].priority > anchors[j].priority
+	})
+
+	var filtered []anchor
+	lastEnd := -1
+	for _, a := range anchors {
+		if a.start >= lastEnd {
+			filtered = append(filtered, a)
+			lastEnd = a.end
+		}
+	}
+	anchors = filtered
+
+	// 4. Chunk and Assign
+	results := make(map[string]string)
+	for i, a := range anchors {
+		start := a.end
+		end := len(text)
+		if i+1 < len(anchors) {
+			end = anchors[i+1].start
+		}
+		val := strings.TrimSpace(text[start:end])
+		// Optimization: if the value is empty or just punctuation, don't overwrite
+		if val != "" {
+			if _, exists := results[a.field]; !exists || a.priority > 1 {
+				results[a.field] = val
+			}
+		}
 	}
 
-	// 6. Receiver Email
-	emailLabel := `(?:email|mail|e-mail)`
-	m.ReceiverEmail = extractField(text, rxLabel+`[\s:']*`+emailLabel+`[\s:']*`, `([^\n\s]+@[^\n\s]+\.[^\n\s]+)`)
+	// 5. Build Manifest
+	m.ReceiverName = results["ReceiverName"]
+	m.ReceiverPhone = results["ReceiverPhone"]
+	m.ReceiverAddress = results["ReceiverAddress"]
+	m.ReceiverCountry = results["ReceiverCountry"]
+	m.ReceiverID = results["ReceiverID"]
+	m.ReceiverEmail = results["ReceiverEmail"]
+	m.SenderName = results["SenderName"]
+	m.SenderCountry = results["SenderCountry"]
+	m.CargoType = results["CargoType"]
+
+	if weightStr, ok := results["Weight"]; ok {
+		// Clean weight string (e.g., "70 kg" -> "70")
+		re := regexp.MustCompile(`([\d.]+)`)
+		if match := re.FindString(weightStr); match != "" {
+			fmt.Sscanf(match, "%f", &m.Weight)
+		}
+	}
+
+	// 6. Entity Fallback (for fields that are still empty)
+	if m.ReceiverPhone == "" {
+		m.ReceiverPhone = extractEntity(text, `(?i)(?:phone|mobile|tel|num|contact|telephone|mobil|number|ph|cell|whatsapp)?[\s\-:]*([\+\d \t\-\(\).]{7,}\d)`)
+	}
 	if m.ReceiverEmail == "" {
-		m.ReceiverEmail = extractField(text, `(?i)`+emailLabel+`[\s:']*`, `([^\n\s]+@[^\n\s]+\.[^\n\s]+)`)
+		m.ReceiverEmail = extractEntity(text, `([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})`)
 	}
-
-	// 7. Sender Name
-	m.SenderName = extractField(text, sxLabel+`[\s:']*(?:name[\s:']*)?`, `([^\n]+)`)
-
-	// 8. Sender Country
-	m.SenderCountry = extractField(text, sxLabel+`[\s:']*`+countryLabel+`[\s:']*`, `([^\n]+)`)
-
-	// 9. Cargo Type
-	cargoLabel := `(?:item|content|cargo|description|type|package|commodity)`
-	m.CargoType = extractField(text, `(?i)`+cargoLabel+`[\s:']*`, `([^\n]+)`)
-
-	// 10. Weight
-	weightLabel := `(?:weight|wgt|mass|gross\s*weight)`
-	weightStr := extractField(text, weightLabel+`[\s:']*`, `([\d.]+)\s*(?:kg|kgs|kilos|kg's)?`)
-	if weightStr != "" {
-		fmt.Sscanf(weightStr, "%f", &m.Weight)
+	if m.Weight == 0 {
+		weightStr := extractEntity(text, `(?i)(?:weight|wgt|mass|gross\s*weight)[\s\-:]*([\d.]+)\s*(?:kg|kgs|kilos|kg's)?`)
+		if weightStr != "" {
+			fmt.Sscanf(weightStr, "%f", &m.Weight)
+		}
 	}
 
 	m.Validate()
 	return m
+}
+
+func extractEntity(text, pattern string) string {
+	re := regexp.MustCompile(pattern)
+	if match := re.FindStringSubmatch(text); len(match) > 1 {
+		return strings.TrimSpace(match[1])
+	}
+	return ""
 }
 
 func CleanText(text string) string {
@@ -101,14 +176,6 @@ func CleanText(text string) string {
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\r", "\n")
 	return text
-}
-
-func extractField(text, labelPattern, valuePattern string) string {
-	re := regexp.MustCompile(fmt.Sprintf(`(?i)%s\s*%s`, labelPattern, valuePattern))
-	if match := re.FindStringSubmatch(text); len(match) > 1 {
-		return strings.TrimSpace(match[1])
-	}
-	return ""
 }
 
 // ParseAI uses Gemini AI to extract manifest data with rate limiting
