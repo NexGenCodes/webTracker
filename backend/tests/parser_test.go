@@ -160,6 +160,13 @@ func TestParseRegex(t *testing.T) {
 			wantPhone: "+2348011122233",
 			wantEmail: "john@example.com",
 		},
+		{
+			name:     "Trailing Periods",
+			input:    "Receiver Name: John Doe. Address: 123 Main St. Country: Nigeria.",
+			wantName: "John Doe",
+			wantAddr: "123 Main St",
+			wantID:   "", // Check if ID is empty
+		},
 	}
 
 	for _, tt := range tests {

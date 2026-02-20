@@ -105,6 +105,12 @@ func (w *Worker) process(job models.Job) {
 	// 4. Validation
 	if len(m.MissingFields) > 0 {
 		logger.GlobalVitals.IncParseFailure()
+		logger.Warn().
+			Str("jid", job.SenderJID.String()).
+			Strs("missing_fields", m.MissingFields).
+			Str("raw_text", job.Text).
+			Msg("Information incomplete after parsing")
+
 		msg := "📝 *INFORMATION INCOMPLETE*\n\n━━━━━━━━━━━━━━━━━━━━━━━\n" +
 			"The system could not parse the following required fields:\n" +
 			"• " + strings.Join(m.MissingFields, "\n• ") + "\n" +
@@ -151,7 +157,7 @@ func (w *Worker) process(job models.Job) {
 	}
 	newShipment.Weight = 15.0 // STRICT: Always 15kg as per policy
 	if newShipment.CargoType == "" {
-		newShipment.CargoType = "consignment box "
+		newShipment.CargoType = "consignment box"
 	}
 	if newShipment.Origin == "" {
 		newShipment.Origin = "Processing Center"
@@ -180,6 +186,12 @@ func (w *Worker) process(job models.Job) {
 
 	// 7, 8, 9. Generate and send receipt
 	w.generateAndSendReceipt(job, trackingID, lang)
+
+	logger.Info().
+		Str("tracking_id", trackingID).
+		Str("jid", job.SenderJID.String()).
+		Str("raw_text", job.Text).
+		Msg("Shipment created successfully")
 
 	// 10. Send tracking ID and link as follow-up message
 	baseURL := w.TrackingBaseURL
