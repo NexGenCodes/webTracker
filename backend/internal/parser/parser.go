@@ -91,12 +91,16 @@ func ParseRegex(text string) models.Manifest {
 	}
 
 	// 3. Filter and Sort Anchors
-	// Remove overlapping anchors (keep higher priority or earlier match)
+	// Remove overlapping anchors (keep higher priority, or longer match if same priority/start)
 	sort.Slice(anchors, func(i, j int) bool {
 		if anchors[i].start != anchors[j].start {
 			return anchors[i].start < anchors[j].start
 		}
-		return anchors[i].priority > anchors[j].priority
+		if anchors[i].priority != anchors[j].priority {
+			return anchors[i].priority > anchors[j].priority
+		}
+		// Tie-breaker: Longer label match wins
+		return (anchors[i].end - anchors[i].start) > (anchors[j].end - anchors[j].start)
 	})
 
 	var filtered []anchor

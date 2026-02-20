@@ -7,14 +7,15 @@ import (
 
 func TestParseRegex(t *testing.T) {
 	tests := []struct {
-		name       string
-		input      string
-		wantName   string
-		wantPhone  string
-		wantAddr   string
-		wantSender string
-		wantEmail  string
-		wantID     string
+		name        string
+		input       string
+		wantName    string
+		wantPhone   string
+		wantAddr    string
+		wantSender  string
+		wantEmail   string
+		wantID      string
+		wantCountry string
 	}{
 		{
 			name:      "Standard Format v1",
@@ -167,6 +168,12 @@ func TestParseRegex(t *testing.T) {
 			wantAddr: "123 Main St",
 			wantID:   "", // Check if ID is empty
 		},
+		{
+			name:        "Possessive Sender and Overlap",
+			input:       "SENDER'S NAME : JENNIFER WARREN\nSENDER'S COUNTRY: AFGHANISTAN",
+			wantSender:  "JENNIFER WARREN",
+			wantCountry: "AFGHANISTAN",
+		},
 	}
 
 	for _, tt := range tests {
@@ -185,10 +192,13 @@ func TestParseRegex(t *testing.T) {
 				t.Errorf("ParseRegex() SenderName = [%v], want [%v]", got.SenderName, tt.wantSender)
 			}
 			if tt.wantEmail != "" && got.ReceiverEmail != tt.wantEmail {
-				t.Errorf("ParseRegex() Email = [%v], want [%v]", got.ReceiverEmail, tt.wantEmail)
+				t.Errorf("%s: ReceiverEmail = %q, want %q", tt.name, got.ReceiverEmail, tt.wantEmail)
 			}
 			if tt.wantID != "" && got.ReceiverID != tt.wantID {
 				t.Errorf("ParseRegex() ID = [%v], want [%v]", got.ReceiverID, tt.wantID)
+			}
+			if tt.wantCountry != "" && got.SenderCountry != tt.wantCountry {
+				t.Errorf("%s: SenderCountry = %q, want %q", tt.name, got.SenderCountry, tt.wantCountry)
 			}
 		})
 	}
