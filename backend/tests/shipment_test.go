@@ -20,11 +20,15 @@ func TestCalculateSchedule(t *testing.T) {
 		expectedDeliveryD int // Expected Day offset for Delivery (from Base)
 	}{
 		{
-			name:             "Mid-Day USA (New York is UTC-4 -> 06:00 AM Local)",
-			nowUTC:           baseTime, // 10:00 UTC = 06:00 AM NY
-			originCountry:    "usa",    // < 8 AM Rule should apply
-			expectedTransitH: 12,       // Should wait for 08:00 AM NY = 12:00 UTC
-			expectedTransitD: 0,        // Same day
+			name:             "Mid-Day USA (Lagos Admin Gate Daytime -> 11:00 UTC)",
+			nowUTC:           baseTime, // 10:00 UTC = 11:00 AM Lagos
+			originCountry:    "usa",    // Daytime in Lagos (8am-9pm) -> Add 1 hour buffer
+			expectedTransitH: 11,       // 11:00 AM Lagos = 11:00 UTC (Actually 11 AM Lagos = 10 AM UTC in Oct if UTC+1?)
+			// Wait, let's calculate: baseTime is 10:00 UTC.
+			// Lagos is UTC+1. So 11:00 AM Lagos.
+			// Daytime + 1 hour -> 12:00 PM Lagos.
+			// 12:00 PM Lagos = 11:00 AM UTC.
+			expectedTransitD: 0,
 		},
 		{
 			name:             "Late Night Nigeria (Lagos is UTC+1 -> 23:00 PM Local)",

@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync/atomic"
@@ -295,111 +296,125 @@ type EditHandler struct {
 }
 
 func (h *EditHandler) Execute(ctx context.Context, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
-	if len(args) < 2 {
-		return Result{Message: "📝 *EDIT SHIPMENT INFORMATION*\n\nUsage:\n`!edit [field] [new_value]`\n\nFields: `name`, `phone`, `address`, `country`, `email`, `id`, `sender`, `origin`"}
+	if len(args) < 1 {
+		return Result{Message: "✏️ *EDIT SHIPMENT*\n\nUsage: `!edit [TrackingID] [Updates...]` or `!edit [Updates...]` (targets last shipment)\n\n*Example:* `!edit LGS-1234 name: John, departure: tomorrow`"}
 	}
 
-	var trackingID, field, value string
 	jid := ctx.Value("jid").(string)
+	var trackingID string
+	var startIdx int
 
-	// Case 1: !edit [trackingID] [field] [value...]
-	if strings.Contains(args[0], "-") {
+	// 1. Identify Target Shipment
+	// Pattern: 3 uppercase letters, hyphen, 4 digits
+	idPattern := regexp.MustCompile(`^[A-Z]{3}-\d{4}$`)
+	if idPattern.MatchString(args[0]) {
 		trackingID = args[0]
-		field = args[1]
-		value = strings.Join(args[2:], " ")
+		startIdx = 1
 	} else {
-		// Case 2: !edit [field] [value...] (Target last shipment)
+		// Contextual Lookup: Fetch last shipment for this user
 		var err error
-		trackingID, err = ldb.GetLastTrackingByJID(ctx, jid)
+		trackingID, err = ldb.GetLastShipmentIDForUser(ctx, jid)
 		if err != nil || trackingID == "" {
-			return Result{Message: "⚠️ *NO RECORD FOUND*\n_I couldn't find your last shipment. Please provide the tracking ID._"}
+			return Result{Message: "⚠️ *CONTEXT ERROR*\n_I couldn't find your last shipment. Please provide the tracking ID (e.g., !edit ABC-1234 ...)._"}
 		}
-		field = args[0]
-		value = strings.Join(args[1:], " ")
+		startIdx = 0
 	}
 
-	if value == "" {
-		return Result{Message: "⚠️ *MISSING VALUE*\n_Please provide the new information for the field._"}
-	}
+	// 2. Parse Updates
+	updateText := strings.Join(args[startIdx:], " ")
+	updates := parser.ParseEditPairs(updateText)
 
-	// Normalize Field Names (Aliases)
-	normField := strings.ToLower(field)
-	switch normField {
-	case "receiver", "receivername", "receiver_name", "recipient", "reciever", "recieve", "recievers", "receivers", "recipientname":
-		field = "recipient_name"
-	case "sender", "sendername", "sender_name", "senders":
-		field = "sender_name"
-	case "phone", "phones", "receiverphone", "receiver_phone", "recipient_phone", "mobile", "mobiles", "number", "numbers", "receivernumber", "cell", "contact":
-		field = "recipient_phone"
-	case "email", "emails", "mail", "mails", "receiveremail", "receiver_email", "recipient_email":
-		field = "recipient_email"
-	case "country", "countries", "receivercountry", "receiver_country", "dest", "destination", "destinations", "location":
-		field = "destination"
-	case "address", "addresses", "addr", "receiveraddress", "receiver_address", "recipient_address":
-		field = "recipient_address"
-	case "sendercountry", "sender_country", "origin", "origins", "from", "source":
-		field = "origin"
-	case "senderphone", "sender_phone", "sendernumber", "sender_number":
-		field = "sender_phone"
-	case "type", "types", "cargotype", "cargo_type", "content", "contents":
-		field = "cargo_type"
-	case "departure", "departure_date", "departuredate", "transit", "transit_time":
-		field = "scheduled_transit_time"
-	case "arrival", "arrival_date", "arrivaldate", "delivery", "delivery_time":
-		field = "expected_delivery_time"
-	}
-
-	if field == "weight" {
-		return Result{Message: "🚫 *ACCESS DENIED*\n_The weight policy is strictly set to 15KG and cannot be modified._"}
-	}
-
-	// Validation Logic
-	if strings.Contains(strings.ToLower(field), "email") {
-		if !parser.ValidateEmail(value) {
-			return Result{Message: "⚠️ *INVALID EMAIL format*\n_Please provide a valid email address (e.g., name@domain.com)._"}
+	// Fallback for single field (e.g., !edit name Mark) if parser didn't find clear anchors
+	if len(updates) == 0 && len(args[startIdx:]) >= 2 {
+		// This handles the old style: !edit field value
+		field := args[startIdx]
+		value := strings.Join(args[startIdx+1:], " ")
+		// Reuse canonical mapping logic
+		normField := strings.ToLower(field)
+		dbField := ""
+		switch normField {
+		case "receiver", "name", "recipient", "reciever":
+			dbField = "recipient_name"
+		case "phone", "mobile", "number", "contact":
+			dbField = "recipient_phone"
+		case "address", "addr":
+			dbField = "recipient_address"
+		case "destination", "country", "to":
+			dbField = "destination"
+		case "origin", "from", "source":
+			dbField = "origin"
+		case "departure", "transit":
+			dbField = "scheduled_transit_time"
+		case "arrival", "delivery":
+			dbField = "expected_delivery_time"
+		case "cargo", "type", "content":
+			dbField = "cargo_type"
+		case "weight":
+			dbField = "weight"
+		}
+		if dbField != "" {
+			updates[dbField] = value
 		}
 	}
 
-	if strings.Contains(strings.ToLower(field), "phone") || strings.Contains(strings.ToLower(field), "mobile") {
-		if !parser.ValidatePhone(value) {
-			return Result{Message: "⚠️ *INVALID PHONE FORMAT*\n_Phone numbers must contain at least 5 digits._"}
-		}
+	if len(updates) == 0 {
+		return Result{Message: "⚠️ *NO UPDATES FOUND*\n_Please specify what you want to change (e.g., 'name: John' or 'departure: tomorrow')._"}
 	}
 
-	// Use the same parser cleaning logic as creation
-	value = parser.CleanText(value)
+	// 3. Apply Updates
+	var updatedFields []string
+	var dateChanged bool
 
-	// Special Handling for Dates (today, tomorrow, next tomorrow, yesterday)
-	if field == "scheduled_transit_time" || field == "expected_delivery_time" {
-		tz := h.AdminTimezone
-		if tz == "" {
-			tz = "Africa/Lagos" // Default
+	for field, value := range updates {
+		// Strict Policy: Weight is fixed
+		if field == "weight" {
+			continue
 		}
-		loc, _ := time.LoadLocation(tz)
-		now := time.Now().In(loc)
 
-		if parsedDate, ok := utils.ParseNaturalDate(value, now); ok {
-			// Format for SQLite (YYYY-MM-DD HH:MM:SS)
-			value = parsedDate.Format("2006-01-02 15:04:05")
-		} else {
-			// Fallback: Check if it's already a valid date string
-			_, err := time.Parse("2006-01-02", value)
-			if err != nil {
-				_, err = time.Parse("2006-01-02 15:04:05", value)
+		// Validation
+		if strings.Contains(field, "email") && !parser.ValidateEmail(value) {
+			continue
+		}
+		if strings.Contains(field, "phone") && !parser.ValidatePhone(value) {
+			continue
+		}
+
+		// Special Date Parsing
+		if field == "scheduled_transit_time" || field == "expected_delivery_time" {
+			tz := h.AdminTimezone
+			if tz == "" {
+				tz = "Africa/Lagos"
+			}
+			loc, _ := time.LoadLocation(tz)
+			now := time.Now().In(loc)
+
+			if parsedDate, ok := utils.ParseNaturalDate(value, now); ok {
+				value = parsedDate.Format("2006-01-02 15:04:05")
+			} else {
+				// Fallback to strict format
+				_, err := time.Parse("2006-01-02", value)
 				if err != nil {
-					return Result{Message: "⚠️ *INVALID DATE FORMAT*\n_Please use 'today', 'tomorrow', 'next tomorrow', 'yesterday' or YYYY-MM-DD._"}
+					_, err = time.Parse("2006-01-02 15:04:05", value)
+					if err != nil {
+						continue // Skip invalid date
+					}
 				}
 			}
+			dateChanged = true
+		}
+
+		err := ldb.UpdateShipmentField(ctx, trackingID, field, value)
+		if err == nil {
+			updatedFields = append(updatedFields, strings.ToUpper(field))
 		}
 	}
 
-	err := ldb.UpdateShipmentField(ctx, trackingID, field, value)
-	if err != nil {
-		return Result{Message: fmt.Sprintf("❌ *UPDATE FAILED*\n_%v_", err)}
+	if len(updatedFields) == 0 {
+		return Result{Message: "⚠️ *UPDATE FAILED*\n_None of the fields could be updated. Check your format (e.g., label: value)._"}
 	}
 
-	// Catch-up logic for edits: If we edited a date, re-calculate status
-	if field == "scheduled_transit_time" || field == "expected_delivery_time" {
+	// 4. Persistence & Cleanup
+	if dateChanged {
 		if s, _ := ldb.GetShipment(ctx, trackingID); s != nil {
 			newStatus := s.ResolveStatus(time.Now().UTC())
 			if newStatus != s.Status {
@@ -408,8 +423,11 @@ func (h *EditHandler) Execute(ctx context.Context, ldb *localdb.Client, args []s
 		}
 	}
 
+	summary := fmt.Sprintf("✅ *INFORMATION UPDATED*\n\n🆔 *%s*\n\n📝 *FIELDS MODIFIED:*\n• %s\n\n━━━━━━━━━━━━━━━━━━━━━━━\n_Generating your updated receipt..._",
+		trackingID, strings.Join(updatedFields, "\n• "))
+
 	return Result{
-		Message: fmt.Sprintf("✅ *INFORMATION UPDATED*\n\n━━━━━━━━━━━━━━━━━━━━━━━\nID: *%s*\nField: *%s*\nNew Value: *%s*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n_Generating your updated receipt..._", trackingID, strings.ToUpper(field), value),
+		Message: summary,
 		EditID:  trackingID,
 	}
 }
