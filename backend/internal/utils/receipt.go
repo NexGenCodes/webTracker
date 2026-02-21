@@ -166,16 +166,23 @@ func drawV11Grid(dc *gg.Context, shipment shipment.Shipment, lang i18n.Language)
 	drawSelectorV10(dc, gX+c1W, gY, c2W, selectorH, i18n.T(lang, "receipt_service"), []string{"EXPRESS", "DIPLOMATIC", "DOMESTIC", "OVERNIGHT"}, "DIPLOMATIC")
 	drawSelectorV10(dc, gX+c1W+c2W, gY, c3W, selectorH, i18n.T(lang, "receipt_payment"), []string{"CASH", "CHEQUE", "ACCOUNT", "BILLED"}, "ACCOUNT")
 
-	now := time.Now()
-	departure := now
-	if now.Hour() >= 23 {
-		departure = now.AddDate(0, 0, 1)
+	// Use stored timestamps from database
+	departure := shipment.ScheduledTransitTime
+	arrival := shipment.ExpectedDeliveryTime
+
+	// Convert to localized time for display
+	origLoc, _ := time.LoadLocation(shipment.SenderTimezone)
+	if origLoc == nil {
+		origLoc = time.UTC
 	}
-	arrival := departure.AddDate(0, 0, 1)
+	destLoc, _ := time.LoadLocation(shipment.RecipientTimezone)
+	if destLoc == nil {
+		destLoc = time.UTC
+	}
 
 	dateFormat := i18n.GetDateFormat(lang)
-	depStr := departure.Format(dateFormat)
-	arrStr := arrival.Format(dateFormat)
+	depStr := departure.In(origLoc).Format(dateFormat)
+	arrStr := arrival.In(destLoc).Format(dateFormat)
 
 	drawSmartCellV10(dc, gX+c1W, gY+selectorH, c2W, rowH, i18n.T(lang, "receipt_dep_date"), depStr)
 	drawSmartCellV10(dc, gX+c1W+c2W, gY+selectorH, c3W, rowH, i18n.T(lang, "receipt_arr_date"), arrStr)
