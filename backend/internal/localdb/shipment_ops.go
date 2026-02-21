@@ -274,3 +274,14 @@ func (c *Client) FindSimilarShipment(ctx context.Context, userJID, recipientPhon
 	}
 	return id, err
 }
+
+// GetLastShipmentIDForUser returns the tracking ID of the most recently created shipment for a given JID.
+func (c *Client) GetLastShipmentIDForUser(ctx context.Context, userJID string) (string, error) {
+	query := `SELECT tracking_id FROM Shipment WHERE user_jid = ? ORDER BY created_at DESC LIMIT 1`
+	var id string
+	err := c.db.QueryRowContext(ctx, query, userJID).Scan(&id)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return id, err
+}

@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
 
 	"golang.org/x/time/rate"
@@ -22,50 +21,32 @@ import (
 var aiRateLimiter = rate.NewLimiter(rate.Every(200*time.Millisecond), 5)
 
 var stopLabels = `(?:receiver|reciver|sender|sendr|phone|mobile|tel|num|contact|address|addr|country|nation|state|city|id|passport|email|cargo|item|content|weight|wgt|name|to|from|origin|dest|destination)`
-var sep = `[\s\-:]*`
 var labelSep = `[\s]*[:\-]+[\s]*`
 
 type anchor struct {
 	field    string
 	start    int
 	end      int
-	priority int // Higher priority labels win if they overlap
+	priority int
 }
 
-// ParseRegex extracts manifest data using a segmented heuristic approach.
-func ParseRegex(text string) models.Manifest {
-	m := models.Manifest{}
-	// 0. Pre-processing: Footer Trimming
-	// Detect common footer noise to prevent it from bleeding into the last field
-	footerRe := regexp.MustCompile(`(?im)^[\s\-_*]{3,}$|(?i)\b(?:thank\s*you|regards|best|sincerely|kind\s*regards|thanks|saludos)\b`)
-	if loc := footerRe.FindStringIndex(text); loc != nil {
-		text = text[:loc[0]]
-	}
-	text = CleanText(text)
+type labelMap struct {
+	field    string
+	pattern  string
+	priority int
+}
 
-	// Identify Context Zones (Receiver vs Sender)
-	senderStartIdx := -1
-	senderLabels := regexp.MustCompile(`(?i)\b(?:sender|sendr|origin|from|shippr|shipper|sent by)\b`)
-	if match := senderLabels.FindStringIndex(text); match != nil {
-		senderStartIdx = match[0]
-	}
-
-	// 1. Define Label Mappings
-	// Priority: 2 (Specific Label like 'Receiver Name'), 1 (Generic Label like 'Name')
-	labelMaps := []struct {
-		field    string
-		pattern  string
-		priority int
-	}{
-		{"ReceiverName", `(?i)\b(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee)[s']*\b[\s\-:]+name\b[\s\-:]*`, 2},
-		{"ReceiverName", `(?i)\b(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee)[s']*\b[\s\-:]*`, 2},
+func GetLabelMappings() []labelMap {
+	return []labelMap{
+		{"ReceiverName", `(?i)\b(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|consignment|consignee)[s']*\b[\s\-:]+name\b[\s\-:]*`, 2},
+		{"ReceiverName", `(?i)\b(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|consignment|consignee)[s']*\b[\s\-:]*`, 2},
 		{"ReceiverName", `(?i)\bname\b[\s\-:]*`, 1},
 		{"ReceiverPhone", `(?i)\b(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee)[s']*\b[\s\-:]+\b(?:phone|mobile|tel|num|contact|telephone|mobil|number|ph|cell|whatsapp)\b[\s\-:]*`, 2},
 		{"ReceiverPhone", `(?i)\b(?:phone|mobile|tel|num|contact|telephone|mobil|number|ph|cell|whatsapp)\b[\s\-:]*`, 1},
 		{"ReceiverAddress", `(?i)\b(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee)[s']*\b[\s\-:]+\b(?:address|addr|street|location|addres|addrs|dir|direction)\b[\s\-:]*`, 2},
 		{"ReceiverAddress", `(?i)\b(?:address|addr|street|location|addres|addrs|dir|direction)\b[\s\-:]*`, 1},
 		{"ReceiverCountry", `(?i)\b(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee)[s']*\b[\s\-:]+\b(?:country|nation|state|city|pais|land|dest|destination)\b[\s\-:]*`, 2},
-		{"ReceiverCountry", `(?i)\b(?:country|nation|state|city|pais|land|dest|destination)\b[\s\-:]*`, 1},
+		{"ReceiverCountry", `(?i)\b(?:country|nation|state|city|pais|land|dest|destination|to)\b[\s\-:]*`, 2},
 		{"ReceiverID", `(?i)\b(?:id|passport|passport\s*num|id\s*num|identity|identification|tin|nin|ssn)\b[\s\-:]*`, 1},
 		{"ReceiverID", `(?i)\b(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee)[s']*\b[\s\-:]+\b(?:id|passport|passport\s*num|id\s*num|identity|identification|tin|nin|ssn)\b[\s\-:]*`, 2},
 		{"ReceiverEmail", `(?i)\b(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee)[s']*\b[\s\-:]+\b(?:email|mail|e-mail)\b[\s\-:]*`, 2},
@@ -75,87 +56,31 @@ func ParseRegex(text string) models.Manifest {
 		{"SenderCountry", `(?i)\b(?:sender|sendr|origin|from|shippr|shipper|sent by)[s']*\b[\s\-:]+\b(?:country|nation|state|city|pais|land|dest|destination)\b[\s\-:]*`, 2},
 		{"CargoType", `(?i)\b(?:item|content|cargo|description|type|package|commodity)\b[\s\-:]*`, 1},
 		{"Weight", `(?i)\b(?:weight|wgt|mass|gross\s*weight)\b[\s\-:]*`, 1},
+		{"scheduled_transit_time", `(?i)\b(?:departure|transit\s*time|depart|sent\s*date|start\s*date|transit)\b[\s\-:]*`, 2},
+		{"expected_delivery_time", `(?i)\b(?:arrival|delivery\s*time|arrive|expect|delivery\s*date|delivered\s*on|delivery)\b[\s\-:]*`, 2},
+	}
+}
+
+// ParseRegex extracts manifest data using a segmented heuristic approach.
+func ParseRegex(text string) models.Manifest {
+	m := models.Manifest{}
+	footerRe := regexp.MustCompile(`(?im)^[\s\-_*]{3,}$|(?i)\b(?:thank\s*you|regards|best|sincerely|kind\s*regards|thanks|saludos)\b`)
+	if loc := footerRe.FindStringIndex(text); loc != nil {
+		text = text[:loc[0]]
+	}
+	text = CleanText(text)
+
+	senderStartIdx := -1
+	senderLabels := regexp.MustCompile(`(?i)\b(?:sender|sendr|origin|from|shippr|shipper|sent by)\b`)
+	if match := senderLabels.FindStringIndex(text); match != nil {
+		senderStartIdx = match[0]
 	}
 
-	// 2. Identify Anchors
-	var anchors []anchor
-	for _, lm := range labelMaps {
-		re := regexp.MustCompile(lm.pattern)
-		matches := re.FindAllStringIndex(text, -1)
-		for _, match := range matches {
-			anchorStart := match[0]
-			anchorText := text[match[0]:match[1]]
+	labelMaps := GetLabelMappings()
+	anchors := findAnchors(text, labelMaps)
+	anchors = sortAndFilterAnchors(anchors)
+	results := chunkAndAssign(text, anchors)
 
-			// Quality Check:
-			// A label in the middle of a line should generally have a colon/hyphen
-			// to be considered a robust label, unless it's a very specific one.
-			isStartOfLine := anchorStart == 0 || text[anchorStart-1] == '\n' || (anchorStart > 1 && text[anchorStart-1] == ' ' && text[anchorStart-2] == '\n')
-			hasStrongSep := regexp.MustCompile(labelSep).MatchString(anchorText)
-
-			if isStartOfLine || hasStrongSep || lm.priority > 1 {
-				anchors = append(anchors, anchor{
-					field:    lm.field,
-					start:    match[0],
-					end:      match[1],
-					priority: lm.priority,
-				})
-			}
-		}
-	}
-
-	// 3. Filter and Sort Anchors
-	// Remove overlapping anchors (keep higher priority, or longer match if same priority/start)
-	sort.Slice(anchors, func(i, j int) bool {
-		if anchors[i].start != anchors[j].start {
-			return anchors[i].start < anchors[j].start
-		}
-		if anchors[i].priority != anchors[j].priority {
-			return anchors[i].priority > anchors[j].priority
-		}
-		// Tie-breaker: Longer label match wins
-		return (anchors[i].end - anchors[i].start) > (anchors[j].end - anchors[j].start)
-	})
-
-	var filtered []anchor
-	lastEnd := -1
-	for _, a := range anchors {
-		if a.start >= lastEnd {
-			filtered = append(filtered, a)
-			lastEnd = a.end
-		}
-	}
-	anchors = filtered
-
-	// 4. Chunk and Assign
-	results := make(map[string]string)
-	for i, a := range anchors {
-		start := a.end
-		end := len(text)
-		if i+1 < len(anchors) {
-			end = anchors[i+1].start
-		}
-		val := strings.TrimSpace(text[start:end])
-		// Optimization: if the value is empty or just punctuation, don't overwrite
-		if val != "" {
-			// User request: remove trailing periods from saved values
-			val = strings.TrimRight(val, ".")
-			val = strings.TrimSpace(val)
-
-			// Logic-First Improvement: Fields like Name, Phone, ID, Country are usually single-line.
-			// Only Address and CargoType should be allowed to swallow multiple lines.
-			if a.field != "ReceiverAddress" && a.field != "CargoType" {
-				if idx := strings.Index(val, "\n"); idx != -1 {
-					val = strings.TrimSpace(val[:idx])
-				}
-			}
-
-			if _, exists := results[a.field]; !exists || a.priority > 1 {
-				results[a.field] = val
-			}
-		}
-	}
-
-	// 5. Build Manifest
 	m.ReceiverName = results["ReceiverName"]
 	m.ReceiverPhone = results["ReceiverPhone"]
 	m.ReceiverAddress = results["ReceiverAddress"]
@@ -167,14 +92,12 @@ func ParseRegex(text string) models.Manifest {
 	m.CargoType = results["CargoType"]
 
 	if weightStr, ok := results["Weight"]; ok {
-		// Clean weight string (e.g., "70 kg" -> "70")
 		re := regexp.MustCompile(`([\d.]+)`)
 		if match := re.FindString(weightStr); match != "" {
 			fmt.Sscanf(match, "%f", &m.Weight)
 		}
 	}
 
-	// 6. Entity Fallback (Context-Aware)
 	receiverZone := text
 	if senderStartIdx != -1 {
 		receiverZone = text[:senderStartIdx]
@@ -184,7 +107,6 @@ func ParseRegex(text string) models.Manifest {
 		m.ReceiverPhone = extractEntity(receiverZone, `(?i)(?:phone|mobile|tel|num|contact|telephone|mobil|number|ph|cell|whatsapp)?[\s\-:]*([\+\d \t\-\(\).]{7,}\d)`)
 	}
 	if m.ReceiverEmail == "" {
-		// Use full text as fallback for email since it's quite unique
 		m.ReceiverEmail = extractEntity(text, `([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})`)
 	}
 	if m.Weight == 0 {
@@ -194,9 +116,7 @@ func ParseRegex(text string) models.Manifest {
 		}
 	}
 
-	// 7. Tabular Fallback (If still critical fields are missing)
 	if m.ReceiverName == "" || m.ReceiverPhone == "" {
-		// Use receiver zone for tabular extraction if we have a sender break
 		tabularText := text
 		if senderStartIdx != -1 {
 			tabularText = receiverZone
@@ -211,13 +131,11 @@ func ParseRegex(text string) models.Manifest {
 			}
 		}
 
-		// Heuristic: First line is often Name if it's short and no labels found
 		if m.ReceiverName == "" && len(cleanLines) > 0 {
 			if len(cleanLines[0]) < 40 && !regexp.MustCompile(`(?i)`+stopLabels).MatchString(cleanLines[0]) {
 				m.ReceiverName = cleanLines[0]
 			}
 		}
-		// Second or third line with numbers is often Phone
 		if m.ReceiverPhone == "" {
 			phoneRe := regexp.MustCompile(`(?i)(?:\+?\d[\d\s\-\(\)]{7,}\d)`)
 			for i := 0; i < len(cleanLines) && i < 4; i++ {
@@ -233,6 +151,110 @@ func ParseRegex(text string) models.Manifest {
 	return m
 }
 
+func ParseEditPairs(text string) map[string]string {
+	text = CleanText(text)
+	maps := GetLabelMappings()
+	anchors := findAnchors(text, maps)
+	anchors = sortAndFilterAnchors(anchors)
+	results := chunkAndAssign(text, anchors)
+
+	dbMap := map[string]string{
+		"ReceiverName":           "recipient_name",
+		"ReceiverPhone":          "recipient_phone",
+		"ReceiverAddress":        "recipient_address",
+		"ReceiverCountry":        "destination",
+		"ReceiverID":             "recipient_id",
+		"ReceiverEmail":          "recipient_email",
+		"SenderName":             "sender_name",
+		"SenderCountry":          "origin",
+		"CargoType":              "cargo_type",
+		"Weight":                 "weight",
+		"scheduled_transit_time": "scheduled_transit_time",
+		"expected_delivery_time": "expected_delivery_time",
+	}
+
+	final := make(map[string]string)
+	for k, v := range results {
+		if dbField, ok := dbMap[k]; ok {
+			final[dbField] = v
+		}
+	}
+	return final
+}
+
+func findAnchors(text string, mappings []labelMap) []anchor {
+	var anchors []anchor
+	for _, lm := range mappings {
+		re := regexp.MustCompile(lm.pattern)
+		matches := re.FindAllStringIndex(text, -1)
+		for _, match := range matches {
+			anchorStart := match[0]
+			anchorText := text[match[0]:match[1]]
+			isStartOfLine := anchorStart == 0 || text[anchorStart-1] == '\n' || (anchorStart > 1 && text[anchorStart-1] == ' ' && text[anchorStart-2] == '\n')
+			hasStrongSep := regexp.MustCompile(labelSep).MatchString(anchorText)
+
+			if isStartOfLine || hasStrongSep || lm.priority > 1 {
+				anchors = append(anchors, anchor{
+					field:    lm.field,
+					start:    match[0],
+					end:      match[1],
+					priority: lm.priority,
+				})
+			}
+		}
+	}
+	return anchors
+}
+
+func sortAndFilterAnchors(anchors []anchor) []anchor {
+	sort.Slice(anchors, func(i, j int) bool {
+		if anchors[i].start != anchors[j].start {
+			return anchors[i].start < anchors[j].start
+		}
+		if anchors[i].priority != anchors[j].priority {
+			return anchors[i].priority > anchors[j].priority
+		}
+		return (anchors[i].end - anchors[i].start) > (anchors[j].end - anchors[j].start)
+	})
+
+	var filtered []anchor
+	lastEnd := -1
+	for _, a := range anchors {
+		if a.start >= lastEnd {
+			filtered = append(filtered, a)
+			lastEnd = a.end
+		}
+	}
+	return filtered
+}
+
+func chunkAndAssign(text string, anchors []anchor) map[string]string {
+	results := make(map[string]string)
+	for i, a := range anchors {
+		start := a.end
+		end := len(text)
+		if i+1 < len(anchors) {
+			end = anchors[i+1].start
+		}
+		val := strings.TrimSpace(text[start:end])
+		if val != "" {
+			// Trim common delimiters that might be between fields
+			val = strings.TrimRight(val, ".,;|\n\t ")
+			val = strings.TrimSpace(val)
+
+			if a.field != "ReceiverAddress" && a.field != "CargoType" {
+				if idx := strings.Index(val, "\n"); idx != -1 {
+					val = strings.TrimSpace(val[:idx])
+				}
+			}
+			if _, exists := results[a.field]; !exists || a.priority > 1 {
+				results[a.field] = val
+			}
+		}
+	}
+	return results
+}
+
 func extractEntity(text, pattern string) string {
 	re := regexp.MustCompile(pattern)
 	if match := re.FindStringSubmatch(text); len(match) > 1 {
@@ -242,22 +264,17 @@ func extractEntity(text, pattern string) string {
 }
 
 func CleanText(text string) string {
-	// Standardize line endings and remove weird invisible chars
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\r", "\n")
 	return text
 }
 
-// ParseAI uses Gemini AI to extract manifest data with rate limiting
 func ParseAI(text, apiKey string) (models.Manifest, error) {
-	// Rate limit AI requests
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
 	if err := aiRateLimiter.Wait(ctx); err != nil {
 		return models.Manifest{}, fmt.Errorf("AI rate limit exceeded: %w", err)
 	}
-
 	url := "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=" + apiKey
 
 	prompt := `You are a logistics data extraction assistant. Extract shipping information from user text and return JSON matching the schema below.
@@ -298,25 +315,21 @@ func ParseAI(text, apiKey string) (models.Manifest, error) {
 	if err != nil {
 		return models.Manifest{}, err
 	}
-
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return models.Manifest{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return models.Manifest{}, err
 	}
 	defer resp.Body.Close()
-
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return models.Manifest{}, fmt.Errorf("AI API error %d: %s", resp.StatusCode, string(body))
 	}
-
 	var result struct {
 		Candidates []struct {
 			Content struct {
@@ -326,44 +339,33 @@ func ParseAI(text, apiKey string) (models.Manifest, error) {
 			} `json:"content"`
 		} `json:"candidates"`
 	}
-
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return models.Manifest{}, err
 	}
-
 	if len(result.Candidates) == 0 || len(result.Candidates[0].Content.Parts) == 0 {
 		return models.Manifest{}, fmt.Errorf("no AI response")
 	}
-
-	aiText := result.Candidates[0].Content.Parts[0].Text
-	aiText = strings.TrimSpace(aiText)
+	aiText := strings.TrimSpace(result.Candidates[0].Content.Parts[0].Text)
 	aiText = strings.Trim(aiText, "```json")
 	aiText = strings.Trim(aiText, "```")
 	aiText = strings.TrimSpace(aiText)
-
 	var m models.Manifest
 	if err := json.Unmarshal([]byte(aiText), &m); err != nil {
-		logger.Warn().Str("ai_response", aiText).Msg("Failed to parse AI JSON")
 		return models.Manifest{}, err
 	}
-
 	return m, nil
 }
 
-// ValidateEmail checks if the string superficially resembles an email.
 func ValidateEmail(email string) bool {
 	return strings.Contains(email, "@") && strings.Contains(email, ".")
 }
 
-// ValidatePhone checks if the string looks like a phone number (mostly digits).
 func ValidatePhone(phone string) bool {
-	// Must have at least a few digits
 	digits := 0
 	for _, r := range phone {
 		if r >= '0' && r <= '9' {
 			digits++
 		}
 	}
-	// Arbitrary minimum of 5 digits to be a "phone number"
 	return digits >= 5
 }
