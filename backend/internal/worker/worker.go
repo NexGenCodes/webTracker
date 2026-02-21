@@ -93,8 +93,8 @@ func (w *Worker) process(job models.Job) {
 	// 3. Normal Parsing (Regex first)
 	m := parser.ParseRegex(job.Text)
 
-	// AI Fallback
-	if len(m.MissingFields) > 0 {
+	// AI Fallback (Minimized: Only if critical fields are missing to save costs)
+	if m.ReceiverName == "" || m.ReceiverPhone == "" || m.ReceiverAddress == "" {
 		if aiM, err := parser.ParseAI(job.Text, w.GeminiKey); err == nil {
 			m.Merge(aiM)
 			m.IsAI = true
@@ -108,8 +108,6 @@ func (w *Worker) process(job models.Job) {
 		logger.Warn().
 			Str("jid", job.SenderJID.String()).
 			Strs("missing_fields", m.MissingFields).
-			Str("raw_text", job.Text).
-			Interface("parsed_values", m).
 			Msg("Information incomplete after parsing")
 
 		msg := "📝 *INFORMATION INCOMPLETE*\n\n━━━━━━━━━━━━━━━━━━━━━━━\n" +
@@ -156,6 +154,9 @@ func (w *Worker) process(job models.Job) {
 		Weight:    m.Weight,
 		Cost:      0.0,
 	}
+
+	// 5. Catch-up Logic: Set initial status based on schedule
+	newShipment.Status = newShipment.ResolveStatus(nowUTC)
 	newShipment.Weight = 15.0 // STRICT: Always 15kg as per policy
 	if newShipment.CargoType == "" {
 		newShipment.CargoType = "consignment box"
@@ -191,8 +192,6 @@ func (w *Worker) process(job models.Job) {
 	logger.Info().
 		Str("tracking_id", trackingID).
 		Str("jid", job.SenderJID.String()).
-		Str("raw_text", job.Text).
-		Interface("parsed_values", m).
 		Msg("Shipment created successfully")
 
 	// 10. Send tracking ID and link as follow-up message

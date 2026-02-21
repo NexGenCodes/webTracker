@@ -102,6 +102,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) 
 			h.CompanyPrefix = d.AwbCmd
 		case *EditHandler:
 			h.CompanyPrefix = d.AwbCmd
+			h.AdminTimezone = d.AdminTimezone
 		case *BroadcastHandler:
 			h.Sender = d.sender
 		case *StatusHandler:
@@ -233,9 +234,9 @@ func (h *HelpHandler) Execute(ctx context.Context, ldb *localdb.Client, args []s
 		msg = fmt.Sprintf("🛠️ *%s - ADMIN CONTROL PANEL*\n\n", company) +
 			"━━━━ MANAGEMENT ━━━━\n" +
 			"📊 `!stats` - Daily Operations\n" +
-			"� `!broadcast [msg]` - Global Update\n" +
+			" `!broadcast [msg]` - Global Update\n" +
 			"🖥️ `!status` - System Health/Groups\n" +
-			"�� `!edit [field] [value]` - Fix shipment mistakes\n" +
+			" `!edit [field] [value]` - Fix shipment mistakes\n" +
 			"🗑️ `!delete [ID]` - Permanently remove shipment\n" +
 			"━━━━ GENERAL ━━━━\n" +
 			"🔍 `!info [ID]` - Check shipment status\n" +
@@ -245,7 +246,10 @@ func (h *HelpHandler) Execute(ctx context.Context, ldb *localdb.Client, args []s
 			"*🛠️ HOW TO EDIT:*\n" +
 			"`!edit name Jane Doe` (Fixes last shipment)\n" +
 			fmt.Sprintf("`!edit %s-123 name Jane Doe` (Fixes specific ID)\n", h.CompanyPrefix) +
-			"_Fields: name, phone, address, country, email, id, sender, origin_"
+			"_Fields: name, phone, address, country, origin, departure, arrival_\n\n" +
+			"*📅 DATE EDITING:*\n" +
+			"_Use: today, tomorrow, next tomorrow, yesterday_\n" +
+			"_Example: `!edit departure tomorrow`_"
 	} else {
 		msg = fmt.Sprintf("📖 *%s - CUSTOMER SERVICE*\n\n", company) +
 			"━━━━ AVAILABLE COMMANDS ━━━━\n" +
@@ -287,6 +291,7 @@ func (h *LangHandler) Execute(ctx context.Context, ldb *localdb.Client, args []s
 // EditHandler handles !edit [trackingID] [field] [value] or !edit [field] [value]
 type EditHandler struct {
 	CompanyPrefix string
+	AdminTimezone string
 }
 
 func (h *EditHandler) Execute(ctx context.Context, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
@@ -338,6 +343,10 @@ func (h *EditHandler) Execute(ctx context.Context, ldb *localdb.Client, args []s
 		field = "sender_phone"
 	case "type", "types", "cargotype", "cargo_type", "content", "contents":
 		field = "cargo_type"
+	case "departure", "departure_date", "departuredate", "transit", "transit_time":
+		field = "scheduled_transit_time"
+	case "arrival", "arrival_date", "arrivaldate", "delivery", "delivery_time":
+		field = "expected_delivery_time"
 	}
 
 	if field == "weight" {
@@ -360,9 +369,43 @@ func (h *EditHandler) Execute(ctx context.Context, ldb *localdb.Client, args []s
 	// Use the same parser cleaning logic as creation
 	value = parser.CleanText(value)
 
+	// Special Handling for Dates (today, tomorrow, next tomorrow, yesterday)
+	if field == "scheduled_transit_time" || field == "expected_delivery_time" {
+		tz := h.AdminTimezone
+		if tz == "" {
+			tz = "Africa/Lagos" // Default
+		}
+		loc, _ := time.LoadLocation(tz)
+		now := time.Now().In(loc)
+
+		if parsedDate, ok := utils.ParseNaturalDate(value, now); ok {
+			// Format for SQLite (YYYY-MM-DD HH:MM:SS)
+			value = parsedDate.Format("2006-01-02 15:04:05")
+		} else {
+			// Fallback: Check if it's already a valid date string
+			_, err := time.Parse("2006-01-02", value)
+			if err != nil {
+				_, err = time.Parse("2006-01-02 15:04:05", value)
+				if err != nil {
+					return Result{Message: "⚠️ *INVALID DATE FORMAT*\n_Please use 'today', 'tomorrow', 'next tomorrow', 'yesterday' or YYYY-MM-DD._"}
+				}
+			}
+		}
+	}
+
 	err := ldb.UpdateShipmentField(ctx, trackingID, field, value)
 	if err != nil {
 		return Result{Message: fmt.Sprintf("❌ *UPDATE FAILED*\n_%v_", err)}
+	}
+
+	// Catch-up logic for edits: If we edited a date, re-calculate status
+	if field == "scheduled_transit_time" || field == "expected_delivery_time" {
+		if s, _ := ldb.GetShipment(ctx, trackingID); s != nil {
+			newStatus := s.ResolveStatus(time.Now().UTC())
+			if newStatus != s.Status {
+				_ = ldb.UpdateShipmentStatus(ctx, trackingID, newStatus)
+			}
+		}
 	}
 
 	return Result{
