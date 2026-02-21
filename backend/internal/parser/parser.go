@@ -35,7 +35,20 @@ type anchor struct {
 // ParseRegex extracts manifest data using a segmented heuristic approach.
 func ParseRegex(text string) models.Manifest {
 	m := models.Manifest{}
+	// 0. Pre-processing: Footer Trimming
+	// Detect common footer noise to prevent it from bleeding into the last field
+	footerRe := regexp.MustCompile(`(?im)^[\s\-_*]{3,}$|(?i)\b(?:thank\s*you|regards|best|sincerely|kind\s*regards|thanks|saludos)\b`)
+	if loc := footerRe.FindStringIndex(text); loc != nil {
+		text = text[:loc[0]]
+	}
 	text = CleanText(text)
+
+	// Identify Context Zones (Receiver vs Sender)
+	senderStartIdx := -1
+	senderLabels := regexp.MustCompile(`(?i)\b(?:sender|sendr|origin|from|shippr|shipper|sent by)\b`)
+	if match := senderLabels.FindStringIndex(text); match != nil {
+		senderStartIdx = match[0]
+	}
 
 	// 1. Define Label Mappings
 	// Priority: 2 (Specific Label like 'Receiver Name'), 1 (Generic Label like 'Name')
@@ -128,6 +141,14 @@ func ParseRegex(text string) models.Manifest {
 			val = strings.TrimRight(val, ".")
 			val = strings.TrimSpace(val)
 
+			// Logic-First Improvement: Fields like Name, Phone, ID, Country are usually single-line.
+			// Only Address and CargoType should be allowed to swallow multiple lines.
+			if a.field != "ReceiverAddress" && a.field != "CargoType" {
+				if idx := strings.Index(val, "\n"); idx != -1 {
+					val = strings.TrimSpace(val[:idx])
+				}
+			}
+
 			if _, exists := results[a.field]; !exists || a.priority > 1 {
 				results[a.field] = val
 			}
@@ -153,17 +174,58 @@ func ParseRegex(text string) models.Manifest {
 		}
 	}
 
-	// 6. Entity Fallback (for fields that are still empty)
+	// 6. Entity Fallback (Context-Aware)
+	receiverZone := text
+	if senderStartIdx != -1 {
+		receiverZone = text[:senderStartIdx]
+	}
+
 	if m.ReceiverPhone == "" {
-		m.ReceiverPhone = extractEntity(text, `(?i)(?:phone|mobile|tel|num|contact|telephone|mobil|number|ph|cell|whatsapp)?[\s\-:]*([\+\d \t\-\(\).]{7,}\d)`)
+		m.ReceiverPhone = extractEntity(receiverZone, `(?i)(?:phone|mobile|tel|num|contact|telephone|mobil|number|ph|cell|whatsapp)?[\s\-:]*([\+\d \t\-\(\).]{7,}\d)`)
 	}
 	if m.ReceiverEmail == "" {
+		// Use full text as fallback for email since it's quite unique
 		m.ReceiverEmail = extractEntity(text, `([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})`)
 	}
 	if m.Weight == 0 {
 		weightStr := extractEntity(text, `(?i)(?:weight|wgt|mass|gross\s*weight)[\s\-:]*([\d.]+)\s*(?:kg|kgs|kilos|kg's)?`)
 		if weightStr != "" {
 			fmt.Sscanf(weightStr, "%f", &m.Weight)
+		}
+	}
+
+	// 7. Tabular Fallback (If still critical fields are missing)
+	if m.ReceiverName == "" || m.ReceiverPhone == "" {
+		// Use receiver zone for tabular extraction if we have a sender break
+		tabularText := text
+		if senderStartIdx != -1 {
+			tabularText = receiverZone
+		}
+
+		lines := strings.Split(tabularText, "\n")
+		var cleanLines []string
+		for _, l := range lines {
+			l = strings.TrimSpace(l)
+			if l != "" {
+				cleanLines = append(cleanLines, l)
+			}
+		}
+
+		// Heuristic: First line is often Name if it's short and no labels found
+		if m.ReceiverName == "" && len(cleanLines) > 0 {
+			if len(cleanLines[0]) < 40 && !regexp.MustCompile(`(?i)`+stopLabels).MatchString(cleanLines[0]) {
+				m.ReceiverName = cleanLines[0]
+			}
+		}
+		// Second or third line with numbers is often Phone
+		if m.ReceiverPhone == "" {
+			phoneRe := regexp.MustCompile(`(?i)(?:\+?\d[\d\s\-\(\)]{7,}\d)`)
+			for i := 0; i < len(cleanLines) && i < 4; i++ {
+				if match := phoneRe.FindString(cleanLines[i]); match != "" {
+					m.ReceiverPhone = match
+					break
+				}
+			}
 		}
 	}
 

@@ -108,53 +108,61 @@ func (m *CronManager) executeJob(name string, cmd func()) {
 // handlePulse checks for shipments ready to move to next stage (Pending -> Intransit -> Delivered)
 func (m *CronManager) handlePulse() {
 	ctx := context.Background()
+	now := time.Now().UTC()
 
-	// 1. Check Pending -> Intransit
-	pendingIDs, err := m.ldb.GetShipmentsReadyForTransit(ctx)
-	if err == nil {
-		for _, id := range pendingIDs {
-			logger.Info().Str("id", id).Msg("Pulse: Moving shipment to INTRANSIT")
-			if err := m.ldb.UpdateShipmentStatus(ctx, id, shipment.StatusIntransit); err != nil {
-				logger.Error().Err(err).Str("id", id).Msg("Pulse: Failed to update status")
-			} else {
-				// Fetch shipment to get JID
-				s, _ := m.ldb.GetShipment(ctx, id)
-				if s != nil {
-					m.sendStatusAlert(s.UserJID, s.TrackingID, shipment.StatusIntransit)
+	// Process transitions in a loop to handle 'catch-up' (cascading statuses)
+	// Example: If a shipment is backdated to yesterday, it should move to Delivered in one pulse.
+	maxRounds := 3
+	for i := 0; i < maxRounds; i++ {
+		changed := false
+
+		// 1. Check Pending -> Intransit
+		pendingIDs, err := m.ldb.GetShipmentsReadyForTransit(ctx, now)
+		if err == nil && len(pendingIDs) > 0 {
+			for _, id := range pendingIDs {
+				logger.Info().Str("id", id).Msg("Pulse: Moving shipment to INTRANSIT")
+				if err := m.ldb.UpdateShipmentStatus(ctx, id, shipment.StatusIntransit); err == nil {
+					changed = true
+					s, _ := m.ldb.GetShipment(ctx, id)
+					if s != nil {
+						m.sendStatusAlert(s.UserJID, s.TrackingID, shipment.StatusIntransit)
+					}
 				}
 			}
 		}
-	}
 
-	// 2. Check Intransit -> OutForDelivery
-	transitIDs, err := m.ldb.GetShipmentsReadyForOutForDelivery(ctx)
-	if err == nil {
-		for _, id := range transitIDs {
-			logger.Info().Str("id", id).Msg("Pulse: Moving shipment to OUT_FOR_DELIVERY")
-			if err := m.ldb.UpdateShipmentStatus(ctx, id, shipment.StatusOutForDelivery); err != nil {
-				logger.Error().Err(err).Str("id", id).Msg("Pulse: Failed to update status")
-			} else {
-				s, _ := m.ldb.GetShipment(ctx, id)
-				if s != nil {
-					m.sendStatusAlert(s.UserJID, s.TrackingID, shipment.StatusOutForDelivery)
+		// 2. Check Intransit -> OutForDelivery
+		transitIDs, err := m.ldb.GetShipmentsReadyForOutForDelivery(ctx, now)
+		if err == nil && len(transitIDs) > 0 {
+			for _, id := range transitIDs {
+				logger.Info().Str("id", id).Msg("Pulse: Moving shipment to OUT_FOR_DELIVERY")
+				if err := m.ldb.UpdateShipmentStatus(ctx, id, shipment.StatusOutForDelivery); err == nil {
+					changed = true
+					s, _ := m.ldb.GetShipment(ctx, id)
+					if s != nil {
+						m.sendStatusAlert(s.UserJID, s.TrackingID, shipment.StatusOutForDelivery)
+					}
 				}
 			}
 		}
-	}
 
-	// 3. Check OutForDelivery -> Delivered
-	readyIDs, err := m.ldb.GetShipmentsReadyForDelivery(ctx)
-	if err == nil {
-		for _, id := range readyIDs {
-			logger.Info().Str("id", id).Msg("Pulse: Moving shipment to DELIVERED")
-			if err := m.ldb.UpdateShipmentStatus(ctx, id, shipment.StatusDelivered); err != nil {
-				logger.Error().Err(err).Str("id", id).Msg("Pulse: Failed to update status")
-			} else {
-				s, _ := m.ldb.GetShipment(ctx, id)
-				if s != nil {
-					m.sendStatusAlert(s.UserJID, s.TrackingID, shipment.StatusDelivered)
+		// 3. Check OutForDelivery -> Delivered
+		deliveryIDs, err := m.ldb.GetShipmentsReadyForDelivery(ctx, now)
+		if err == nil && len(deliveryIDs) > 0 {
+			for _, id := range deliveryIDs {
+				logger.Info().Str("id", id).Msg("Pulse: Moving shipment to DELIVERED")
+				if err := m.ldb.UpdateShipmentStatus(ctx, id, shipment.StatusDelivered); err == nil {
+					changed = true
+					s, _ := m.ldb.GetShipment(ctx, id)
+					if s != nil {
+						m.sendStatusAlert(s.UserJID, s.TrackingID, shipment.StatusDelivered)
+					}
 				}
 			}
+		}
+
+		if !changed {
+			break
 		}
 	}
 }

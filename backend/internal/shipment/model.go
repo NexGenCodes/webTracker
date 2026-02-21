@@ -47,6 +47,23 @@ type Shipment struct {
 	Cost             float64 `json:"cost"`
 }
 
+// ResolveStatus returns what the status *should* be right now based on the schedule.
+func (s *Shipment) ResolveStatus(nowUTC time.Time) string {
+	if s.Status == StatusCanceled {
+		return StatusCanceled
+	}
+	if !nowUTC.Before(s.ExpectedDeliveryTime) {
+		return StatusDelivered
+	}
+	if !nowUTC.Before(s.OutForDeliveryTime) {
+		return StatusOutForDelivery
+	}
+	if !nowUTC.Before(s.ScheduledTransitTime) {
+		return StatusIntransit
+	}
+	return StatusPending
+}
+
 // TimelineEvent represents a single step in the tracking history
 type TimelineEvent struct {
 	Status      string    `json:"status"`

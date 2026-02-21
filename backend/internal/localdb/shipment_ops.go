@@ -57,11 +57,11 @@ func (c *Client) GetShipment(ctx context.Context, trackingID string) (*shipment.
 }
 
 // GetShipmentsReadyForTransit finds all PENDING shipments that have passed their transit time
-func (c *Client) GetShipmentsReadyForTransit(ctx context.Context) ([]string, error) {
+func (c *Client) GetShipmentsReadyForTransit(ctx context.Context, now time.Time) ([]string, error) {
 	query := `SELECT tracking_id FROM Shipment 
 			  WHERE status = ? AND scheduled_transit_time <= ?`
 
-	rows, err := c.db.QueryContext(ctx, query, shipment.StatusPending, time.Now().UTC())
+	rows, err := c.db.QueryContext(ctx, query, shipment.StatusPending, now)
 	if err != nil {
 		return nil, err
 	}
@@ -78,11 +78,11 @@ func (c *Client) GetShipmentsReadyForTransit(ctx context.Context) ([]string, err
 }
 
 // GetShipmentsReadyForOutForDelivery finds all INTRANSIT shipments that have passed their out-for-delivery time
-func (c *Client) GetShipmentsReadyForOutForDelivery(ctx context.Context) ([]string, error) {
+func (c *Client) GetShipmentsReadyForOutForDelivery(ctx context.Context, now time.Time) ([]string, error) {
 	query := `SELECT tracking_id FROM Shipment 
 			  WHERE status = ? AND outfordelivery_time <= ?`
 
-	rows, err := c.db.QueryContext(ctx, query, shipment.StatusIntransit, time.Now().UTC())
+	rows, err := c.db.QueryContext(ctx, query, shipment.StatusIntransit, now)
 	if err != nil {
 		return nil, err
 	}
@@ -99,11 +99,11 @@ func (c *Client) GetShipmentsReadyForOutForDelivery(ctx context.Context) ([]stri
 }
 
 // GetShipmentsReadyForDelivery finds all OUT_FOR_DELIVERY shipments that have passed their delivery time
-func (c *Client) GetShipmentsReadyForDelivery(ctx context.Context) ([]string, error) {
+func (c *Client) GetShipmentsReadyForDelivery(ctx context.Context, now time.Time) ([]string, error) {
 	query := `SELECT tracking_id FROM Shipment 
 			  WHERE status = ? AND expected_delivery_time <= ?`
 
-	rows, err := c.db.QueryContext(ctx, query, shipment.StatusOutForDelivery, time.Now().UTC())
+	rows, err := c.db.QueryContext(ctx, query, shipment.StatusOutForDelivery, now)
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +186,8 @@ func (c *Client) UpdateShipmentField(ctx context.Context, trackingID, field, val
 	allowedFields := map[string]bool{
 		"sender_name": true, "sender_phone": true, "origin": true,
 		"recipient_name": true, "recipient_phone": true, "recipient_email": true, "recipient_id": true, "recipient_address": true, "destination": true,
-		"cargo_type": true,
+		"cargo_type":             true,
+		"scheduled_transit_time": true, "expected_delivery_time": true,
 	}
 
 	if !allowedFields[field] {

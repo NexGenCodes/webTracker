@@ -1,6 +1,7 @@
 package shipment
 
 import (
+	"strings"
 	"time"
 )
 
@@ -28,10 +29,15 @@ var CountryTimezoneMap = map[string]string{
 	"china":          "Asia/Shanghai",
 	"dubai":          "Asia/Dubai",
 	"uae":            "Asia/Dubai",
+	"ghana":          "Africa/Accra",
+	"afghanistan":    "Asia/Kabul",
+	"honduras":       "America/Tegucigalpa",
+	"mexico":         "America/Mexico_City",
 }
 
 // ResolveTimezone attempts to find a valid timezone for a country name
 func (c *Calculator) ResolveTimezone(country string) string {
+	country = strings.ToLower(strings.TrimSpace(country))
 	if tz, ok := CountryTimezoneMap[country]; ok {
 		return tz
 	}
@@ -39,37 +45,52 @@ func (c *Calculator) ResolveTimezone(country string) string {
 }
 
 func (c *Calculator) CalculateSchedule(nowUTC time.Time, originCountry, destCountry string) (transitTimeUTC, outForDeliveryUTC, deliveryTimeUTC time.Time) {
+	// 1. Resolve Admin (Lagos) Time for Operational Rules
+	adminLoc, _ := time.LoadLocation("Africa/Lagos")
+	adminNow := nowUTC.In(adminLoc)
+	hour := adminNow.Hour()
+
+	// 2. Resolve Regional Timezones for localized display
 	originTZ := c.ResolveTimezone(originCountry)
-	loc, err := time.LoadLocation(originTZ)
+	destTZ := c.ResolveTimezone(destCountry)
+
+	originLoc, err := time.LoadLocation(originTZ)
 	if err != nil {
-		loc = time.UTC
+		originLoc = time.UTC
+	}
+	destLoc, err := time.LoadLocation(destTZ)
+	if err != nil {
+		destLoc = time.UTC
 	}
 
-	// 1. Convert Now(UTC) to Origin Local Time
-	localNow := nowUTC.In(loc)
-	hour := localNow.Hour()
-
-	// 2. Logic: Transit Start (Pending -> Intransit)
+	// 3. Logic: Transit Start (The Operational Gate)
 	var localTransitStart time.Time
 
 	if hour < 8 {
-		localTransitStart = time.Date(localNow.Year(), localNow.Month(), localNow.Day(), 8, 0, 0, 0, loc)
+		// Before 8 AM Admin TZ: Process at 8 AM Today (in the Sender's local zone)
+		senderNow := nowUTC.In(originLoc)
+		localTransitStart = time.Date(senderNow.Year(), senderNow.Month(), senderNow.Day(), 8, 0, 0, 0, originLoc)
 	} else if hour >= 21 {
-		tomorrow := localNow.Add(24 * time.Hour)
-		localTransitStart = time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 8, 0, 0, 0, loc)
+		// After 9 PM Admin TZ: Process at 8 AM Tomorrow (in the Sender's local zone)
+		senderNow := nowUTC.In(originLoc)
+		tomorrow := senderNow.Add(24 * time.Hour)
+		localTransitStart = time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 8, 0, 0, 0, originLoc)
 	} else {
-		localTransitStart = localNow.Add(1 * time.Hour)
+		// During the day Admin TZ: Start after a 1-hour buffer (The Holding Window)
+		senderNow := nowUTC.In(originLoc)
+		localTransitStart = senderNow.Add(1 * time.Hour)
 	}
 
-	// 3. Logic: Delivery Date (Intransit -> Delivered)
+	// 4. Logic: Delivery Date (Standard 24-hour window)
+	// We use the Receiver's locale for the arrival timestamp
 	transitDuration := 24 * time.Hour
-	localDelivery := localTransitStart.Add(transitDuration)
+	localDelivery := localTransitStart.Add(transitDuration).In(destLoc)
 
-	// Reset to 10:00 AM on delivery day
-	localDelivery = time.Date(localDelivery.Year(), localDelivery.Month(), localDelivery.Day(), 10, 0, 0, 0, loc)
+	// Reset to 10:00 AM on delivery day in Receiver's zone
+	localDelivery = time.Date(localDelivery.Year(), localDelivery.Month(), localDelivery.Day(), 10, 0, 0, 0, destLoc)
 
-	// Out For Delivery: 8:00 AM on delivery day (2 hours before delivery)
-	localOutForDelivery := time.Date(localDelivery.Year(), localDelivery.Month(), localDelivery.Day(), 8, 0, 0, 0, loc)
+	// Out For Delivery: 8:00 AM on delivery day in Receiver's zone
+	localOutForDelivery := time.Date(localDelivery.Year(), localDelivery.Month(), localDelivery.Day(), 8, 0, 0, 0, destLoc)
 
 	return localTransitStart.UTC(), localOutForDelivery.UTC(), localDelivery.UTC()
 }

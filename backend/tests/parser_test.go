@@ -174,6 +174,25 @@ func TestParseRegex(t *testing.T) {
 			wantSender:  "JENNIFER WARREN",
 			wantCountry: "AFGHANISTAN",
 		},
+		{
+			name:     "Footer Trimming",
+			input:    "Name: John Doe\nAddress: 123 Main St\n\nThank you for choosing us!\nBest Regards,\nShipping Team",
+			wantName: "John Doe",
+			wantAddr: "123 Main St",
+		},
+		{
+			name:       "Context Zone Protection",
+			input:      "Receiver Name: Alice\nSender Name: Bob\n08011122233",
+			wantName:   "Alice",
+			wantSender: "Bob",
+			wantPhone:  "", // Should NOT be assigned to Alice because it's in the sender zone
+		},
+		{
+			name:      "Tabular Format",
+			input:     "John Smith\n+2348011122233\nLagos State\nNigeria",
+			wantName:  "John Smith",
+			wantPhone: "+2348011122233",
+		},
 	}
 
 	for _, tt := range tests {
