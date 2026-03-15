@@ -43,6 +43,8 @@ func NewClient(dsn string) (*Client, error) {
 
 func (c *Client) InitSchema(ctx context.Context) error {
 	query := `
+	SET search_path TO public;
+
 	CREATE TABLE IF NOT EXISTS public.SystemConfig (
 		key TEXT PRIMARY KEY,
 		value TEXT NOT NULL,
