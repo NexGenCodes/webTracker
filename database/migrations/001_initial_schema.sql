@@ -1,14 +1,68 @@
--- 001_initial_schema.sql
--- Consolidated database logic for WebTracker
+-- 0. Core Tables
+CREATE TABLE IF NOT EXISTS SystemConfig (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
--- 0. Country Timezones (lookup table used by scheduling trigger)
-CREATE TABLE IF NOT EXISTS public.country_timezones (
+CREATE TABLE IF NOT EXISTS UserPreference (
+    jid TEXT PRIMARY KEY,
+    language TEXT NOT NULL DEFAULT 'en',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS GroupAuthority (
+    jid TEXT PRIMARY KEY,
+    is_authorized BOOLEAN NOT NULL DEFAULT FALSE,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS Shipment (
+    tracking_id TEXT PRIMARY KEY,
+    user_jid TEXT NOT NULL,
+    status TEXT DEFAULT 'pending',
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    scheduled_transit_time TIMESTAMP,
+    outfordelivery_time TIMESTAMP,
+    expected_delivery_time TIMESTAMP,
+    
+    sender_timezone TEXT,
+    recipient_timezone TEXT,
+
+    sender_name TEXT,
+    sender_phone TEXT,
+    origin TEXT,
+    recipient_name TEXT,
+    recipient_phone TEXT,
+    recipient_email TEXT,
+    recipient_id TEXT,
+    recipient_address TEXT,
+    destination TEXT,
+    cargo_type TEXT,
+    weight DOUBLE PRECISION,
+    cost DOUBLE PRECISION,
+    
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_shipment_triggers_pending ON Shipment(status, scheduled_transit_time) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_shipment_triggers_transit ON Shipment(status, outfordelivery_time) WHERE status = 'intransit';
+CREATE INDEX IF NOT EXISTS idx_shipment_triggers_outfordelivery ON Shipment(status, expected_delivery_time) WHERE status = 'outfordelivery';
+CREATE INDEX IF NOT EXISTS idx_shipment_user_jid ON Shipment(user_jid);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_shipment_unique_phone ON Shipment(recipient_phone) WHERE recipient_phone IS NOT NULL AND recipient_phone != '';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_shipment_unique_email ON Shipment(recipient_email) WHERE recipient_email IS NOT NULL AND recipient_email != '';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_shipment_unique_id ON Shipment(recipient_id) WHERE recipient_id IS NOT NULL AND recipient_id != '';
+
+-- 1. Country Timezones
+CREATE TABLE IF NOT EXISTS country_timezones (
     country_name TEXT PRIMARY KEY,
     zone_name TEXT NOT NULL
 );
 
--- Seed timezone data (idempotent via ON CONFLICT)
-INSERT INTO public.country_timezones (country_name, zone_name) VALUES
+-- Seed timezone data
+INSERT INTO country_timezones (country_name, zone_name) VALUES
     ('nigeria', 'Africa/Lagos'),
     ('ghana', 'Africa/Accra'),
     ('kenya', 'Africa/Nairobi'),
@@ -72,7 +126,8 @@ INSERT INTO public.country_timezones (country_name, zone_name) VALUES
 ON CONFLICT (country_name) DO NOTHING;
 
 -- 1. Tracking ID Generation
-CREATE OR REPLACE FUNCTION public.generate_tracking_id()
+DROP FUNCTION IF EXISTS generate_tracking_id() CASCADE;
+CREATE OR REPLACE FUNCTION generate_tracking_id()
  RETURNS text
  LANGUAGE plpgsql
 AS $function$
@@ -89,19 +144,19 @@ END;
 $function$;
 
 -- 2. Automated Scheduling Logic
-CREATE OR REPLACE FUNCTION public.fn_shipment_auto_schedule()
+DROP FUNCTION IF EXISTS fn_shipment_auto_schedule() CASCADE;
+CREATE OR REPLACE FUNCTION fn_shipment_auto_schedule()
  RETURNS trigger
  LANGUAGE plpgsql
 AS $function$
 DECLARE
-    dest_tz TEXT;
-    now_lagos TIMESTAMP;
-    departure_utc TIMESTAMP;
-    transit_hours INT := 10;
-    earliest_arrival_utc TIMESTAMP;
-    arrival_local TIMESTAMP;
-    snap_hour INT := 10;
-    final_arrival_utc TIMESTAMP;
+    v_dest_tz TEXT;
+    v_now_lagos TIMESTAMP;
+    v_departure_utc TIMESTAMP;
+    v_arrival_local TIMESTAMP;
+    v_snap_hour INT := 10;
+    v_final_arrival_utc TIMESTAMP;
+BEGIN
     NEW.updated_at := CURRENT_TIMESTAMP;
 
     IF (TG_OP = 'INSERT') 
@@ -114,60 +169,54 @@ DECLARE
             NEW.tracking_id := generate_tracking_id();
         END IF;
 
-        SELECT zone_name INTO dest_tz FROM public.country_timezones WHERE country_name = lower(trim(NEW.destination));
-        IF dest_tz IS NULL THEN dest_tz := 'UTC'; END IF;
+        SELECT zone_name INTO v_dest_tz FROM country_timezones WHERE country_name = lower(trim(NEW.destination));
+        IF v_dest_tz IS NULL THEN v_dest_tz := 'UTC'; END IF;
 
-        -- 1. Manual Arrival Override: If the expected_delivery_time itself was edited
+        -- 1. Manual Arrival Override
         IF (TG_OP = 'UPDATE') AND (NEW.expected_delivery_time IS DISTINCT FROM OLD.expected_delivery_time) THEN
              NEW.outfordelivery_time := NEW.expected_delivery_time - interval '2 hours';
         
-        -- 2. Auto-Scheduling: For new shipments or edits to Location/Departure
+        -- 2. Auto-Scheduling
         ELSE
             IF (TG_OP = 'INSERT') THEN
-                -- ORIGINAL CREATION LOGIC: 1h delay, 10 PM cap logic, and 10 AM snap arrival
-                now_lagos := CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Lagos';
-                IF extract(hour from now_lagos) >= 22 THEN
-                    departure_utc := (date_trunc('day', now_lagos + interval '1 day') + interval '8 hours') AT TIME ZONE 'Africa/Lagos';
+                v_now_lagos := CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Lagos';
+                IF extract(hour from v_now_lagos) >= 22 THEN
+                    v_departure_utc := (date_trunc('day', v_now_lagos + interval '1 day') + interval '8 hours') AT TIME ZONE 'Africa/Lagos';
                 ELSE
-                    departure_utc := CURRENT_TIMESTAMP + interval '1 hour';
+                    v_departure_utc := CURRENT_TIMESTAMP + interval '1 hour';
                 END IF;
-                NEW.scheduled_transit_time := departure_utc;
+                NEW.scheduled_transit_time := v_departure_utc;
 
-                -- Snapping Arrival to 10 AM Local
-                IF dest_tz = 'UTC' THEN snap_hour := 12; END IF;
-                arrival_local := date_trunc('day', (departure_utc AT TIME ZONE dest_tz) + interval '1 day') + (snap_hour * interval '1 hour');
-                final_arrival_utc := arrival_local AT TIME ZONE dest_tz;
+                IF v_dest_tz = 'UTC' THEN v_snap_hour := 12; END IF;
+                v_arrival_local := date_trunc('day', (v_departure_utc AT TIME ZONE v_dest_tz) + interval '1 day') + (v_snap_hour * interval '1 hour');
+                v_final_arrival_utc := v_arrival_local AT TIME ZONE v_dest_tz;
             ELSE
-                -- EDIT LOGIC (UPDATE)
-                departure_utc := NEW.scheduled_transit_time;
-                
-                -- Branch: Past/Today vs Future
-                IF (departure_utc <= CURRENT_TIMESTAMP + interval '10 minutes') THEN
-                    -- Strict Rules for Past/Today: Arrival = Departure + 1 day (Strict 24h)
-                    final_arrival_utc := departure_utc + interval '1 day';
+                v_departure_utc := NEW.scheduled_transit_time;
+                IF (v_departure_utc <= CURRENT_TIMESTAMP + interval '10 minutes') THEN
+                    v_final_arrival_utc := v_departure_utc + interval '1 day';
                 ELSE
-                    -- Future Rules: Snapping Arrival to 10 AM Local
-                    IF dest_tz = 'UTC' THEN snap_hour := 12; END IF;
-                    arrival_local := date_trunc('day', (departure_utc AT TIME ZONE dest_tz) + interval '1 day') + (snap_hour * interval '1 hour');
-                    final_arrival_utc := arrival_local AT TIME ZONE dest_tz;
+                    IF v_dest_tz = 'UTC' THEN v_snap_hour := 12; END IF;
+                    v_arrival_local := date_trunc('day', (v_departure_utc AT TIME ZONE v_dest_tz) + interval '1 day') + (v_snap_hour * interval '1 hour');
+                    v_final_arrival_utc := v_arrival_local AT TIME ZONE v_dest_tz;
                 END IF;
             END IF;
             
-            NEW.expected_delivery_time := final_arrival_utc;
-            NEW.outfordelivery_time := final_arrival_utc - interval '2 hours';
+            NEW.expected_delivery_time := v_final_arrival_utc;
+            NEW.outfordelivery_time := v_final_arrival_utc - interval '2 hours';
         END IF;
     END IF;
     RETURN NEW;
 END;
 $function$;
 
-DROP TRIGGER IF EXISTS trg_shipment_init ON public.Shipment;
+DROP TRIGGER IF EXISTS trg_shipment_init ON Shipment;
 CREATE TRIGGER trg_shipment_init
-BEFORE INSERT OR UPDATE ON public.Shipment
-FOR EACH ROW EXECUTE FUNCTION public.fn_shipment_auto_schedule();
+BEFORE INSERT OR UPDATE ON Shipment
+FOR EACH ROW EXECUTE FUNCTION fn_shipment_auto_schedule();
 
 -- 3. Atomic Status Transitions
-CREATE OR REPLACE FUNCTION public.fn_process_status_transitions(now_utc TIMESTAMP)
+DROP FUNCTION IF EXISTS fn_process_status_transitions(TIMESTAMP) CASCADE;
+CREATE OR REPLACE FUNCTION fn_process_status_transitions(now_utc TIMESTAMP)
 RETURNS TABLE (
     r_tracking_id TEXT,
     new_status TEXT,
@@ -205,7 +254,8 @@ END;
 $$;
 
 -- 4. Aged Data Pruning
-CREATE OR REPLACE FUNCTION public.fn_prune_aged_shipments()
+DROP FUNCTION IF EXISTS fn_prune_aged_shipments() CASCADE;
+CREATE OR REPLACE FUNCTION fn_prune_aged_shipments()
 RETURNS TABLE (deleted_count BIGINT)
 LANGUAGE plpgsql
 AS $$
