@@ -33,7 +33,11 @@ DECLARE
     snap_hour INT := 10;
     final_arrival_utc TIMESTAMP;
 BEGIN
-    IF (TG_OP = 'INSERT') OR (NEW.origin IS DISTINCT FROM OLD.origin) OR (NEW.destination IS DISTINCT FROM OLD.destination) THEN
+    IF (TG_OP = 'INSERT') 
+       OR (NEW.origin IS DISTINCT FROM OLD.origin) 
+       OR (NEW.destination IS DISTINCT FROM OLD.destination) 
+       OR (NEW.scheduled_transit_time IS DISTINCT FROM OLD.scheduled_transit_time)
+       OR (NEW.expected_delivery_time IS DISTINCT FROM OLD.expected_delivery_time) THEN
         
         IF NEW.tracking_id IS NULL OR NEW.tracking_id = '' THEN
             NEW.tracking_id := generate_tracking_id();
@@ -42,39 +46,34 @@ BEGIN
         SELECT zone_name INTO dest_tz FROM public.country_timezones WHERE country_name = lower(trim(NEW.destination));
         IF dest_tz IS NULL THEN dest_tz := 'UTC'; END IF;
 
-        now_lagos := CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Lagos';
+        -- 1. Manual Arrival Override: If the expected_delivery_time itself was edited
+        IF (TG_OP = 'UPDATE') AND (NEW.expected_delivery_time IS DISTINCT FROM OLD.expected_delivery_time) THEN
+             NEW.outfordelivery_time := NEW.expected_delivery_time - interval '2 hours';
         
-        IF extract(hour from now_lagos) >= 22 THEN
-            departure_utc := (date_trunc('day', now_lagos + interval '1 day') + interval '8 hours') AT TIME ZONE 'Africa/Lagos';
+        -- 2. Auto-Scheduling: For new shipments or edits to Location/Departure
         ELSE
-            departure_utc := CURRENT_TIMESTAMP + interval '1 hour';
+            IF (TG_OP = 'INSERT') THEN
+                now_lagos := CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Lagos';
+                IF extract(hour from now_lagos) >= 22 THEN
+                    departure_utc := (date_trunc('day', now_lagos + interval '1 day') + interval '8 hours') AT TIME ZONE 'Africa/Lagos';
+                ELSE
+                    departure_utc := CURRENT_TIMESTAMP + interval '1 hour';
+                END IF;
+                NEW.scheduled_transit_time := departure_utc;
+            ELSE
+                departure_utc := NEW.scheduled_transit_time;
+            END IF;
+
+            -- Force "Next Day" Arrival
+            IF dest_tz = 'UTC' THEN snap_hour := 12; END IF;
+            arrival_local := date_trunc('day', (departure_utc AT TIME ZONE dest_tz) + interval '1 day') + (snap_hour * interval '1 hour');
+            final_arrival_utc := arrival_local AT TIME ZONE dest_tz;
+            
+            NEW.expected_delivery_time := final_arrival_utc;
+            NEW.outfordelivery_time := final_arrival_utc - interval '2 hours';
         END IF;
 
-        NEW.scheduled_transit_time := departure_utc;
-
-        IF lower(trim(NEW.origin)) IN ('nigeria', 'ghana', 'benin', 'togo', 'niger', 'cameroon') 
-           AND lower(trim(NEW.destination)) IN ('nigeria', 'ghana', 'benin', 'togo', 'niger', 'cameroon') THEN
-            transit_hours := 4;
-        END IF;
-
-        earliest_arrival_utc := departure_utc + (transit_hours * interval '1 hour');
-
-        arrival_local := earliest_arrival_utc AT TIME ZONE dest_tz;
-        
-        IF dest_tz = 'UTC' THEN snap_hour := 12; END IF;
-
-        IF extract(hour from arrival_local) >= 17 THEN
-            arrival_local := date_trunc('day', arrival_local + interval '1 day') + (snap_hour * interval '1 hour');
-        ELSIF extract(hour from arrival_local) < snap_hour THEN
-            arrival_local := date_trunc('day', arrival_local) + (snap_hour * interval '1 hour');
-        END IF;
-
-        final_arrival_utc := arrival_local AT TIME ZONE dest_tz;
-        
-        NEW.expected_delivery_time := final_arrival_utc;
-        NEW.outfordelivery_time := final_arrival_utc - interval '2 hours';
         NEW.updated_at := CURRENT_TIMESTAMP;
-
     END IF;
     RETURN NEW;
 END;

@@ -50,16 +50,30 @@ export interface CreateShipmentDto {
     weight?: number;
 }
 
-export interface ServiceResult<T = any> {
+export interface ServiceResult<T = unknown> {
     success: boolean;
     data?: T;
     error?: string;
     count?: number;
 }
 
+export interface DashboardStats {
+    total: number;
+    inTransit: number;
+    outForDelivery: number;
+    delivered: number;
+    pending: number;
+    canceled: number;
+}
+
+export interface Dictionary {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    [key: string]: any;
+}
+
 export interface ParseResult {
     success: boolean;
-    data?: CreateShipmentDto;
+    data?: Partial<CreateShipmentDto>;
     error?: string;
     correction?: string;
 }

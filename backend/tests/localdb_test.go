@@ -3,24 +3,49 @@ package tests
 import (
 	"context"
 	"os"
-	"path/filepath"
 	"testing"
 	"webtracker-bot/internal/localdb"
+
+	"github.com/joho/godotenv"
 )
 
 func TestLocalDB(t *testing.T) {
-	// Use a temp file for testing
-	tempDir := os.TempDir()
-	dbPath := filepath.Join(tempDir, "test_session.db")
-	defer os.Remove(dbPath)
+	// Load .env from parent directory
+	_ = godotenv.Load("../.env")
 
-	client, err := localdb.NewClient(dbPath)
+	// This test now requires a live PostgreSQL database
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("Skipping TestLocalDB: TEST_DATABASE_URL not set")
+	}
+
+	client, err := localdb.NewClient(dsn)
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
 	defer client.Close()
 
 	ctx := context.Background()
+
+	// Use a unique schema for isolation
+	schemaName := "test_localdb"
+	_, err = client.Exec(ctx, "CREATE SCHEMA IF NOT EXISTS "+schemaName)
+	if err != nil {
+		t.Fatalf("Failed to create schema: %v", err)
+	}
+	defer client.Exec(ctx, "DROP SCHEMA "+schemaName+" CASCADE")
+
+	// Set search path to our test schema
+	_, err = client.Exec(ctx, "SET search_path TO "+schemaName)
+	if err != nil {
+		t.Fatalf("Failed to set search_path: %v", err)
+	}
+
+	// Re-run initSchema in the new schema
+	if err := client.InitSchema(ctx); err != nil {
+		t.Fatalf("Failed to init schema in test schema: %v", err)
+	}
+
 	jid := "123456789@s.whatsapp.net"
 
 	// 1. Get default

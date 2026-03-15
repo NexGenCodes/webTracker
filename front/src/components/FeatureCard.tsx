@@ -11,7 +11,7 @@ interface FeatureCardProps {
     className?: string;
 }
 
-export const FeatureCard: React.FC<FeatureCardProps> = memo(({
+const FeatureCardComponent: React.FC<FeatureCardProps> = memo(({
     icon,
     title,
     description,
@@ -30,3 +30,6 @@ export const FeatureCard: React.FC<FeatureCardProps> = memo(({
         </div>
     );
 });
+
+FeatureCardComponent.displayName = 'FeatureCard';
+export const FeatureCard = FeatureCardComponent;

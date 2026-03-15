@@ -67,6 +67,11 @@ func processReceipt(rj ReceiptJob) {
 
 	logger.Info().Str("id", rj.TrackingID).Msg("Rendering receipt (singleton queue)")
 
+	if rj.TrackingID == "" {
+		logger.Error().Msg("Cannot process receipt: tracking ID is empty")
+		return
+	}
+
 	// 1. Fetch Shipment
 	s, err := rj.LocalDB.GetShipment(context.Background(), rj.TrackingID)
 	if err != nil || s == nil {

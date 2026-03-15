@@ -40,6 +40,14 @@ func TestParseEditPairs(t *testing.T) {
 				"scheduled_transit_time": "yesterday",
 			},
 		},
+		{
+			name:  "New Shortcuts (ID & Email)",
+			input: "id: 12345, email: test@example.com",
+			expected: map[string]string{
+				"recipient_id":    "12345",
+				"recipient_email": "test@example.com",
+			},
+		},
 	}
 
 	for _, tt := range tests {

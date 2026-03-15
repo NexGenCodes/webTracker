@@ -344,6 +344,10 @@ func (h *EditHandler) Execute(ctx context.Context, ldb *localdb.Client, args []s
 			dbField = "destination"
 		case "origin", "from", "source":
 			dbField = "origin"
+		case "id", "passport", "identification":
+			dbField = "recipient_id"
+		case "email", "mail":
+			dbField = "recipient_email"
 		case "departure", "transit":
 			dbField = "scheduled_transit_time"
 		case "arrival", "delivery":

@@ -21,6 +21,7 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
     useEffect(() => {
         const saved = localStorage.getItem('locale') as Locale;
         if (saved && dictionaries[saved]) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setLocaleState(saved);
         }
     }, []);

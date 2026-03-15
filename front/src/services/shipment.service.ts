@@ -1,8 +1,7 @@
-import { CreateShipmentDto, ShipmentData, ServiceResult } from '@/types/shipment';
+import { CreateShipmentDto, ShipmentData, ServiceResult, ShipmentStatus, DashboardStats } from '@/types/shipment';
 import { logger } from '@/lib/logger';
 
 
-const API_URL = ''; // Relative paths for Edge unified routing
 const REQUEST_TIMEOUT = 10000;
 
 // Enhanced error categorization
@@ -36,9 +35,9 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise
         });
         clearTimeout(timeoutId);
         return response;
-    } catch (error: any) {
+    } catch (error: unknown) {
         clearTimeout(timeoutId);
-        if (error.name === 'AbortError') {
+        if (error instanceof Error && error.name === 'AbortError') {
             throw new Error('Request timeout');
         }
         throw error;
@@ -48,20 +47,23 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise
 /**
  * Categorize and format errors for better user feedback
  */
-function handleApiError(error: any, context: string): ApiError {
+function handleApiError(error: unknown, context: string): ApiError {
+    const message = error instanceof Error ? error.message : String(error);
+    const name = error instanceof Error ? error.name : '';
+
     logger.error(`[ShipmentService] ${context}`, error);
 
     // Network/Connection errors
-    if (error.message?.includes('fetch failed') || error.message?.includes('Failed to fetch')) {
+    if (message.includes('fetch failed') || message.includes('Failed to fetch')) {
         return {
             type: ApiErrorType.NETWORK,
-            message: error.message,
+            message: message,
             userMessage: 'Cannot connect to server. Please check your internet connection or try again later.'
         };
     }
 
     // Timeout errors
-    if (error.message?.includes('timeout') || error.name === 'AbortError') {
+    if (message.includes('timeout') || name === 'AbortError') {
         return {
             type: ApiErrorType.TIMEOUT,
             message: 'Request timed out',
@@ -70,48 +72,55 @@ function handleApiError(error: any, context: string): ApiError {
     }
 
     // Server errors (5xx)
-    if (error.message?.includes('500') || error.message?.includes('502') || error.message?.includes('503')) {
+    if (message.includes('500') || message.includes('502') || message.includes('503')) {
         return {
             type: ApiErrorType.SERVER,
-            message: error.message,
+            message: message,
             userMessage: 'Server error. Our team has been notified. Please try again in a few minutes.'
         };
     }
 
     // Unauthorized (401/403)
-    if (error.message?.includes('401') || error.message?.includes('403') || error.message?.includes('Unauthorized')) {
+    if (message.includes('401') || message.includes('403') || message.includes('Unauthorized')) {
         return {
             type: ApiErrorType.UNAUTHORIZED,
-            message: error.message,
+            message: message,
             userMessage: 'Session expired. Please sign in again.'
         };
     }
 
     // Not found (404)
-    if (error.message?.includes('404')) {
+    if (message.includes('404')) {
         return {
             type: ApiErrorType.NOT_FOUND,
-            message: error.message,
+            message: message,
             userMessage: 'The requested resource was not found.'
         };
     }
 
     // Validation errors (400)
-    if (error.message?.includes('400') || error.message?.includes('Bad Request')) {
+    if (message.includes('400') || message.includes('Bad Request')) {
         return {
             type: ApiErrorType.VALIDATION,
-            message: error.message,
+            message: message,
             userMessage: 'Invalid data provided. Please check your input and try again.'
         };
     }
 
-    // Unknown/Generic errors
     return {
         type: ApiErrorType.UNKNOWN,
-        message: error.message || 'Unknown error',
+        message: message || 'Unknown error',
         userMessage: 'Something went wrong. Please try again or contact support if the issue persists.'
     };
 }
+
+const normalizeStatus = (s: string): string => {
+    const upper = s.toUpperCase();
+    if (upper === 'INTRANSIT') return 'IN_TRANSIT';
+    if (upper === 'OUTFORDELIVERY') return 'OUT_FOR_DELIVERY';
+    if (upper === 'CANCELLED') return 'CANCELED';
+    return upper;
+};
 
 export class ShipmentService {
     /**
@@ -170,7 +179,7 @@ export class ShipmentService {
             const shipment: ShipmentData = {
                 id: data.tracking_id,
                 trackingNumber: data.tracking_id,
-                status: normalizeStatus(data.status) as any,
+                status: normalizeStatus(data.status as string) as ShipmentStatus,
                 senderName: data.sender_name || 'N/A',
                 receiverName: data.recipient_name || 'N/A',
                 receiverPhone: data.recipient_phone || null,
@@ -246,7 +255,7 @@ export class ShipmentService {
     /**
      * Admin: Dashboard data via Next.js API
      */
-    static async getDashboardData(): Promise<ServiceResult<{ shipments: any[], stats: any }>> {
+    static async getDashboardData(): Promise<ServiceResult<{ shipments: ShipmentData[], stats: DashboardStats }>> {
         try {
             // Fetch List
             const listRes = await fetchWithTimeout(`/api/admin/shipments`, {
@@ -258,19 +267,25 @@ export class ShipmentService {
             }
 
             const apiShipments = await listRes.json();
+            
+            interface ApiShipment {
+                tracking_id: string;
+                status: string;
+                sender_name: string;
+                recipient_name: string;
+                recipient_phone?: string;
+                recipient_email?: string;
+                recipient_address?: string;
+                destination: string;
+                weight: number;
+                origin: string;
+                created_at: string;
+            }
 
-            const normalizeStatus = (s: string): string => {
-                const upper = s.toUpperCase();
-                if (upper === 'INTRANSIT') return 'IN_TRANSIT';
-                if (upper === 'OUTFORDELIVERY') return 'OUT_FOR_DELIVERY';
-                if (upper === 'CANCELLED') return 'CANCELED';
-                return upper;
-            };
-
-            const shipments = apiShipments.map((s: any) => ({
+            const shipments = apiShipments.map((s: ApiShipment) => ({
                 id: s.tracking_id,
                 trackingNumber: s.tracking_id,
-                status: normalizeStatus(s.status),
+                status: normalizeStatus(s.status) as ShipmentStatus,
                 senderName: s.sender_name,
                 receiverName: s.recipient_name,
                 receiverPhone: s.recipient_phone,
@@ -303,7 +318,7 @@ export class ShipmentService {
                 canceled: parseInt(apiStats.canceled),
             };
 
-            return { success: true, data: { shipments, stats } };
+            return { success: true, data: { shipments: shipments as ShipmentData[], stats } };
         } catch (error) {
             const apiError = handleApiError(error, 'Dashboard data');
             return { success: false, error: apiError.userMessage };
@@ -329,5 +344,12 @@ export class ShipmentService {
             const apiError = handleApiError(error, 'Bulk delete');
             return { success: false, error: apiError.userMessage };
         }
+    }
+
+    /**
+     * Admin: Prune stale shipments (internal maintenance)
+     */
+    static async pruneStale(): Promise<ServiceResult<void>> {
+        return this.bulkDeleteDelivered();
     }
 }

@@ -11,7 +11,7 @@ interface LogoProps {
     iconClassName?: string;
 }
 
-export const Logo: React.FC<LogoProps> = memo(({ className, iconClassName }) => {
+const LogoComponent: React.FC<LogoProps> = memo(({ className, iconClassName }) => {
     const { dict } = useI18n();
 
     return (
@@ -33,3 +33,6 @@ export const Logo: React.FC<LogoProps> = memo(({ className, iconClassName }) => 
         </Link>
     );
 });
+
+LogoComponent.displayName = 'Logo';
+export const Logo = LogoComponent;

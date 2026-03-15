@@ -3,16 +3,13 @@
 import { useState, useEffect } from 'react';
 import { createShipment, getAdminDashboardData, deleteShipment, bulkDeleteDelivered, markAsDelivered, cancelShipment } from '../actions/shipment';
 import { ShipmentForm } from './components/ShipmentForm';
-import { CreateShipmentDto } from '@/types/shipment';
-import { ChevronLeft, LayoutDashboard, List, Package, PlusCircle, Search } from 'lucide-react';
+import { CreateShipmentDto, ShipmentData, DashboardStats } from '@/types/shipment';
+import { LayoutDashboard, List, Package, PlusCircle, Search } from 'lucide-react';
 
 // Components
 import { useI18n } from '@/components/I18nContext';
-import { ThemeToggle } from '@/components/ThemeToggle';
-import { LanguageToggle } from '@/components/LanguageToggle';
 
-import { signIn, signOut, useSession } from "next-auth/react";
-import { Logo } from '@/components/Logo';
+import { signIn, useSession } from "next-auth/react";
 import { StatsCards } from './components/StatsCards';
 import { RecentShipments } from './components/RecentShipments';
 import { ShipmentTable } from './components/ShipmentTable';
@@ -30,9 +27,9 @@ export default function AdminPage() {
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [copied, setCopied] = useState(false);
-    const [shipments, setShipments] = useState<any[]>([]);
+    const [shipments, setShipments] = useState<ShipmentData[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
-    const [stats, setStats] = useState({ total: 0, inTransit: 0, outForDelivery: 0, delivered: 0, pending: 0, canceled: 0 });
+    const [stats, setStats] = useState<DashboardStats>({ total: 0, inTransit: 0, outForDelivery: 0, delivered: 0, pending: 0, canceled: 0 });
     const [dataLoading, setDataLoading] = useState(false);
 
     const loadShipments = async () => {
@@ -65,8 +62,8 @@ export default function AdminPage() {
             } else {
                 setError(result.error ?? dict.admin.failedCreate);
             }
-        } catch (err: any) {
-            setError(err.message || dict.admin.failedCreate);
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : dict.admin.failedCreate);
         } finally {
             setLoading(false);
         }

@@ -154,8 +154,8 @@ func (w *Worker) process(job models.Job) {
 		newShipment.Destination = "Local Delivery"
 	}
 
-	// 5b. Deduplication Check (Strict Phone Match)
-	if existingID, err := w.LocalDB.FindSimilarShipment(context.Background(), job.SenderJID.String(), newShipment.RecipientPhone); err == nil && existingID != "" {
+	// 5b. Deduplication Check (Strict Phone, Email, or ID Match)
+	if existingID, err := w.LocalDB.FindSimilarShipment(context.Background(), job.SenderJID.String(), newShipment.RecipientPhone, newShipment.RecipientEmail, newShipment.RecipientID); err == nil && existingID != "" {
 		logger.Info().Str("existing_id", existingID).Msg("Duplicate shipment blocked")
 		dupMsg := fmt.Sprintf("⚠️ *SHIPMENT ALREADY EXISTS*\n\nA shipment for this recipient phone is already in the system.\n\n🆔 *%s*\n\n🔹 Use `!edit %s ...` to update.\n🔹 Use `!delete %s` to remove.", existingID, existingID, existingID)
 		w.Sender.Reply(job.ChatJID, job.SenderJID, dupMsg, job.MessageID, job.Text)

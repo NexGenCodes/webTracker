@@ -5,7 +5,8 @@
   "main": "migrate.mjs",
   "type": "module",
   "scripts": {
-    "migrate": "node --env-file=.env migrate.mjs"
+    "migrate": "node --env-file=.env migrate.mjs",
+    "reset": "node --env-file=.env reset.mjs && npm run migrate"
   },
   "dependencies": {
     "postgres": "^3.4.8"

@@ -36,10 +36,14 @@ yarn-error.log*
 .env.*.local
 .env.production
 .env.development
+.env.test
+.env.test.local
 *.env
 *.env.local
 *.env.production
 *.env.development
+*.env.test
+*.env.test.local
 
 # whitelist env examples
 !.env.example

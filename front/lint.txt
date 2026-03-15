@@ -1,0 +1,35 @@
+
+> airway-bill@0.1.0 lint
+> eslint
+
+
+C:\Users\USER\Desktop\webTracker\front\src\app\api\admin\shipments\route.ts
+  7:27  warning  'request' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\USER\Desktop\webTracker\front\src\app\api\admin\stats\route.ts
+  6:27  warning  'request' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\USER\Desktop\webTracker\front\src\app\auth\signin\page.tsx
+  10:10  warning  'ThemeToggle' is defined but never used  @typescript-eslint/no-unused-vars
+  43:18  warning  'err' is defined but never used          @typescript-eslint/no-unused-vars
+
+C:\Users\USER\Desktop\webTracker\front\src\app\contact\page.tsx
+  10:10  warning  'APP_NAME' is defined but never used  @typescript-eslint/no-unused-vars
+  13:17  warning  'Toaster' is defined but never used   @typescript-eslint/no-unused-vars
+
+C:\Users\USER\Desktop\webTracker\front\src\app\page.tsx
+   54:14  warning  'err' is defined but never used                                                                                                          @typescript-eslint/no-unused-vars
+   63:6   warning  React Hook useCallback has unnecessary dependencies: 'dict.admin' and 'dict.common'. Either exclude them or remove the dependency array  react-hooks/exhaustive-deps
+  297:58  error    Unexpected any. Specify a different type                                                                                                 @typescript-eslint/no-explicit-any
+  298:27  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+C:\Users\USER\Desktop\webTracker\front\src\lib\__tests__\vitals.test.ts
+  1:32  warning  'beforeEach' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\USER\Desktop\webTracker\front\src\lib\auth.ts
+  13:42  warning  'req' is defined but never used    @typescript-eslint/no-unused-vars
+  30:34  warning  'token' is defined but never used  @typescript-eslint/no-unused-vars
+
+Γ£û 13 problems (1 error, 12 warnings)
+  0 errors and 1 warning potentially fixable with the `--fix` option.
+
