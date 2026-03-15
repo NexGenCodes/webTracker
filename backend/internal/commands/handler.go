@@ -395,7 +395,7 @@ func (h *EditHandler) Execute(ctx context.Context, ldb *localdb.Client, args []s
 			now := time.Now().In(loc)
 
 			if parsedDate, ok := utils.ParseNaturalDate(value, now); ok {
-				value = parsedDate.Format("2006-01-02 15:04:05")
+				value = parsedDate.UTC().Format("2006-01-02 15:04:05")
 			} else {
 				// Fallback to strict format
 				_, err := time.Parse("2006-01-02", value)

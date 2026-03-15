@@ -13,19 +13,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Run Database Migrations
-        run: |
-          cd database
-          npm install
-          npm run migrate
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
