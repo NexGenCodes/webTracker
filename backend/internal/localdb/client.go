@@ -91,16 +91,16 @@ func (c *Client) InitSchema(ctx context.Context) error {
 		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
 
-	CREATE INDEX IF NOT EXISTS idx_shipment_triggers_pending ON public.Shipment(status, scheduled_transit_time) WHERE status = 'pending';
-	CREATE INDEX IF NOT EXISTS idx_shipment_triggers_transit ON public.Shipment(status, outfordelivery_time) WHERE status = 'intransit';
-	CREATE INDEX IF NOT EXISTS idx_shipment_triggers_outfordelivery ON public.Shipment(status, expected_delivery_time) WHERE status = 'outfordelivery';
-	CREATE INDEX IF NOT EXISTS idx_shipment_user_jid ON public.Shipment(user_jid);
+	CREATE INDEX IF NOT EXISTS public.idx_shipment_triggers_pending ON public.Shipment(status, scheduled_transit_time) WHERE status = 'pending';
+	CREATE INDEX IF NOT EXISTS public.idx_shipment_triggers_transit ON public.Shipment(status, outfordelivery_time) WHERE status = 'intransit';
+	CREATE INDEX IF NOT EXISTS public.idx_shipment_triggers_outfordelivery ON public.Shipment(status, expected_delivery_time) WHERE status = 'outfordelivery';
+	CREATE INDEX IF NOT EXISTS public.idx_shipment_user_jid ON public.Shipment(user_jid);
 
 	-- Uniqueness Constraints (Recipient Details)
 	-- We use partial indices to allow multiple NULLs but enforce uniqueness on values
-	CREATE UNIQUE INDEX IF NOT EXISTS idx_shipment_unique_phone ON public.Shipment(recipient_phone) WHERE recipient_phone IS NOT NULL AND recipient_phone != '';
-	CREATE UNIQUE INDEX IF NOT EXISTS idx_shipment_unique_email ON public.Shipment(recipient_email) WHERE recipient_email IS NOT NULL AND recipient_email != '';
-	CREATE UNIQUE INDEX IF NOT EXISTS idx_shipment_unique_id ON public.Shipment(recipient_id) WHERE recipient_id IS NOT NULL AND recipient_id != '';
+	CREATE UNIQUE INDEX IF NOT EXISTS public.idx_shipment_unique_phone ON public.Shipment(recipient_phone) WHERE recipient_phone IS NOT NULL AND recipient_phone != '';
+	CREATE UNIQUE INDEX IF NOT EXISTS public.idx_shipment_unique_email ON public.Shipment(recipient_email) WHERE recipient_email IS NOT NULL AND recipient_email != '';
+	CREATE UNIQUE INDEX IF NOT EXISTS public.idx_shipment_unique_id ON public.Shipment(recipient_id) WHERE recipient_id IS NOT NULL AND recipient_id != '';
 	`
 	_, err := c.db.ExecContext(ctx, query)
 	return err
