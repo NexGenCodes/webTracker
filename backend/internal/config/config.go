@@ -36,18 +36,8 @@ type Config struct {
 	AllowPrivateChat bool
 	AdminPhones      []string
 
-	// Session Storage
-	WhatsAppSessionPath string
-
-	// API Auth
-	ApiAuthToken string
-	APIPort      string
-
 	// Public Tracking URL
 	TrackingBaseURL string
-
-	// CORS
-	AllowedOrigin string
 }
 
 func GetWorkDir() string {
@@ -189,11 +179,7 @@ func LoadFromEnv() (*Config, error) {
 		AllowPrivateChat:    os.Getenv("WHATSAPP_ALLOW_PRIVATE_CHAT") == "true",
 		AdminPhones:         adminPhones,
 		BotOwnerPhone:       os.Getenv("BOT_OWNER_PHONE"), // Load from env
-		WhatsAppSessionPath: os.Getenv("WHATSAPP_SESSION_PATH"),
-		ApiAuthToken:        os.Getenv("API_AUTH_TOKEN"),
-		APIPort:             os.Getenv("API_PORT"),
 		TrackingBaseURL:     os.Getenv("TRACKING_BASE_URL"),
-		AllowedOrigin:       os.Getenv("ALLOWED_ORIGIN"),
 	}
 
 	// Default BotOwnerPhone to first admin if not set
@@ -223,10 +209,6 @@ func LoadFromEnv() (*Config, error) {
 
 	cfg.AdminPhones = adminPhones
 
-	if cfg.WhatsAppSessionPath == "" {
-		cfg.WhatsAppSessionPath = filepath.Join(workDir, "session.db")
-	}
-
 	if cfg.DatabaseURL == "" {
 		cfg.DatabaseURL = os.Getenv("DATABASE_URL")
 	}
@@ -238,7 +220,10 @@ func LoadFromEnv() (*Config, error) {
 }
 
 func (cfg *Config) Validate() error {
-	// SQLite is used locally, no DATABASE_URL needed
+	// Database is required (PostgreSQL)
+	if cfg.DatabaseURL == "" {
+		return fmt.Errorf("DATABASE_URL / DIRECT_URL is missing")
+	}
 	if cfg.GeminiAPIKey == "" {
 		return fmt.Errorf("GEMINI_API_KEY is missing")
 	}

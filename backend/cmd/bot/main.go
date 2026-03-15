@@ -1,12 +1,23 @@
 package main
 
 import (
+	"runtime/debug"
+	"time"
 	"webtracker-bot/internal/app"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/logger"
 )
 
 func main() {
+	debug.SetGCPercent(50)
+	debug.SetMemoryLimit(700 * 1024 * 1024)
+	go func() {
+		for {
+			time.Sleep(5 * time.Minute)
+			debug.FreeOSMemory()
+		}
+	}()
+
 	// 1. Load Config
 	cfg := config.Load()
 

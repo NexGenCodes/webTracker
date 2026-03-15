@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"net/smtp"
 	"strings"
+	"time"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/logger"
+	"webtracker-bot/internal/shipment"
 )
 
 // SendPairingCodeEmail sends the pairing code via a professional HTML email
@@ -81,6 +83,89 @@ func SendPairingCodeEmail(cfg *config.Config, code string) {
 		logger.Error().Err(err).Msg("Failed to send pairing code email")
 	} else {
 		logger.Info().Str("email", recipient).Msg("Professional pairing email delivered")
+	}
+}
+
+// SendShipmentEmail sends a professional shipment confirmation email to the recipient
+func SendShipmentEmail(cfg *config.Config, s *shipment.Shipment, trackingURL string) {
+	if cfg.SMTPHost == "" || cfg.SMTPUsername == "" || s.RecipientEmail == "" {
+		return
+	}
+
+	companyName := strings.ToUpper(cfg.CompanyName)
+	if companyName == "" {
+		companyName = "AirWayBill"
+	}
+
+	subject := fmt.Sprintf("[%s] Shipment Confirmation - %s", companyName, s.TrackingID)
+	recipient := s.RecipientEmail
+
+	// HTML Template
+	body := fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px;">
+    <div style="max-width: 600px; margin: auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+        <h1 style="color: #007bff; font-size: 24px; margin-bottom: 10px;">%s</h1>
+        <h2 style="color: #333; font-size: 18px; margin-bottom: 25px;">Shipment Confirmation</h2>
+        
+        <p style="color: #555; line-height: 1.6;">Hello <strong>%s</strong>,</p>
+        <p style="color: #555; line-height: 1.6;">Your shipment has been registered and is now being processed. Below are your tracking details:</p>
+        
+        <div style="background-color: #f8f9fa; border-left: 4px solid #007bff; padding: 15px; margin: 25px 0;">
+            <p style="margin: 0; color: #333;"><strong>Tracking ID:</strong> <span style="font-family: monospace; font-size: 16px;">%s</span></p>
+            <p style="margin: 5px 0 0 0; color: #333;"><strong>Recipient:</strong> %s</p>
+            <p style="margin: 5px 0 0 0; color: #333;"><strong>Location:</strong> %s, %s</p>
+            <p style="margin: 5px 0 0 0; color: #333;"><strong>Expected Delivery:</strong> %s</p>
+        </div>
+
+        <div style="text-align: center; margin: 35px 0;">
+            <a href="%s" style="background-color: #007bff; color: white; padding: 15px 30px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">TRACK YOUR PACKAGE</a>
+        </div>
+
+        <p style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px; color: #888; font-size: 12px;">
+            If you have any questions, please reply to this email.
+            <br>&copy; 2026 %s. All rights reserved.
+        </p>
+    </div>
+</body>
+</html>`,
+		companyName,
+		s.RecipientName,
+		s.TrackingID,
+		s.RecipientName,
+		s.RecipientAddress,
+		s.Destination,
+		s.ExpectedDeliveryTime.In(time.UTC).Format("January 02, 2006"),
+		trackingURL,
+		companyName,
+	)
+
+	msg := "From: " + cfg.SMTPUsername + "\r\n" +
+		"To: " + recipient + "\r\n" +
+		"Subject: " + subject + "\r\n" +
+		"MIME-Version: 1.0\r\n" +
+		"Content-Type: text/html; charset=\"UTF-8\"\r\n" +
+		"\r\n" +
+		body
+
+	addr := fmt.Sprintf("%s:%d", cfg.SMTPHost, cfg.SMTPPort)
+	logger.Info().Str("to", recipient).Str("tracking_id", s.TrackingID).Msg("Attempting to send shipment confirmation email")
+
+	var err error
+	if cfg.SMTPPort == 465 {
+		err = sendSMTPS(addr, cfg.SMTPHost, cfg.SMTPUsername, cfg.SMTPPassword, recipient, []byte(msg))
+	} else {
+		user := strings.TrimSpace(cfg.SMTPUsername)
+		pass := strings.TrimSpace(cfg.SMTPPassword)
+		host := strings.TrimSpace(cfg.SMTPHost)
+		auth := smtp.PlainAuth("", user, pass, host)
+		err = smtp.SendMail(addr, auth, user, []string{recipient}, []byte(msg))
+	}
+
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to send shipment confirmation email")
+	} else {
+		logger.Info().Str("email", recipient).Msg("Shipment confirmation email delivered")
 	}
 }
 

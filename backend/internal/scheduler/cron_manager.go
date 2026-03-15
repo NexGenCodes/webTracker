@@ -114,55 +114,19 @@ func (m *CronManager) handlePulse() {
 	// Example: If a shipment is backdated to yesterday, it should move to Delivered in one pulse.
 	maxRounds := 3
 	for i := 0; i < maxRounds; i++ {
-		changed := false
-
-		// 1. Check Pending -> Intransit
-		pendingIDs, err := m.ldb.GetShipmentsReadyForTransit(ctx, now)
-		if err == nil && len(pendingIDs) > 0 {
-			for _, id := range pendingIDs {
-				logger.Info().Str("id", id).Msg("Pulse: Moving shipment to INTRANSIT")
-				if err := m.ldb.UpdateShipmentStatus(ctx, id, shipment.StatusIntransit); err == nil {
-					changed = true
-					s, _ := m.ldb.GetShipment(ctx, id)
-					if s != nil {
-						m.sendStatusAlert(s.UserJID, s.TrackingID, shipment.StatusIntransit)
-					}
-				}
-			}
-		}
-
-		// 2. Check Intransit -> OutForDelivery
-		transitIDs, err := m.ldb.GetShipmentsReadyForOutForDelivery(ctx, now)
-		if err == nil && len(transitIDs) > 0 {
-			for _, id := range transitIDs {
-				logger.Info().Str("id", id).Msg("Pulse: Moving shipment to OUT_FOR_DELIVERY")
-				if err := m.ldb.UpdateShipmentStatus(ctx, id, shipment.StatusOutForDelivery); err == nil {
-					changed = true
-					s, _ := m.ldb.GetShipment(ctx, id)
-					if s != nil {
-						m.sendStatusAlert(s.UserJID, s.TrackingID, shipment.StatusOutForDelivery)
-					}
-				}
-			}
-		}
-
-		// 3. Check OutForDelivery -> Delivered
-		deliveryIDs, err := m.ldb.GetShipmentsReadyForDelivery(ctx, now)
-		if err == nil && len(deliveryIDs) > 0 {
-			for _, id := range deliveryIDs {
-				logger.Info().Str("id", id).Msg("Pulse: Moving shipment to DELIVERED")
-				if err := m.ldb.UpdateShipmentStatus(ctx, id, shipment.StatusDelivered); err == nil {
-					changed = true
-					s, _ := m.ldb.GetShipment(ctx, id)
-					if s != nil {
-						m.sendStatusAlert(s.UserJID, s.TrackingID, shipment.StatusDelivered)
-					}
-				}
-			}
-		}
-
-		if !changed {
+		transitions, err := m.ldb.ProcessStatusTransitions(ctx, now)
+		if err != nil {
+			logger.Error().Err(err).Msg("Pulse: Failed to process status transitions")
 			break
+		}
+		
+		if len(transitions) == 0 {
+			break
+		}
+
+		for _, t := range transitions {
+			logger.Info().Str("id", t.TrackingID).Str("new_status", t.NewStatus).Msg("Pulse: Shipment status updated via DB trigger")
+			m.sendStatusAlert(t.UserJID, t.TrackingID, t.NewStatus)
 		}
 	}
 }

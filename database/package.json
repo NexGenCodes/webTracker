@@ -1,0 +1,13 @@
+{
+  "name": "webtracker-db-mgr",
+  "version": "1.0.0",
+  "description": "Database management for WebTracker",
+  "main": "migrate.mjs",
+  "type": "module",
+  "scripts": {
+    "migrate": "node --env-file=.env migrate.mjs"
+  },
+  "dependencies": {
+    "postgres": "^3.4.8"
+  }
+}

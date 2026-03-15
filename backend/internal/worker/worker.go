@@ -5,16 +5,16 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"time"
 
 	"webtracker-bot/internal/commands"
+	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/i18n"
 	"webtracker-bot/internal/localdb"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
+	"webtracker-bot/internal/notif"
 	"webtracker-bot/internal/parser"
 	"webtracker-bot/internal/shipment"
-	"webtracker-bot/internal/utils"
 	"webtracker-bot/internal/whatsapp"
 
 	"go.mau.fi/whatsmeow"
@@ -27,7 +27,7 @@ type Worker struct {
 	LocalDB         *localdb.Client
 	Jobs            <-chan models.Job
 	WG              *sync.WaitGroup
-	GeminiKey       string
+	Cfg             *config.Config
 	AwbCmd          string
 	CompanyName     string
 	TrackingBaseURL string
@@ -62,6 +62,7 @@ func (w *Worker) process(job models.Job) {
 	ctx := context.WithValue(context.Background(), "jid", job.SenderJID.String())
 	ctx = context.WithValue(ctx, "sender_phone", job.SenderPhone)
 	ctx = context.WithValue(ctx, "is_admin", job.IsAdmin)
+
 	if res, ok := w.Cmd.Dispatch(ctx, job.Text); ok {
 		w.Sender.Reply(job.ChatJID, job.SenderJID, res.Message, job.MessageID, job.Text)
 
@@ -95,7 +96,7 @@ func (w *Worker) process(job models.Job) {
 
 	// AI Fallback (Minimized: Only if critical fields are missing to save costs)
 	if m.ReceiverName == "" || m.ReceiverPhone == "" || m.ReceiverAddress == "" {
-		if aiM, err := parser.ParseAI(job.Text, w.GeminiKey); err == nil {
+		if aiM, err := parser.ParseAI(job.Text, w.Cfg.GeminiAPIKey); err == nil {
 			m.Merge(aiM)
 			m.IsAI = true
 			m.Validate()
@@ -119,26 +120,14 @@ func (w *Worker) process(job models.Job) {
 	}
 	logger.GlobalVitals.IncParseSuccess()
 
-	// 6. Create Shipment (Map Manifest -> Shipment)
-	trackingID := utils.GenerateTrackingID(w.AwbCmd)
-	nowUTC := time.Now().UTC()
-
-	// Default Logic inputs
 	orig := m.SenderCountry
 	dest := m.ReceiverCountry
 
-	transitTime, outForDeliveryTime, deliveryTime := w.ShipmentService.CalculateSchedule(nowUTC, orig, dest)
-
 	newShipment := &shipment.Shipment{
-		TrackingID:           trackingID,
-		UserJID:              job.SenderJID.String(),
-		Status:               shipment.StatusPending,
-		CreatedAt:            nowUTC,
-		ScheduledTransitTime: transitTime,
-		OutForDeliveryTime:   outForDeliveryTime,
-		ExpectedDeliveryTime: deliveryTime,
-		SenderTimezone:       w.ShipmentService.ResolveTimezone(orig),
-		RecipientTimezone:    w.ShipmentService.ResolveTimezone(dest),
+		UserJID:           job.SenderJID.String(),
+		Status:            shipment.StatusPending,
+		SenderTimezone:    w.ShipmentService.ResolveTimezone(orig),
+		RecipientTimezone: w.ShipmentService.ResolveTimezone(dest),
 
 		SenderName:       m.SenderName,
 		SenderPhone:      job.SenderPhone,
@@ -151,13 +140,10 @@ func (w *Worker) process(job models.Job) {
 		Destination:      m.ReceiverCountry,
 
 		CargoType: m.CargoType,
-		Weight:    m.Weight,
+		Weight:    15.0, // STRICT: Always 15kg as per policy
 		Cost:      0.0,
 	}
 
-	// 5. Catch-up Logic: Set initial status based on schedule
-	newShipment.Status = newShipment.ResolveStatus(nowUTC)
-	newShipment.Weight = 15.0 // STRICT: Always 15kg as per policy
 	if newShipment.CargoType == "" {
 		newShipment.CargoType = "consignment box"
 	}
@@ -176,8 +162,8 @@ func (w *Worker) process(job models.Job) {
 		return
 	}
 
-	// Insert into LocalDB
-	err := w.LocalDB.CreateShipment(context.Background(), newShipment)
+	// Insert into DB — trigger generates tracking_id and schedule
+	trackingID, err := w.LocalDB.CreateShipment(context.Background(), newShipment, w.Cfg.CompanyPrefix)
 	if err != nil {
 		logger.GlobalVitals.IncInsertFailure()
 		logger.Error().Err(err).Str("jid", job.SenderJID.String()).Msg("Failed to insert shipment information")
@@ -205,28 +191,23 @@ func (w *Worker) process(job models.Job) {
 		trackingMsg += "\n\n_✨ Parsed by AI_"
 	}
 	w.Sender.Reply(job.ChatJID, job.SenderJID, trackingMsg, job.MessageID, job.Text)
+
+	// 11. Send Email Notification (if email provided)
+	if newShipment.RecipientEmail != "" {
+		trackingURL := fmt.Sprintf("%s?id=%s", baseURL, trackingID)
+		notif.SendShipmentEmail(w.Cfg, newShipment, trackingURL)
+	}
 }
 
 func (w *Worker) generateAndSendReceipt(job models.Job, id string, lang i18n.Language) {
-	// 1. Fetch
-	s, err := w.LocalDB.GetShipment(context.Background(), id)
-	if err != nil || s == nil {
-		logger.Warn().Err(err).Str("tracking_id", id).Msg("Failed to fetch info for receipt delivery")
-		return
-	}
-
-	// 2. Render
-	receiptImg, err := utils.RenderReceipt(*s, w.CompanyName, lang)
-	if err != nil {
-		logger.Error().Err(err).Str("tracking_id", id).Msg("Failed to render updated receipt")
-		return
-	}
-
-	// 3. Send
-	err = w.Sender.SendImage(job.ChatJID, job.SenderJID, receiptImg, "", job.MessageID, job.Text)
-	if err != nil {
-		logger.Warn().Err(err).Str("tracking_id", id).Msg("Failed to deliver receipt image")
-	}
+	EnqueueReceipt(ReceiptJob{
+		Job:         job,
+		TrackingID:  id,
+		Language:    lang,
+		CompanyName: w.CompanyName,
+		LocalDB:     w.LocalDB,
+		Sender:      w.Sender,
+	})
 }
 
 func (w *Worker) isPotentialManifest(text string) (bool, bool) {

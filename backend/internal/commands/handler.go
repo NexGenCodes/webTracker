@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"regexp"
 	"runtime"
 	"strings"
@@ -78,9 +79,9 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) 
 	args := parts[1:]
 
 	if handler, ok := d.handlers[rawCmd]; ok {
-		jid := ctx.Value("jid").(string)
-		senderPhone := ctx.Value("sender_phone").(string)
-		isAdmin, _ := ctx.Value("is_admin").(bool)
+		jid := utils.GetJID(ctx)
+		senderPhone := utils.GetSenderPhone(ctx)
+		isAdmin := utils.IsAdmin(ctx)
 
 		isOwner := senderPhone == d.BotPhone
 
@@ -300,7 +301,7 @@ func (h *EditHandler) Execute(ctx context.Context, ldb *localdb.Client, args []s
 		return Result{Message: "✏️ *EDIT SHIPMENT*\n\nUsage: `!edit [TrackingID] [Updates...]` or `!edit [Updates...]` (targets last shipment)\n\n*Example:* `!edit LGS-1234 name: John, departure: tomorrow`"}
 	}
 
-	jid := ctx.Value("jid").(string)
+	jid := utils.GetJID(ctx)
 	var trackingID string
 	var startIdx int
 
@@ -347,6 +348,8 @@ func (h *EditHandler) Execute(ctx context.Context, ldb *localdb.Client, args []s
 			dbField = "scheduled_transit_time"
 		case "arrival", "delivery":
 			dbField = "expected_delivery_time"
+		case "outfordelivery", "out_for_delivery":
+			dbField = "outfordelivery_time"
 		case "cargo", "type", "content":
 			dbField = "cargo_type"
 		case "weight":
@@ -363,7 +366,6 @@ func (h *EditHandler) Execute(ctx context.Context, ldb *localdb.Client, args []s
 
 	// 3. Apply Updates
 	var updatedFields []string
-	var dateChanged bool
 
 	for field, value := range updates {
 		// Strict Policy: Weight is fixed
@@ -380,7 +382,7 @@ func (h *EditHandler) Execute(ctx context.Context, ldb *localdb.Client, args []s
 		}
 
 		// Special Date Parsing
-		if field == "scheduled_transit_time" || field == "expected_delivery_time" {
+		if field == "scheduled_transit_time" || field == "expected_delivery_time" || field == "outfordelivery_time" {
 			tz := h.AdminTimezone
 			if tz == "" {
 				tz = "Africa/Lagos"
@@ -400,12 +402,14 @@ func (h *EditHandler) Execute(ctx context.Context, ldb *localdb.Client, args []s
 					}
 				}
 			}
-			dateChanged = true
 		}
+
+		// Check if this change triggers a schedule recalculation
+		// (Handled by DB trigger fn_shipment_auto_schedule)
 
 		err := ldb.UpdateShipmentField(ctx, trackingID, field, value)
 		if err == nil {
-			updatedFields = append(updatedFields, strings.ToUpper(field))
+			updatedFields = append(updatedFields, strings.ToUpper(strings.ReplaceAll(field, "_", " ")))
 		}
 	}
 
@@ -413,13 +417,17 @@ func (h *EditHandler) Execute(ctx context.Context, ldb *localdb.Client, args []s
 		return Result{Message: "⚠️ *UPDATE FAILED*\n_None of the fields could be updated. Check your format (e.g., label: value)._"}
 	}
 
-	// 4. Persistence & Cleanup
-	if dateChanged {
-		if s, _ := ldb.GetShipment(ctx, trackingID); s != nil {
-			newStatus := s.ResolveStatus(time.Now().UTC())
-			if newStatus != s.Status {
-				_ = ldb.UpdateShipmentStatus(ctx, trackingID, newStatus)
-			}
+	// 4. Persistence & Schedule Sync
+	// The DB trigger fn_shipment_auto_schedule() auto-recalculates
+	// scheduled_transit_time, outfordelivery_time, expected_delivery_time
+	// when origin or destination changes on UPDATE.
+
+	s, _ := ldb.GetShipment(ctx, trackingID)
+	if s != nil {
+		// Re-resolve status based on current UTC time
+		newStatus := s.ResolveStatus(time.Now().UTC())
+		if newStatus != s.Status {
+			_ = ldb.UpdateShipmentField(ctx, trackingID, "status", newStatus)
 		}
 	}
 
@@ -462,33 +470,34 @@ func (h *BroadcastHandler) Execute(ctx context.Context, ldb *localdb.Client, arg
 	msg := strings.Join(args, " ")
 	broadcastMsg := "📢 *OFFICIAL UPDATE FROM LOGISTICS*\n\n" + msg
 
-	// Check connection first
-	if !h.Sender.Client.IsConnected() {
-		return Result{Message: "❌ *FAILED*\n_WhatsApp is currently disconnected._"}
-	}
-
-	// Get all authorized groups from DB
+	// Fetch authorized groups from DB
 	groups, err := ldb.GetAuthorizedGroups(ctx)
 	if err != nil {
-		return Result{Message: "❌ *DATABASE ERROR*\n_Failed to fetch target groups._", Error: err}
+		return Result{Message: "❌ *DATABASE ERROR*\n\nCould not retrieve authorized groups."}
 	}
 
-	successCount := 0
+	if len(groups) == 0 {
+		return Result{Message: "ℹ️ *NO TARGETS*\n\nThere are no authorized groups to broadcast to."}
+	}
 
-	// Create semaphore to limit concurrent sends (avoid blocking main thread too long)
-	// WhatsApp recommends not flooding
+	// Perform broadcast in background to avoid blocking worker
+	go func() {
+		successCount := 0
+		for _, groupID := range groups {
+			groupJID, err := types.ParseJID(groupID)
+			if err != nil {
+				continue
+			}
+			// Add extra jitter between groups for safety
+			time.Sleep(time.Duration(200+rand.Intn(300)) * time.Millisecond)
 
-	for _, groupID := range groups {
-		groupJID, err := types.ParseJID(groupID)
-		if err != nil {
-			continue
+			h.Sender.Send(groupJID, broadcastMsg)
+			successCount++
 		}
-		// Direct send (non-reply)
-		h.Sender.Send(groupJID, broadcastMsg)
-		successCount++
-	}
+		logger.Info().Int("success_count", successCount).Msg("Background broadcast complete")
+	}()
 
-	return Result{Message: fmt.Sprintf("✅ *BROADCAST COMPLETE*\n\nSent to: *%d* groups.", successCount)}
+	return Result{Message: fmt.Sprintf("📣 *BROADCAST INITIATED*\n\nSending to *%d* authorized groups in the background.\n\n_Progress will be logged to system vitals._", len(groups))}
 }
 
 // StatusHandler handles !status

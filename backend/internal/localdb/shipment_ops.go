@@ -9,27 +9,36 @@ import (
 	"webtracker-bot/internal/shipment"
 )
 
-// CreateShipment inserts a new shipment with pre-calculated timestamps.
-func (c *Client) CreateShipment(ctx context.Context, s *shipment.Shipment) error {
+// CreateShipment inserts a new shipment. The DB trigger auto-generates:
+// tracking_id, scheduled_transit_time, outfordelivery_time, expected_delivery_time.
+func (c *Client) CreateShipment(ctx context.Context, s *shipment.Shipment, prefix string) (string, error) {
+	if prefix == "" {
+		prefix = "AWB"
+	}
+	// Generate tracking ID: Prefix + 9 random digits. Using time.Now().UnixNano() or similar
+	// But let's just use a simple random string of digits
+	randStr := fmt.Sprintf("%09d", time.Now().UnixNano()%1000000000)
+	trackingID := fmt.Sprintf("%s-%s", prefix, randStr)
+	
 	query := `
 	INSERT INTO Shipment (
-		tracking_id, user_jid, status, 
-		created_at, scheduled_transit_time, outfordelivery_time, expected_delivery_time,
+		tracking_id, user_jid, status,
 		sender_timezone, recipient_timezone,
 		sender_name, sender_phone, origin,
 		recipient_name, recipient_phone, recipient_email, recipient_id, recipient_address, destination,
 		cargo_type, weight, cost
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+	RETURNING tracking_id`
 
-	_, err := c.db.ExecContext(ctx, query,
-		s.TrackingID, s.UserJID, s.Status,
-		s.CreatedAt, s.ScheduledTransitTime, s.OutForDeliveryTime, s.ExpectedDeliveryTime,
+	var returnedID string
+	err := c.db.QueryRowContext(ctx, query,
+		trackingID, s.UserJID, s.Status,
 		s.SenderTimezone, s.RecipientTimezone,
 		s.SenderName, s.SenderPhone, s.Origin,
 		s.RecipientName, s.RecipientPhone, s.RecipientEmail, s.RecipientID, s.RecipientAddress, s.Destination,
 		s.CargoType, s.Weight, s.Cost,
-	)
-	return err
+	).Scan(&returnedID)
+	return returnedID, err
 }
 
 // GetShipment retrieves a shipment by its tracking ID.
@@ -40,7 +49,7 @@ func (c *Client) GetShipment(ctx context.Context, trackingID string) (*shipment.
 		sender_name, sender_phone, origin,
 		recipient_name, recipient_phone, recipient_email, recipient_id, recipient_address, destination,
 		cargo_type, weight, cost
-		FROM Shipment WHERE tracking_id = ?`
+		FROM Shipment WHERE tracking_id = $1`
 
 	var s shipment.Shipment
 	err := c.db.QueryRowContext(ctx, query, trackingID).Scan(
@@ -56,104 +65,39 @@ func (c *Client) GetShipment(ctx context.Context, trackingID string) (*shipment.
 	return &s, nil
 }
 
-// GetShipmentsReadyForTransit finds all PENDING shipments that have passed their transit time
-func (c *Client) GetShipmentsReadyForTransit(ctx context.Context, now time.Time) ([]string, error) {
-	query := `SELECT tracking_id FROM Shipment 
-			  WHERE status = ? AND scheduled_transit_time <= ?`
-
-	rows, err := c.db.QueryContext(ctx, query, shipment.StatusPending, now)
+// ProcessStatusTransitions atomically processes all pending status changes using the DB function
+func (c *Client) ProcessStatusTransitions(ctx context.Context, now time.Time) ([]struct{TrackingID, NewStatus, UserJID string}, error) {
+	query := `SELECT r_tracking_id, new_status, r_user_jid FROM public.fn_process_status_transitions($1)`
+	rows, err := c.db.QueryContext(ctx, query, now)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var ids []string
+	var results []struct{TrackingID, NewStatus, UserJID string}
 	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err == nil {
-			ids = append(ids, id)
+		var res struct{TrackingID, NewStatus, UserJID string}
+		if err := rows.Scan(&res.TrackingID, &res.NewStatus, &res.UserJID); err == nil {
+			results = append(results, res)
 		}
 	}
-	return ids, nil
+	return results, nil
 }
 
-// GetShipmentsReadyForOutForDelivery finds all INTRANSIT shipments that have passed their out-for-delivery time
-func (c *Client) GetShipmentsReadyForOutForDelivery(ctx context.Context, now time.Time) ([]string, error) {
-	query := `SELECT tracking_id FROM Shipment 
-			  WHERE status = ? AND outfordelivery_time <= ?`
-
-	rows, err := c.db.QueryContext(ctx, query, shipment.StatusIntransit, now)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var ids []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err == nil {
-			ids = append(ids, id)
-		}
-	}
-	return ids, nil
-}
-
-// GetShipmentsReadyForDelivery finds all OUT_FOR_DELIVERY shipments that have passed their delivery time
-func (c *Client) GetShipmentsReadyForDelivery(ctx context.Context, now time.Time) ([]string, error) {
-	query := `SELECT tracking_id FROM Shipment 
-			  WHERE status = ? AND expected_delivery_time <= ?`
-
-	rows, err := c.db.QueryContext(ctx, query, shipment.StatusOutForDelivery, now)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var ids []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err == nil {
-			ids = append(ids, id)
-		}
-	}
-	return ids, nil
-}
-
-// UpdateShipmentStatus updates a single shipment's status
-func (c *Client) UpdateShipmentStatus(ctx context.Context, trackingID, newStatus string) error {
-	query := `UPDATE Shipment SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE tracking_id = ?`
-	_, err := c.db.ExecContext(ctx, query, newStatus, trackingID)
-	return err
-}
-
-// RunAgedCleanup enforces the data retention policy:
-// 1. Delete delivered shipments older than 2 days (updated_at)
-// 2. Delete ALL shipments older than 7 days (created_at)
+// RunAgedCleanup enforces the data retention policy using the DB function:
 func (c *Client) RunAgedCleanup(ctx context.Context) (int64, error) {
-	twoDaysAgo := time.Now().Add(-48 * time.Hour).UTC()
-	sevenDaysAgo := time.Now().Add(-168 * time.Hour).UTC()
-
-	// 1. Cleanup Delivered (>2 days)
-	res1, err := c.db.ExecContext(ctx, "DELETE FROM Shipment WHERE status = ? AND updated_at < ?", shipment.StatusDelivered, twoDaysAgo)
+	var deleted int64
+	err := c.db.QueryRowContext(ctx, "SELECT deleted_count FROM public.fn_prune_aged_shipments()").Scan(&deleted)
 	if err != nil {
-		return 0, fmt.Errorf("failed cleaning delivered: %w", err)
+		return 0, fmt.Errorf("failed running aged cleanup function: %w", err)
 	}
-	d1, _ := res1.RowsAffected()
-
-	// 2. Cleanup All (>7 days)
-	res2, err := c.db.ExecContext(ctx, "DELETE FROM Shipment WHERE created_at < ?", sevenDaysAgo)
-	if err != nil {
-		return d1, fmt.Errorf("failed cleaning all aged: %w", err)
-	}
-	d2, _ := res2.RowsAffected()
-
-	return d1 + d2, nil
+	return deleted, nil
 }
 
 // CountDailyStats returns counts for Created and Delivered shipments in the last 24h
 func (c *Client) CountDailyStats(ctx context.Context, since time.Time) (created int, delivered int, err error) {
 	// Simple count query for created
-	err = c.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM Shipment WHERE created_at >= ?", since).Scan(&created)
+	err = c.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM Shipment WHERE created_at >= $1", since).Scan(&created)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -161,7 +105,7 @@ func (c *Client) CountDailyStats(ctx context.Context, since time.Time) (created 
 	// Simple count query for delivered (approximate by looking at when they *should* have been delivered,
 	// or refined by adding an 'actual_delivery_time' later. For now, we trust the status update happened nearby)
 	// Better: Select count where status='delivered' AND updated_at >= since (assuming we update the timestamp)
-	err = c.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM Shipment WHERE status = ? AND updated_at >= ?", shipment.StatusDelivered, since).Scan(&delivered)
+	err = c.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM Shipment WHERE status = $1 AND updated_at >= $2", shipment.StatusDelivered, since).Scan(&delivered)
 	if err != nil {
 		return created, 0, err
 	}
@@ -171,7 +115,7 @@ func (c *Client) CountDailyStats(ctx context.Context, since time.Time) (created 
 
 // GetLastTrackingByJID retrieves the most recently created tracking ID for a user.
 func (c *Client) GetLastTrackingByJID(ctx context.Context, jid string) (string, error) {
-	query := `SELECT tracking_id FROM Shipment WHERE user_jid = ? ORDER BY created_at DESC LIMIT 1`
+	query := `SELECT tracking_id FROM Shipment WHERE user_jid = $1 ORDER BY created_at DESC LIMIT 1`
 	var id string
 	err := c.db.QueryRowContext(ctx, query, jid).Scan(&id)
 	if err == sql.ErrNoRows {
@@ -194,14 +138,14 @@ func (c *Client) UpdateShipmentField(ctx context.Context, trackingID, field, val
 		return fmt.Errorf("invalid field: %s", field)
 	}
 
-	query := fmt.Sprintf("UPDATE Shipment SET %s = ?, updated_at = CURRENT_TIMESTAMP WHERE tracking_id = ?", field)
+	query := fmt.Sprintf("UPDATE Shipment SET %s = $1, updated_at = CURRENT_TIMESTAMP WHERE tracking_id = $2", field)
 	_, err := c.db.ExecContext(ctx, query, value, trackingID)
 	return err
 }
 
 // DeleteShipment removes a shipment by ID
 func (c *Client) DeleteShipment(ctx context.Context, trackingID string) error {
-	_, err := c.db.ExecContext(ctx, "DELETE FROM Shipment WHERE tracking_id = ?", trackingID)
+	_, err := c.db.ExecContext(ctx, "DELETE FROM Shipment WHERE tracking_id = $1", trackingID)
 	return err
 }
 
@@ -241,12 +185,11 @@ func (c *Client) ListShipments(ctx context.Context) ([]shipment.Shipment, error)
 // UpdateShipment updates all editable fields of a shipment
 func (c *Client) UpdateShipment(ctx context.Context, s *shipment.Shipment) error {
 	query := `UPDATE Shipment SET 
-		status = ?, 
-		sender_name = ?, sender_phone = ?, origin = ?,
-		recipient_name = ?, recipient_phone = ?, recipient_email = ?, recipient_id = ?, recipient_address = ?, destination = ?,
-		cargo_type = ?, weight = ?, cost = ?,
-		updated_at = CURRENT_TIMESTAMP
-		WHERE tracking_id = ?`
+		status = $1, 
+		sender_name = $2, sender_phone = $3, origin = $4,
+		recipient_name = $5, recipient_phone = $6, recipient_email = $7, recipient_id = $8, recipient_address = $9, destination = $10,
+		cargo_type = $11, weight = $12, cost = $13
+		WHERE tracking_id = $14`
 
 	_, err := c.db.ExecContext(ctx, query,
 		s.Status,
@@ -263,8 +206,8 @@ func (c *Client) FindSimilarShipment(ctx context.Context, userJID, recipientPhon
 	// Simple duplicate check: Same User, Same Recipient Phone
 	// We ignore strict time windows as requested
 	query := `SELECT tracking_id FROM Shipment 
-			  WHERE user_jid = ? 
-			  AND recipient_phone = ?
+			  WHERE user_jid = $1 
+			  AND recipient_phone = $2
 			  ORDER BY created_at DESC LIMIT 1`
 
 	var id string
@@ -277,7 +220,7 @@ func (c *Client) FindSimilarShipment(ctx context.Context, userJID, recipientPhon
 
 // GetLastShipmentIDForUser returns the tracking ID of the most recently created shipment for a given JID.
 func (c *Client) GetLastShipmentIDForUser(ctx context.Context, userJID string) (string, error) {
-	query := `SELECT tracking_id FROM Shipment WHERE user_jid = ? ORDER BY created_at DESC LIMIT 1`
+	query := `SELECT tracking_id FROM Shipment WHERE user_jid = $1 ORDER BY created_at DESC LIMIT 1`
 	var id string
 	err := c.db.QueryRowContext(ctx, query, userJID).Scan(&id)
 	if err == sql.ErrNoRows {
