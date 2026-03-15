@@ -27,8 +27,9 @@ func (c *Client) CreateShipment(ctx context.Context, s *shipment.Shipment, prefi
 		sender_timezone, recipient_timezone,
 		sender_name, sender_phone, origin,
 		recipient_name, recipient_phone, recipient_email, recipient_id, recipient_address, destination,
-		cargo_type, weight, cost
-	) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+		cargo_type, weight, cost,
+		scheduled_transit_time
+	) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
 	RETURNING tracking_id`
 
 	var returnedID string
@@ -38,6 +39,7 @@ func (c *Client) CreateShipment(ctx context.Context, s *shipment.Shipment, prefi
 		s.SenderName, s.SenderPhone, s.Origin,
 		s.RecipientName, s.RecipientPhone, s.RecipientEmail, s.RecipientID, s.RecipientAddress, s.Destination,
 		s.CargoType, s.Weight, s.Cost,
+		s.ScheduledTransitTime,
 	).Scan(&returnedID)
 	return returnedID, err
 }
@@ -67,18 +69,18 @@ func (c *Client) GetShipment(ctx context.Context, trackingID string) (*shipment.
 }
 
 // ProcessStatusTransitions atomically processes all pending status changes using the DB function
-func (c *Client) ProcessStatusTransitions(ctx context.Context, now time.Time) ([]struct{TrackingID, NewStatus, UserJID string}, error) {
-	query := `SELECT r_tracking_id, new_status, r_user_jid FROM public.fn_process_status_transitions($1)`
+func (c *Client) ProcessStatusTransitions(ctx context.Context, now time.Time) ([]struct{TrackingID, NewStatus, UserJID, RecipientEmail string}, error) {
+	query := `SELECT r_tracking_id, new_status, r_user_jid, r_recipient_email FROM public.fn_process_status_transitions($1)`
 	rows, err := c.db.QueryContext(ctx, query, now)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var results []struct{TrackingID, NewStatus, UserJID string}
+	var results []struct{TrackingID, NewStatus, UserJID, RecipientEmail string}
 	for rows.Next() {
-		var res struct{TrackingID, NewStatus, UserJID string}
-		if err := rows.Scan(&res.TrackingID, &res.NewStatus, &res.UserJID); err == nil {
+		var res struct{TrackingID, NewStatus, UserJID, RecipientEmail string}
+		if err := rows.Scan(&res.TrackingID, &res.NewStatus, &res.UserJID, &res.RecipientEmail); err == nil {
 			results = append(results, res)
 		}
 	}

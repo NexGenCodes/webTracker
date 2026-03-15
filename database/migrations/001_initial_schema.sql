@@ -1,6 +1,76 @@
 -- 001_initial_schema.sql
 -- Consolidated database logic for WebTracker
 
+-- 0. Country Timezones (lookup table used by scheduling trigger)
+CREATE TABLE IF NOT EXISTS public.country_timezones (
+    country_name TEXT PRIMARY KEY,
+    zone_name TEXT NOT NULL
+);
+
+-- Seed timezone data (idempotent via ON CONFLICT)
+INSERT INTO public.country_timezones (country_name, zone_name) VALUES
+    ('nigeria', 'Africa/Lagos'),
+    ('ghana', 'Africa/Accra'),
+    ('kenya', 'Africa/Nairobi'),
+    ('south africa', 'Africa/Johannesburg'),
+    ('egypt', 'Africa/Cairo'),
+    ('morocco', 'Africa/Casablanca'),
+    ('tanzania', 'Africa/Dar_es_Salaam'),
+    ('ethiopia', 'Africa/Addis_Ababa'),
+    ('uganda', 'Africa/Kampala'),
+    ('cameroon', 'Africa/Douala'),
+    ('senegal', 'Africa/Dakar'),
+    ('ivory coast', 'Africa/Abidjan'),
+    ('angola', 'Africa/Luanda'),
+    ('mozambique', 'Africa/Maputo'),
+    ('zambia', 'Africa/Lusaka'),
+    ('zimbabwe', 'Africa/Harare'),
+    ('united states', 'America/New_York'),
+    ('usa', 'America/New_York'),
+    ('canada', 'America/Toronto'),
+    ('mexico', 'America/Mexico_City'),
+    ('brazil', 'America/Sao_Paulo'),
+    ('argentina', 'America/Argentina/Buenos_Aires'),
+    ('colombia', 'America/Bogota'),
+    ('chile', 'America/Santiago'),
+    ('peru', 'America/Lima'),
+    ('united kingdom', 'Europe/London'),
+    ('uk', 'Europe/London'),
+    ('france', 'Europe/Paris'),
+    ('germany', 'Europe/Berlin'),
+    ('italy', 'Europe/Rome'),
+    ('spain', 'Europe/Madrid'),
+    ('netherlands', 'Europe/Amsterdam'),
+    ('belgium', 'Europe/Brussels'),
+    ('portugal', 'Europe/Lisbon'),
+    ('switzerland', 'Europe/Zurich'),
+    ('sweden', 'Europe/Stockholm'),
+    ('norway', 'Europe/Oslo'),
+    ('denmark', 'Europe/Copenhagen'),
+    ('poland', 'Europe/Warsaw'),
+    ('turkey', 'Europe/Istanbul'),
+    ('russia', 'Europe/Moscow'),
+    ('china', 'Asia/Shanghai'),
+    ('japan', 'Asia/Tokyo'),
+    ('south korea', 'Asia/Seoul'),
+    ('india', 'Asia/Kolkata'),
+    ('indonesia', 'Asia/Jakarta'),
+    ('malaysia', 'Asia/Kuala_Lumpur'),
+    ('singapore', 'Asia/Singapore'),
+    ('thailand', 'Asia/Bangkok'),
+    ('vietnam', 'Asia/Ho_Chi_Minh'),
+    ('philippines', 'Asia/Manila'),
+    ('pakistan', 'Asia/Karachi'),
+    ('bangladesh', 'Asia/Dhaka'),
+    ('saudi arabia', 'Asia/Riyadh'),
+    ('uae', 'Asia/Dubai'),
+    ('united arab emirates', 'Asia/Dubai'),
+    ('qatar', 'Asia/Qatar'),
+    ('israel', 'Asia/Jerusalem'),
+    ('australia', 'Australia/Sydney'),
+    ('new zealand', 'Pacific/Auckland')
+ON CONFLICT (country_name) DO NOTHING;
+
 -- 1. Tracking ID Generation
 CREATE OR REPLACE FUNCTION public.generate_tracking_id()
  RETURNS text
@@ -32,7 +102,8 @@ DECLARE
     arrival_local TIMESTAMP;
     snap_hour INT := 10;
     final_arrival_utc TIMESTAMP;
-BEGIN
+    NEW.updated_at := CURRENT_TIMESTAMP;
+
     IF (TG_OP = 'INSERT') 
        OR (NEW.origin IS DISTINCT FROM OLD.origin) 
        OR (NEW.destination IS DISTINCT FROM OLD.destination) 
@@ -53,6 +124,7 @@ BEGIN
         -- 2. Auto-Scheduling: For new shipments or edits to Location/Departure
         ELSE
             IF (TG_OP = 'INSERT') THEN
+                -- ORIGINAL CREATION LOGIC: 1h delay, 10 PM cap logic, and 10 AM snap arrival
                 now_lagos := CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Lagos';
                 IF extract(hour from now_lagos) >= 22 THEN
                     departure_utc := (date_trunc('day', now_lagos + interval '1 day') + interval '8 hours') AT TIME ZONE 'Africa/Lagos';
@@ -60,20 +132,30 @@ BEGIN
                     departure_utc := CURRENT_TIMESTAMP + interval '1 hour';
                 END IF;
                 NEW.scheduled_transit_time := departure_utc;
-            ELSE
-                departure_utc := NEW.scheduled_transit_time;
-            END IF;
 
-            -- Force "Next Day" Arrival
-            IF dest_tz = 'UTC' THEN snap_hour := 12; END IF;
-            arrival_local := date_trunc('day', (departure_utc AT TIME ZONE dest_tz) + interval '1 day') + (snap_hour * interval '1 hour');
-            final_arrival_utc := arrival_local AT TIME ZONE dest_tz;
+                -- Snapping Arrival to 10 AM Local
+                IF dest_tz = 'UTC' THEN snap_hour := 12; END IF;
+                arrival_local := date_trunc('day', (departure_utc AT TIME ZONE dest_tz) + interval '1 day') + (snap_hour * interval '1 hour');
+                final_arrival_utc := arrival_local AT TIME ZONE dest_tz;
+            ELSE
+                -- EDIT LOGIC (UPDATE)
+                departure_utc := NEW.scheduled_transit_time;
+                
+                -- Branch: Past/Today vs Future
+                IF (departure_utc <= CURRENT_TIMESTAMP + interval '10 minutes') THEN
+                    -- Strict Rules for Past/Today: Arrival = Departure + 1 day (Strict 24h)
+                    final_arrival_utc := departure_utc + interval '1 day';
+                ELSE
+                    -- Future Rules: Snapping Arrival to 10 AM Local
+                    IF dest_tz = 'UTC' THEN snap_hour := 12; END IF;
+                    arrival_local := date_trunc('day', (departure_utc AT TIME ZONE dest_tz) + interval '1 day') + (snap_hour * interval '1 hour');
+                    final_arrival_utc := arrival_local AT TIME ZONE dest_tz;
+                END IF;
+            END IF;
             
             NEW.expected_delivery_time := final_arrival_utc;
             NEW.outfordelivery_time := final_arrival_utc - interval '2 hours';
         END IF;
-
-        NEW.updated_at := CURRENT_TIMESTAMP;
     END IF;
     RETURN NEW;
 END;
@@ -89,7 +171,8 @@ CREATE OR REPLACE FUNCTION public.fn_process_status_transitions(now_utc TIMESTAM
 RETURNS TABLE (
     r_tracking_id TEXT,
     new_status TEXT,
-    r_user_jid TEXT
+    r_user_jid TEXT,
+    r_recipient_email TEXT
 )
 LANGUAGE plpgsql
 AS $$
@@ -99,19 +182,19 @@ BEGIN
         UPDATE Shipment
         SET status = 'intransit', updated_at = CURRENT_TIMESTAMP
         WHERE status = 'pending' AND scheduled_transit_time <= now_utc
-        RETURNING tracking_id, status AS new_status, user_jid
+        RETURNING tracking_id, status AS new_status, user_jid, recipient_email
     ),
     updated_out AS (
         UPDATE Shipment
         SET status = 'outfordelivery', updated_at = CURRENT_TIMESTAMP
         WHERE status = 'intransit' AND outfordelivery_time <= now_utc
-        RETURNING tracking_id, status AS new_status, user_jid
+        RETURNING tracking_id, status AS new_status, user_jid, recipient_email
     ),
     updated_delivered AS (
         UPDATE Shipment
         SET status = 'delivered', updated_at = CURRENT_TIMESTAMP
         WHERE status = 'outfordelivery' AND expected_delivery_time <= now_utc
-        RETURNING tracking_id, status AS new_status, user_jid
+        RETURNING tracking_id, status AS new_status, user_jid, recipient_email
     )
     SELECT * FROM updated_transit
     UNION ALL

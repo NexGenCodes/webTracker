@@ -169,6 +169,81 @@ func SendShipmentEmail(cfg *config.Config, s *shipment.Shipment, trackingURL str
 	}
 }
 
+// SendDeliveryEmail sends a professional email when a shipment is delivered
+func SendDeliveryEmail(cfg *config.Config, s *shipment.Shipment) {
+	if cfg.SMTPHost == "" || cfg.SMTPUsername == "" || s.RecipientEmail == "" {
+		return
+	}
+
+	companyName := strings.ToUpper(cfg.CompanyName)
+	if companyName == "" {
+		companyName = "AirWayBill"
+	}
+
+	subject := fmt.Sprintf("[%s] Package Delivered - %s", companyName, s.TrackingID)
+	recipient := s.RecipientEmail
+
+	// HTML Template
+	body := fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px;">
+    <div style="max-width: 600px; margin: auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+        <h1 style="color: #28a745; font-size: 24px; margin-bottom: 10px;">%s</h1>
+        <h2 style="color: #333; font-size: 18px; margin-bottom: 25px;">Package Delivered!</h2>
+        
+        <p style="color: #555; line-height: 1.6;">Hello <strong>%s</strong>,</p>
+        <p style="color: #555; line-height: 1.6;">Great news! Your package with ID <strong>%s</strong> has been successfully delivered.</p>
+        
+        <div style="background-color: #f8f9fa; border-left: 4px solid #28a745; padding: 15px; margin: 25px 0;">
+            <p style="margin: 0; color: #333;"><strong>Tracking ID:</strong> %s</p>
+            <p style="margin: 5px 0 0 0; color: #333;"><strong>Status:</strong> DELIVERED</p>
+            <p style="margin: 5px 0 0 0; color: #333;"><strong>Delivered on:</strong> %s</p>
+        </div>
+
+        <p style="color: #555; line-height: 1.6;">Thank you for choosing %s. We hope to serve you again soon!</p>
+
+        <p style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px; color: #888; font-size: 12px;">
+            &copy; 2026 %s. All rights reserved.
+        </p>
+    </div>
+</body>
+</html>`,
+		companyName,
+		s.RecipientName,
+		s.TrackingID,
+		s.TrackingID,
+		time.Now().Format("January 02, 2006"),
+		companyName,
+		companyName,
+	)
+
+	msg := "From: " + companyName + " <" + cfg.NotifyEmail + ">\r\n" +
+		"To: " + recipient + "\r\n" +
+		"Subject: " + subject + "\r\n" +
+		"MIME-Version: 1.0\r\n" +
+		"Content-Type: text/html; charset=\"UTF-8\"\r\n" +
+		"\r\n" +
+		body
+
+	addr := fmt.Sprintf("%s:%d", cfg.SMTPHost, cfg.SMTPPort)
+	var err error
+	if cfg.SMTPPort == 465 {
+		err = sendSMTPS(addr, cfg.SMTPHost, cfg.SMTPUsername, cfg.SMTPPassword, recipient, []byte(msg))
+	} else {
+		user := strings.TrimSpace(cfg.SMTPUsername)
+		pass := strings.TrimSpace(cfg.SMTPPassword)
+		host := strings.TrimSpace(cfg.SMTPHost)
+		auth := smtp.PlainAuth("", user, pass, host)
+		err = smtp.SendMail(addr, auth, cfg.NotifyEmail, []string{recipient}, []byte(msg))
+	}
+
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to send delivery email")
+	} else {
+		logger.Info().Str("email", recipient).Msg("Delivery notification email delivered")
+	}
+}
+
 func sendSMTPS(addr, host, user, pass, to string, msg []byte) error {
 	user = strings.TrimSpace(user)
 	pass = strings.TrimSpace(pass)
