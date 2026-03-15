@@ -19,6 +19,11 @@ async function reset() {
             DROP TABLE IF EXISTS GroupAuthority CASCADE;
             DROP TABLE IF EXISTS SystemConfig CASCADE;
             DROP TABLE IF EXISTS country_timezones CASCADE;
+
+            DROP FUNCTION IF EXISTS generate_tracking_id() CASCADE;
+            DROP FUNCTION IF EXISTS fn_shipment_auto_schedule() CASCADE;
+            DROP FUNCTION IF EXISTS fn_process_status_transitions(TIMESTAMP) CASCADE;
+            DROP FUNCTION IF EXISTS fn_prune_aged_shipments() CASCADE;
         `);
         
         console.log('✅ All tables dropped.');
