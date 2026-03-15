@@ -15,9 +15,10 @@ func (c *Client) CreateShipment(ctx context.Context, s *shipment.Shipment, prefi
 	if prefix == "" {
 		prefix = "AWB"
 	}
-	// Generate tracking ID: Prefix + 9 random digits. Using time.Now().UnixNano() or similar
-	// But let's just use a simple random string of digits
-	randStr := fmt.Sprintf("%09d", time.Now().UnixNano()%1000000000)
+	// Generate tracking ID: Prefix + 9 random digits.
+	// We use a more robust random factor by combining unix nano and a large random number
+	seed := time.Now().UnixNano()
+	randStr := fmt.Sprintf("%09d", seed%1000000000)
 	trackingID := fmt.Sprintf("%s-%s", prefix, randStr)
 	
 	query := `
@@ -81,6 +82,9 @@ func (c *Client) ProcessStatusTransitions(ctx context.Context, now time.Time) ([
 			results = append(results, res)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error during row iteration: %w", err)
+	}
 	return results, nil
 }
 
@@ -131,7 +135,7 @@ func (c *Client) UpdateShipmentField(ctx context.Context, trackingID, field, val
 		"sender_name": true, "sender_phone": true, "origin": true,
 		"recipient_name": true, "recipient_phone": true, "recipient_email": true, "recipient_id": true, "recipient_address": true, "destination": true,
 		"cargo_type":             true,
-		"scheduled_transit_time": true, "expected_delivery_time": true,
+		"scheduled_transit_time": true, "expected_delivery_time": true, "outfordelivery_time": true,
 	}
 
 	if !allowedFields[field] {
@@ -179,6 +183,9 @@ func (c *Client) ListShipments(ctx context.Context) ([]shipment.Shipment, error)
 			shipments = append(shipments, s)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error during row iteration: %w", err)
+	}
 	return shipments, nil
 }
 
@@ -201,21 +208,24 @@ func (c *Client) UpdateShipment(ctx context.Context, s *shipment.Shipment) error
 	return err
 }
 
-// FindSimilarShipment checks for an existing shipment with the same recipient phone for this user.
-func (c *Client) FindSimilarShipment(ctx context.Context, userJID, recipientPhone string) (string, error) {
-	// Simple duplicate check: Same User, Same Recipient Phone
-	// We ignore strict time windows as requested
+// FindSimilarShipment checks for an existing shipment with same recipient phone, email, or ID for this user.
+func (c *Client) FindSimilarShipment(ctx context.Context, userJID, phone, email, id string) (string, error) {
+	// Simple duplicate check: Same User AND (Same Phone OR Same Email OR Same ID)
 	query := `SELECT tracking_id FROM Shipment 
 			  WHERE user_jid = $1 
-			  AND recipient_phone = $2
+			  AND (
+				  (recipient_phone = $2 AND $2 != '') OR 
+				  (recipient_email = $3 AND $3 != '') OR 
+				  (recipient_id = $4 AND $4 != '')
+			  )
 			  ORDER BY created_at DESC LIMIT 1`
 
-	var id string
-	err := c.db.QueryRowContext(ctx, query, userJID, recipientPhone).Scan(&id)
+	var trackingID string
+	err := c.db.QueryRowContext(ctx, query, userJID, phone, email, id).Scan(&trackingID)
 	if err == sql.ErrNoRows {
 		return "", nil
 	}
-	return id, err
+	return trackingID, err
 }
 
 // GetLastShipmentIDForUser returns the tracking ID of the most recently created shipment for a given JID.

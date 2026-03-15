@@ -1,13 +1,15 @@
 import React from 'react';
 import { Zap, Cpu, FileText, XCircle, PlusCircle, ChevronLeft } from 'lucide-react';
 
+import { Dictionary } from '@/types/shipment';
+
 interface ManifestEditorProps {
     emailText: string;
     setEmailText: (text: string) => void;
     onGenerate: () => void;
     loading: boolean;
     error: string | null;
-    dict: any;
+    dict: Dictionary;
     onAbort: () => void;
 }
 

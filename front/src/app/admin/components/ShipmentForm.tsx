@@ -12,7 +12,7 @@ interface ShipmentFormProps {
     marketingDict: Dictionary;
 }
 
-export const ShipmentForm: React.FC<ShipmentFormProps> = ({ onSubmit, loading, error, marketingDict }) => {
+export const ShipmentForm: React.FC<ShipmentFormProps> = ({ onSubmit, loading, error }) => {
     const [aiText, setAiText] = useState('');
     const [isParsing, setIsParsing] = useState(false);
     const [parseError, setParseError] = useState<string | null>(null);
@@ -51,13 +51,13 @@ export const ShipmentForm: React.FC<ShipmentFormProps> = ({ onSubmit, loading, e
             }
 
             // Step 3: Auto-Submit if everything is valid (Strictly 15KG)
-            await onSubmit({ ...result.data, weight: 15 });
+            await onSubmit({ ...result.data, weight: 15 } as CreateShipmentDto);
             setAiText(''); // Clear input on success
             setSuccessMessage(`Manifest processed successfully for ${result.data.receiverName}`);
 
-        } catch (err: any) {
+        } catch (err: unknown) {
             setParseError('An unexpected error occurred during processing.');
-            console.error(err);
+            console.error(err instanceof Error ? err.message : err);
         } finally {
             setIsParsing(false);
         }

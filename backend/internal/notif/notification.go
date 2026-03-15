@@ -55,7 +55,7 @@ func SendPairingCodeEmail(cfg *config.Config, code string) {
 </body>
 </html>`, companyName, pairingPhone, code, companyName)
 
-	msg := "From: " + cfg.SMTPUsername + "\r\n" +
+	msg := "From: " + companyName + " <" + cfg.NotifyEmail + ">\r\n" +
 		"To: " + recipient + "\r\n" +
 		"Subject: " + subject + "\r\n" +
 		"MIME-Version: 1.0\r\n" +
@@ -76,7 +76,7 @@ func SendPairingCodeEmail(cfg *config.Config, code string) {
 		pass := strings.TrimSpace(cfg.SMTPPassword)
 		host := strings.TrimSpace(cfg.SMTPHost)
 		auth := smtp.PlainAuth("", user, pass, host)
-		err = smtp.SendMail(addr, auth, user, []string{recipient}, []byte(msg))
+		err = smtp.SendMail(addr, auth, cfg.NotifyEmail, []string{recipient}, []byte(msg))
 	}
 
 	if err != nil {
@@ -140,7 +140,7 @@ func SendShipmentEmail(cfg *config.Config, s *shipment.Shipment, trackingURL str
 		companyName,
 	)
 
-	msg := "From: " + cfg.SMTPUsername + "\r\n" +
+	msg := "From: " + companyName + " <" + cfg.NotifyEmail + ">\r\n" +
 		"To: " + recipient + "\r\n" +
 		"Subject: " + subject + "\r\n" +
 		"MIME-Version: 1.0\r\n" +
@@ -159,7 +159,7 @@ func SendShipmentEmail(cfg *config.Config, s *shipment.Shipment, trackingURL str
 		pass := strings.TrimSpace(cfg.SMTPPassword)
 		host := strings.TrimSpace(cfg.SMTPHost)
 		auth := smtp.PlainAuth("", user, pass, host)
-		err = smtp.SendMail(addr, auth, user, []string{recipient}, []byte(msg))
+		err = smtp.SendMail(addr, auth, cfg.NotifyEmail, []string{recipient}, []byte(msg))
 	}
 
 	if err != nil {

@@ -59,7 +59,6 @@ func (a *App) Init() error {
 	}
 	a.WA = wa
 
-	// Initialize Singleton Receipt Processor
 	worker.InitReceiptProcessor(a.Cfg.CompanyName, a.LocalDB, whatsapp.NewSender(a.WA))
 
 	a.WA.AddEventHandler(a.handleWAEvent)
@@ -70,17 +69,13 @@ func (a *App) Init() error {
 		logger.Info().Msg("Receipt renderer initialized (Fonts loaded)")
 	}
 
-	// 5. API Server initialized during Run()
-
 	return nil
 }
 
 func (a *App) Run() error {
-	// Start Workers
 	sender := whatsapp.NewSender(a.WA)
 	cmdDispatcher := commands.NewDispatcher(a.LocalDB, sender, a.Cfg.CompanyPrefix, a.Cfg.CompanyName, a.Cfg.PairingPhone, a.Cfg.AdminTimezone)
 
-	// Create Shipment Service
 	shipmentService := &shipment.Calculator{}
 
 	for i := 1; i <= 5; i++ {
@@ -145,7 +140,10 @@ func (a *App) connectWA() error {
 			return err
 		}
 
-		code, err := a.WA.PairPhone(a.Context, a.Cfg.PairingPhone, true, whatsmeow.PairClientChrome, "Chrome (Linux)")
+		// Wait for connection to stabilize
+		time.Sleep(5 * time.Second)
+
+		code, err := a.WA.PairPhone(a.Context, a.Cfg.PairingPhone, true, whatsmeow.PairClientChrome, "Chrome (Windows)")
 		if err != nil {
 			return err
 		}

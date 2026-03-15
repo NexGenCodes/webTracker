@@ -1,9 +1,11 @@
 import React from 'react';
 
+import { ShipmentData, Dictionary } from '@/types/shipment';
+
 interface RecentShipmentsProps {
-    shipments: any[];
+    shipments: ShipmentData[];
     dataLoading: boolean;
-    dict: any;
+    dict: Dictionary;
 }
 
 export const RecentShipments: React.FC<RecentShipmentsProps> = ({ shipments, dataLoading, dict }) => {

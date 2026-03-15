@@ -31,7 +31,9 @@ export async function POST(request: NextRequest) {
         const input = await request.json();
 
         // Generate dynamic tracking ID
-        const prefix = process.env.NEXT_PUBLIC_COMPANY_PREFIX || process.env.COMPANY_PREFIX || 'AWB';
+        const { generateAbbreviation } = await import('@/lib/utils');
+        const companyName = process.env.NEXT_PUBLIC_COMPANY_NAME || 'Airwaybill';
+        const prefix = process.env.NEXT_PUBLIC_COMPANY_PREFIX || process.env.COMPANY_PREFIX || generateAbbreviation(companyName);
         const randStr = Math.floor(Math.random() * 1000000000).toString().padStart(9, '0');
         const trackingId = `${prefix}-${randStr}`;
 

@@ -1,15 +1,11 @@
 import React from 'react';
 
+import { DashboardStats, Dictionary } from '@/types/shipment';
+
 interface StatsCardsProps {
-    stats: {
-        total: number;
-        pending: number;
-        inTransit: number;
-        outForDelivery: number;
-        delivered: number;
-    };
+    stats: DashboardStats;
     dataLoading: boolean;
-    dict: any;
+    dict: Dictionary;
 }
 
 export const StatsCards: React.FC<StatsCardsProps> = ({ stats, dataLoading, dict }) => {

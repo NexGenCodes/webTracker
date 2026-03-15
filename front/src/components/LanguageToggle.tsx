@@ -18,7 +18,7 @@ const languages: { code: Locale; label: string }[] = [
     { code: 'ar', label: 'العربية' },
 ];
 
-export const LanguageToggle = memo(() => {
+const LanguageToggleComponent = memo(() => {
     const { locale, setLocale } = useI18n();
     const [isOpen, setIsOpen] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -88,3 +88,6 @@ export const LanguageToggle = memo(() => {
         </div>
     );
 });
+
+LanguageToggleComponent.displayName = 'LanguageToggle';
+export const LanguageToggle = LanguageToggleComponent;

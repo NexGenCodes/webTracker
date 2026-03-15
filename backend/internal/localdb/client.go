@@ -33,7 +33,7 @@ func NewClient(dsn string) (*Client, error) {
 	}
 
 	client := &Client{db: db}
-	if err := client.initSchema(context.Background()); err != nil {
+	if err := client.InitSchema(context.Background()); err != nil {
 		return nil, fmt.Errorf("failed to init schema: %w", err)
 	}
 
@@ -41,27 +41,27 @@ func NewClient(dsn string) (*Client, error) {
 	return client, nil
 }
 
-func (c *Client) initSchema(ctx context.Context) error {
+func (c *Client) InitSchema(ctx context.Context) error {
 	query := `
-	CREATE TABLE IF NOT EXISTS SystemConfig (
+	CREATE TABLE IF NOT EXISTS public.SystemConfig (
 		key TEXT PRIMARY KEY,
 		value TEXT NOT NULL,
 		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
 
-	CREATE TABLE IF NOT EXISTS UserPreference (
+	CREATE TABLE IF NOT EXISTS public.UserPreference (
 		jid TEXT PRIMARY KEY,
 		language TEXT NOT NULL DEFAULT 'en',
 		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
 
-	CREATE TABLE IF NOT EXISTS GroupAuthority (
+	CREATE TABLE IF NOT EXISTS public.GroupAuthority (
 		jid TEXT PRIMARY KEY,
 		is_authorized BOOLEAN NOT NULL DEFAULT FALSE,
 		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
 
-	CREATE TABLE IF NOT EXISTS Shipment (
+	CREATE TABLE IF NOT EXISTS public.Shipment (
 		tracking_id TEXT PRIMARY KEY,
 		user_jid TEXT NOT NULL,
 		status TEXT DEFAULT 'pending',
@@ -91,13 +91,33 @@ func (c *Client) initSchema(ctx context.Context) error {
 		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
 
-	CREATE INDEX IF NOT EXISTS idx_shipment_triggers_pending ON Shipment(status, scheduled_transit_time) WHERE status = 'pending';
-	CREATE INDEX IF NOT EXISTS idx_shipment_triggers_transit ON Shipment(status, outfordelivery_time) WHERE status = 'intransit';
-	CREATE INDEX IF NOT EXISTS idx_shipment_triggers_outfordelivery ON Shipment(status, expected_delivery_time) WHERE status = 'outfordelivery';
-	CREATE INDEX IF NOT EXISTS idx_shipment_user_jid ON Shipment(user_jid);
+	CREATE INDEX IF NOT EXISTS idx_shipment_triggers_pending ON public.Shipment(status, scheduled_transit_time) WHERE status = 'pending';
+	CREATE INDEX IF NOT EXISTS idx_shipment_triggers_transit ON public.Shipment(status, outfordelivery_time) WHERE status = 'intransit';
+	CREATE INDEX IF NOT EXISTS idx_shipment_triggers_outfordelivery ON public.Shipment(status, expected_delivery_time) WHERE status = 'outfordelivery';
+	CREATE INDEX IF NOT EXISTS idx_shipment_user_jid ON public.Shipment(user_jid);
+
+	-- Uniqueness Constraints (Recipient Details)
+	-- We use partial indices to allow multiple NULLs but enforce uniqueness on values
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_shipment_unique_phone ON public.Shipment(recipient_phone) WHERE recipient_phone IS NOT NULL AND recipient_phone != '';
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_shipment_unique_email ON public.Shipment(recipient_email) WHERE recipient_email IS NOT NULL AND recipient_email != '';
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_shipment_unique_id ON public.Shipment(recipient_id) WHERE recipient_id IS NOT NULL AND recipient_id != '';
 	`
 	_, err := c.db.ExecContext(ctx, query)
 	return err
+}
+
+// ResetDB drops all tables and re-initializes the schema.
+func (c *Client) ResetDB(ctx context.Context) error {
+	query := `
+	DROP TABLE IF EXISTS public.Shipment CASCADE;
+	DROP TABLE IF EXISTS public.UserPreference CASCADE;
+	DROP TABLE IF EXISTS public.GroupAuthority CASCADE;
+	DROP TABLE IF EXISTS public.SystemConfig CASCADE;
+	`
+	if _, err := c.db.ExecContext(ctx, query); err != nil {
+		return fmt.Errorf("failed to drop tables: %w", err)
+	}
+	return c.InitSchema(ctx)
 }
 
 // GetSystemConfig fetches a persistent configuration value.
@@ -120,6 +140,10 @@ func (c *Client) SetSystemConfig(ctx context.Context, key string, value string) 
 	`
 	_, err := c.db.ExecContext(ctx, query, key, value)
 	return err
+}
+
+func (c *Client) Exec(ctx context.Context, query string, args ...any) (sql.Result, error) {
+	return c.db.ExecContext(ctx, query, args...)
 }
 
 func (c *Client) Close() error {

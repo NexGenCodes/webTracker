@@ -2,10 +2,11 @@ import React, { memo, useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { Sun, Moon } from "lucide-react";
 
-export const ThemeToggle = memo(() => {
+const ThemeToggleComponent = memo(() => {
     const { theme, setTheme } = useTheme();
     const [mounted, setMounted] = useState(false);
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(() => setMounted(true), []);
 
     if (!mounted) return <div className="p-2 w-10 h-10" />;
@@ -24,3 +25,6 @@ export const ThemeToggle = memo(() => {
         </button>
     );
 });
+
+ThemeToggleComponent.displayName = 'ThemeToggle';
+export const ThemeToggle = ThemeToggleComponent;

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useCallback, useEffect, Suspense } from 'react';
-import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
 import { TrackingSearch } from '@/components/TrackingSearch';
 import { getTracking } from './actions/shipment';
@@ -22,6 +21,11 @@ function HomeContent() {
   const [shippingData, setShippingData] = useState<ShipmentData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const initialId = searchParams.get('id');
 
@@ -74,6 +78,8 @@ function HomeContent() {
     });
     setTimeout(() => setCopied(false), 2000);
   }, [dict.admin]);
+
+  if (!mounted) return null;
 
   return (
     <main className="min-h-screen flex flex-col items-center overflow-x-hidden relative">
@@ -288,7 +294,7 @@ function HomeContent() {
                           </div>
                         ))
                       ) : (
-                        shippingData.events?.map((event: any, i: number) => (
+                        shippingData.events?.map((event, i: number) => (
                           <div key={event.id} className="relative group/event">
                             <div className={cn(
                               "absolute left-[-47px] top-1.5 w-6 h-6 rounded-full border-4 border-bg transition-all duration-500",

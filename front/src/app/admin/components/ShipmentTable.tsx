@@ -1,10 +1,12 @@
 import React from 'react';
 import { Trash2, XCircle } from 'lucide-react';
 
+import { ShipmentData, Dictionary } from '@/types/shipment';
+
 interface ShipmentTableProps {
-    shipments: any[];
+    shipments: ShipmentData[];
     dataLoading: boolean;
-    dict: any;
+    dict: Dictionary;
     onMarkDelivered: (trackingNumber: string) => void;
     onCancel: (trackingNumber: string) => void;
     onDelete: (trackingNumber: string) => void;

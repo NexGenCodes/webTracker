@@ -1,12 +1,14 @@
 import React from 'react';
 import { Check, Copy, ChevronLeft } from 'lucide-react';
 
+import { Dictionary } from '@/types/shipment';
+
 interface SuccessDisplayProps {
     trackingId: string;
     copied: boolean;
     onCopy: () => void;
     onBack: () => void;
-    dict: any;
+    dict: Dictionary;
 }
 
 export const SuccessDisplay: React.FC<SuccessDisplayProps> = ({
