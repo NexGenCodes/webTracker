@@ -213,6 +213,15 @@ func LoadFromEnv() (*Config, error) {
 		cfg.DatabaseURL = os.Getenv("DATABASE_URL")
 	}
 
+	// Ensure search_path is set to public for Neon DB pooled connections
+	if cfg.DatabaseURL != "" && !strings.Contains(cfg.DatabaseURL, "search_path=public") {
+		if strings.Contains(cfg.DatabaseURL, "?") {
+			cfg.DatabaseURL += "&search_path=public"
+		} else {
+			cfg.DatabaseURL += "?search_path=public"
+		}
+	}
+
 	if cfg.LogPath == "" {
 		cfg.LogPath = filepath.Join(workDir, "logs")
 	}
