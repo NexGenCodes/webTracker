@@ -5,12 +5,10 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
 
-	"webtracker-bot/internal/api"
 	"webtracker-bot/internal/commands"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/localdb"
@@ -35,7 +33,6 @@ type App struct {
 	WG      sync.WaitGroup
 	Cancel  context.CancelFunc
 	Cron    *scheduler.CronManager
-	API     *api.Server
 	Context context.Context
 }
 
@@ -50,19 +47,20 @@ func New(cfg *config.Config) *App {
 }
 
 func (a *App) Init() error {
-	workDir := config.GetWorkDir()
-	dbPath := filepath.Join(workDir, "webtracker.db")
-	ldb, err := localdb.NewClient(dbPath)
+	ldb, err := localdb.NewClient(a.Cfg.DatabaseURL)
 	if err != nil {
-		return fmt.Errorf("localdb init: %w", err)
+		return fmt.Errorf("localdb init (Postgres): %w", err)
 	}
 	a.LocalDB = ldb
 
-	wa, err := whatsapp.NewClient(a.Cfg.WhatsAppSessionPath)
+	wa, err := whatsapp.NewClient(a.Cfg.DatabaseURL)
 	if err != nil {
-		return fmt.Errorf("whatsapp init: %w", err)
+		return fmt.Errorf("whatsapp init (Postgres): %w", err)
 	}
 	a.WA = wa
+
+	// Initialize Singleton Receipt Processor
+	worker.InitReceiptProcessor(a.Cfg.CompanyName, a.LocalDB, whatsapp.NewSender(a.WA))
 
 	a.WA.AddEventHandler(a.handleWAEvent)
 
@@ -93,7 +91,7 @@ func (a *App) Run() error {
 			Sender:          sender,
 			Jobs:            a.Jobs,
 			WG:              &a.WG,
-			GeminiKey:       a.Cfg.GeminiAPIKey,
+			Cfg:             a.Cfg,
 			AwbCmd:          a.Cfg.CompanyPrefix,
 			CompanyName:     a.Cfg.CompanyName,
 			Cmd:             cmdDispatcher,
@@ -103,19 +101,6 @@ func (a *App) Run() error {
 		}
 		go w.Start()
 	}
-
-	port := a.Cfg.APIPort
-	if port == "" {
-		port = "8080"
-	}
-
-	a.API = api.NewServer(a.LocalDB, a.Cfg.ApiAuthToken, a.Cfg.GeminiAPIKey, a.Cfg.AllowedOrigin)
-	go func() {
-		logger.Info().Str("port", port).Msg("API Server starting")
-		if err := a.API.Start(port); err != nil {
-			logger.Error().Err(err).Msg("API Server failed")
-		}
-	}()
 
 	a.Cron = scheduler.NewManager(a.Cfg, a.LocalDB, a.WA)
 	a.Cron.Start()

@@ -7,28 +7,23 @@ import (
 	"time"
 
 	"webtracker-bot/internal/logger"
-
-	_ "modernc.org/sqlite"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 type Client struct {
 	db *sql.DB
 }
 
-func NewClient(dbPath string) (*Client, error) {
-	// Use same WAL settings as whatsmeow to ensure compatibility and performance
-	// _pragma=busy_timeout(5000) is crucial for concurrent access
-	dsn := fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)", dbPath)
-
-	db, err := sql.Open("sqlite", dsn)
+func NewClient(dsn string) (*Client, error) {
+	db, err := sql.Open("pgx", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open sqlite connection: %w", err)
+		return nil, fmt.Errorf("failed to open postgres connection: %w", err)
 	}
 
-	// Connection pool settings suitable for SQLite
-	db.SetMaxOpenConns(1) // SQLite writes are serialized anyway; keeping 1 connection avoids lock contention
-	db.SetMaxIdleConns(1)
-	db.SetConnMaxLifetime(0) // Reuse forever
+	// Connection pool settings suitable for 1GB RAM VPS
+	db.SetMaxOpenConns(5)    // Small pool
+	db.SetMaxIdleConns(2)
+	db.SetConnMaxLifetime(1 * time.Hour)
 
 	// Verify connection
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -42,33 +37,28 @@ func NewClient(dbPath string) (*Client, error) {
 		return nil, fmt.Errorf("failed to init schema: %w", err)
 	}
 
-	// Minor migration for existing DBs
-	_, _ = db.Exec("ALTER TABLE Shipment ADD COLUMN recipient_email TEXT")
-	_, _ = db.Exec("ALTER TABLE Shipment ADD COLUMN recipient_id TEXT")
-	_, _ = db.Exec("ALTER TABLE Shipment ADD COLUMN recipient_address TEXT")
-
-	logger.Info().Str("path", dbPath).Msg("Local DB (SQLite) initialized")
+	logger.Info().Msg("Local DB (PostgreSQL) initialized")
 	return client, nil
 }
 
 func (c *Client) initSchema(ctx context.Context) error {
 	query := `
+	CREATE TABLE IF NOT EXISTS SystemConfig (
+		key TEXT PRIMARY KEY,
+		value TEXT NOT NULL,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+
 	CREATE TABLE IF NOT EXISTS UserPreference (
 		jid TEXT PRIMARY KEY,
 		language TEXT NOT NULL DEFAULT 'en',
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
 
 	CREATE TABLE IF NOT EXISTS GroupAuthority (
 		jid TEXT PRIMARY KEY,
-		is_authorized BOOLEAN NOT NULL DEFAULT 0,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
-
-	CREATE TABLE IF NOT EXISTS SystemConfig (
-		key TEXT PRIMARY KEY,
-		value TEXT NOT NULL,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		is_authorized BOOLEAN NOT NULL DEFAULT FALSE,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
 
 	CREATE TABLE IF NOT EXISTS Shipment (
@@ -76,10 +66,10 @@ func (c *Client) initSchema(ctx context.Context) error {
 		user_jid TEXT NOT NULL,
 		status TEXT DEFAULT 'pending',
 		
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		scheduled_transit_time DATETIME,
-		outfordelivery_time DATETIME,
-		expected_delivery_time DATETIME,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		scheduled_transit_time TIMESTAMP,
+		outfordelivery_time TIMESTAMP,
+		expected_delivery_time TIMESTAMP,
 		
 		sender_timezone TEXT,
 		recipient_timezone TEXT,
@@ -94,11 +84,11 @@ func (c *Client) initSchema(ctx context.Context) error {
 		recipient_address TEXT,
 		destination TEXT,
 		cargo_type TEXT,
-		weight REAL,
-		cost REAL,
+		weight DOUBLE PRECISION,
+		cost DOUBLE PRECISION,
 		
 		-- Metadata for easy deletes or bulk ops
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_shipment_triggers_pending ON Shipment(status, scheduled_transit_time) WHERE status = 'pending';
@@ -112,7 +102,7 @@ func (c *Client) initSchema(ctx context.Context) error {
 
 // GetSystemConfig fetches a persistent configuration value.
 func (c *Client) GetSystemConfig(ctx context.Context, key string) (string, error) {
-	query := `SELECT value FROM SystemConfig WHERE key = ?`
+	query := `SELECT value FROM SystemConfig WHERE key = $1`
 	var val string
 	err := c.db.QueryRowContext(ctx, query, key).Scan(&val)
 	if err == sql.ErrNoRows {
@@ -125,8 +115,8 @@ func (c *Client) GetSystemConfig(ctx context.Context, key string) (string, error
 func (c *Client) SetSystemConfig(ctx context.Context, key string, value string) error {
 	query := `
 	INSERT INTO SystemConfig (key, value, updated_at) 
-	VALUES (?, ?, CURRENT_TIMESTAMP)
-	ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP;
+	VALUES ($1, $2, CURRENT_TIMESTAMP)
+	ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP;
 	`
 	_, err := c.db.ExecContext(ctx, query, key, value)
 	return err
@@ -138,7 +128,7 @@ func (c *Client) Close() error {
 
 // GetUserLanguage fetches the preferred language for a JID. Defaults to "en" if not found.
 func (c *Client) GetUserLanguage(ctx context.Context, jid string) (string, error) {
-	query := `SELECT language FROM UserPreference WHERE jid = ?`
+	query := `SELECT language FROM UserPreference WHERE jid = $1`
 	var lang string
 	err := c.db.QueryRowContext(ctx, query, jid).Scan(&lang)
 	if err == sql.ErrNoRows {
@@ -154,8 +144,8 @@ func (c *Client) GetUserLanguage(ctx context.Context, jid string) (string, error
 func (c *Client) SetUserLanguage(ctx context.Context, jid string, lang string) error {
 	query := `
 	INSERT INTO UserPreference (jid, language, updated_at) 
-	VALUES (?, ?, CURRENT_TIMESTAMP)
-	ON CONFLICT(jid) DO UPDATE SET language = excluded.language, updated_at = CURRENT_TIMESTAMP;
+	VALUES ($1, $2, CURRENT_TIMESTAMP)
+	ON CONFLICT(jid) DO UPDATE SET language = EXCLUDED.language, updated_at = CURRENT_TIMESTAMP;
 	`
 	_, err := c.db.ExecContext(ctx, query, jid, lang)
 	return err
@@ -164,7 +154,7 @@ func (c *Client) SetUserLanguage(ctx context.Context, jid string, lang string) e
 // GetGroupAuthority checks the cache for bot authorization in a group.
 // Returns (isAuthorized, exists, error)
 func (c *Client) GetGroupAuthority(ctx context.Context, jid string) (bool, bool, error) {
-	query := `SELECT is_authorized, updated_at FROM GroupAuthority WHERE jid = ?`
+	query := `SELECT is_authorized, updated_at FROM GroupAuthority WHERE jid = $1`
 	var isAuthorized bool
 	var updatedAt time.Time
 	err := c.db.QueryRowContext(ctx, query, jid).Scan(&isAuthorized, &updatedAt)
@@ -182,8 +172,8 @@ func (c *Client) GetGroupAuthority(ctx context.Context, jid string) (bool, bool,
 func (c *Client) SetGroupAuthority(ctx context.Context, jid string, isAuthorized bool) error {
 	query := `
 	INSERT INTO GroupAuthority (jid, is_authorized, updated_at) 
-	VALUES (?, ?, CURRENT_TIMESTAMP)
-	ON CONFLICT(jid) DO UPDATE SET is_authorized = excluded.is_authorized, updated_at = CURRENT_TIMESTAMP;
+	VALUES ($1, $2, CURRENT_TIMESTAMP)
+	ON CONFLICT(jid) DO UPDATE SET is_authorized = EXCLUDED.is_authorized, updated_at = CURRENT_TIMESTAMP;
 	`
 	_, err := c.db.ExecContext(ctx, query, jid, isAuthorized)
 	return err
@@ -191,7 +181,7 @@ func (c *Client) SetGroupAuthority(ctx context.Context, jid string, isAuthorized
 
 // HasAuthorizedGroups checks if the bot is admin in at least one cached group.
 func (c *Client) HasAuthorizedGroups(ctx context.Context) (bool, error) {
-	query := `SELECT COUNT(*) FROM GroupAuthority WHERE is_authorized = 1`
+	query := `SELECT COUNT(*) FROM GroupAuthority WHERE is_authorized = TRUE`
 	var count int
 	err := c.db.QueryRowContext(ctx, query).Scan(&count)
 	return count > 0, err
@@ -199,7 +189,7 @@ func (c *Client) HasAuthorizedGroups(ctx context.Context) (bool, error) {
 
 // GetAuthorizedGroups returns a list of all group JIDs where the bot is authorized.
 func (c *Client) GetAuthorizedGroups(ctx context.Context) ([]string, error) {
-	query := `SELECT jid FROM GroupAuthority WHERE is_authorized = 1`
+	query := `SELECT jid FROM GroupAuthority WHERE is_authorized = TRUE`
 	rows, err := c.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
@@ -218,7 +208,7 @@ func (c *Client) GetAuthorizedGroups(ctx context.Context) ([]string, error) {
 
 // CountAuthorizedGroups returns the total number of authorized groups.
 func (c *Client) CountAuthorizedGroups(ctx context.Context) (int, error) {
-	query := `SELECT COUNT(*) FROM GroupAuthority WHERE is_authorized = 1`
+	query := `SELECT COUNT(*) FROM GroupAuthority WHERE is_authorized = TRUE`
 	var count int
 	err := c.db.QueryRowContext(ctx, query).Scan(&count)
 	return count, err

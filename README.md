@@ -28,115 +28,63 @@
 - 🔐 **Secure Admin Portal** - NextAuth-powered authentication with comprehensive shipment management
 - 🌓 **Dark Mode** - Beautiful cosmic-themed UI with light/dark mode support
 - 🌐 **Internationalization** - Full support for English and Portuguese
-- ⚡ **Real-time Updates** - Automated status transitions and WhatsApp notifications
-
----
-
-## 🏗️ Architecture
+- ⚡ **Real-time Updates** - Automated status transitions an## 🏗️ Architecture (Edge-Core Hybrid)
 
 ```mermaid
 graph TB
-    subgraph "Client Layer"
+    subgraph "Edge Layer (Vercel)"
         A[Web Browser]
-        B[WhatsApp Client]
+        C[Next.js App /api]
+        F[Tracking & Admin API]
     end
 
-    subgraph "Frontend - Next.js 16"
-        C[Next.js App Router]
-        D[React Components]
-        E[Server Actions]
-        F[API Routes]
-        G[NextAuth Middleware]
+    subgraph "Core Layer (VPS)"
+        B[WhatsApp Bot]
+        I[Cron Scheduler]
+        M[whatsmeow Client]
     end
 
-    subgraph "Backend Services"
-        H[Go WhatsApp Bot]
-        I[Cron Jobs]
-        J[Google Gemini AI]
+    subgraph "Shared Data Layer (Neon/Supabase)"
+        K[(PostgreSQL)]
     end
 
-    subgraph "Data Layer"
-        K[(SQLite - Local)]
-        L[Prisma ORM]
-    end
-
-    subgraph "External Services"
-        M[Meta WhatsApp API]
-        N[Google Gemini API]
-        N[Google Gemini API]
+    subgraph "AI Layer"
+        J[Gemini AI]
     end
 
     A -->|HTTPS| C
-    B -->|WhatsApp Messages| M
-    M -->|Webhook| H
+    C -->|Unified Logic| F
+    F -->|Direct SQL| K
     
-    C --> D
-    C --> E
-    C --> F
-    C --> G
+    B -->|Socket| M
+    M -->|State| K
     
-    D -->|Client Actions| E
-    E -->|Database Queries| L
-    F -->|API Calls| L
-    
-    H -->|Parse Manifest| J
-    H -->|Store Shipment| K
-    H -->|Send Reply| M
-    
-    I -->|Status Updates| K
-    I -->|Send Notifications| M
-    
-    L -->|Read/Write| K
-    
-    G -->|Auth Check| E
-    G -->|Auth Check| F
-
-    style A fill:#4A90E2
-    style B fill:#25D366
-    style C fill:#000000
-    style H fill:#00ADD8
-    style K fill:#336791
-    style J fill:#4285F4
+    I -->|Active Jobs| K
+    B -->|OCR/Parse| J
 ```
 
 ### Component Breakdown
 
-#### **Frontend (Next.js)**
+#### **Edge (Frontend / Public API)**
+- **Next.js & Vercel Edge**: Handles all high-traffic web requests (Tracking, Dashboard).
+- **Direct Database Access**: The frontend connects directly to PostgreSQL via `postgres.js` to minimize latency.
+- **Unified Routing**: APIs are nested within the frontend project to ensure 100% uptime even if the VPS is down.
 
-- **Framework**: Next.js 16 with App Router and React Server Components
-- **Styling**: Tailwind CSS 4 with custom cosmic theme
-- **Authentication**: NextAuth v4 with credentials provider
-- **State Management**: React hooks and server actions
-- **Maps**: Leaflet.js with React-Leaflet for interactive shipment visualization
-- **Animations**: Framer Motion for smooth transitions and loading states
-- **Internationalization**: Custom i18n implementation for English/Portuguese
-
-#### **Backend (Go)**
-
-- **WhatsApp Bot**: Built with `whatsmeow` library for Meta WhatsApp Business API
-- **Database**: PostgreSQL connection via `pgx/v5` driver
-- **Logging**: Structured logging with `zerolog` and log rotation via `lumberjack`
-- **Scheduling**: Native internal cron scheduler for automated tasks
-- **AI Integration**: Google Gemini API for manifest parsing
-
-#### **Database (SQLite)**
-
-- **Framework**: SQLite for local persistence, optimized for low-memory environments (VPS).
-- **Features**: WAL mode enabled for high-concurrency read/write operations.
-- **Models**: Shipment, GroupAuthority, UserPreference.
+#### **Core (WhatsApp Bot / Automation)**
+- **Pure WhatsApp Service**: The VPS is now dedicated exclusively to the WhatsApp socket and background processing.
+- **Internal Cron**: All proactive tasks (SLA recalculations, automated status alerts) are handled here to stay live with the WhatsApp connection.
+- **RAM Optimized**: Stripped of its web server, the bot consumes **70% less memory** than before.
 
 ---
 
 ## ✨ Features
 
-### 🌐 Public Tracking Interface
-
-- **Tracking Number Search** - Real-time shipment status lookup
-- **Interactive Map** - Visual representation of shipment journey from origin to destination
-- **Status Timeline** - Detailed event history with timestamps and locations
-- **Delivery Time Calculation** - Precise ETA based on shipping windows and time zones
-- **Responsive Design** - Mobile-first approach with beautiful UI
-- **Multi-language** - English and Portuguese support
+### 🌐 Edge Tracking Interface
+- **Vercel Global Delivery** - Lightning-fast tracking lookups from any location.
+- **Interactive Map** - Visual representation of shipment journey.
+- **Status Timeline** - Detailed event history with timestamps.
+- **Redacted Privacy** - PII (Names/Addresses) are automatically redacted in public views.
+-language** - English and Portuguese support
 
 ### 🔐 Admin Portal
 

@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/localdb"
@@ -18,17 +19,13 @@ import (
 	"go.mau.fi/whatsmeow/types/events"
 	waLog "go.mau.fi/whatsmeow/util/log"
 
-	_ "modernc.org/sqlite"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-func NewClient(dbPath string) (*whatsmeow.Client, error) {
+func NewClient(dsn string) (*whatsmeow.Client, error) {
 	dbLog := waLog.Stdout("Database", "DEBUG", true)
-	// SQLite connection string with performance optimizations:
-	// - WAL mode for better concurrency and speed
-	// - Synchronous NORMAL for speed/durability balance
-	// - Cache size -2000 (approx 2MB)
-	dsn := fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=cache_size(-2000)&_pragma=foreign_keys(1)", dbPath)
-	container, err := sqlstore.New(context.Background(), "sqlite", dsn, dbLog)
+	// PostgreSQL migration for whatsmeow sessions
+	container, err := sqlstore.New(context.Background(), "pgx", dsn, dbLog)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open session database: %w", err)
 	}
@@ -62,7 +59,19 @@ var (
 		botPhone string
 		botLID   string
 	}
+	cacheLastClear time.Time
 )
+
+const maxCacheAge = 1 * time.Hour
+
+func checkCacheCleanup() {
+	if time.Since(cacheLastClear) > maxCacheAge {
+		logger.Info().Msg("[RBAC] Clearing participant and authority caches (TTL reached)")
+		authCache = sync.Map{}
+		participantsCache = sync.Map{}
+		cacheLastClear = time.Now()
+	}
+}
 
 func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.Job, cfg *config.Config, ldb *localdb.Client) {
 	switch v := evt.(type) {
@@ -75,6 +84,7 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 		verifyGroupAuthority(client, ldb, v.JID)
 
 	case *events.Message:
+		checkCacheCleanup()
 		text := ""
 		if v.Message.GetConversation() != "" {
 			text = v.Message.GetConversation()

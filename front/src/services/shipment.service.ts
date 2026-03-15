@@ -1,9 +1,9 @@
 import { CreateShipmentDto, ShipmentData, ServiceResult } from '@/types/shipment';
 import { logger } from '@/lib/logger';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-const AUTH_TOKEN = process.env.API_AUTH_TOKEN || '';
-const REQUEST_TIMEOUT = 10000; // 10 seconds
+
+const API_URL = ''; // Relative paths for Edge unified routing
+const REQUEST_TIMEOUT = 10000;
 
 // Enhanced error categorization
 enum ApiErrorType {
@@ -115,15 +115,14 @@ function handleApiError(error: any, context: string): ApiError {
 
 export class ShipmentService {
     /**
-     * Create a new shipment via Go API
+     * Create a new shipment via Next.js API
      */
     static async create(data: CreateShipmentDto): Promise<ServiceResult<{ trackingNumber: string }>> {
         try {
-            const response = await fetchWithTimeout(`${API_URL}/api/shipments`, {
+            const response = await fetchWithTimeout(`/api/admin/shipments`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${AUTH_TOKEN}`
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify(data),
             });
@@ -142,13 +141,13 @@ export class ShipmentService {
     }
 
     /**
-     * Fetch tracking details from Go Backend API
+     * Fetch tracking details via Next.js API
      */
     static async getByTracking(trackingNumber: string): Promise<ShipmentData | null> {
         if (!trackingNumber) return null;
 
         try {
-            const response = await fetchWithTimeout(`${API_URL}/api/track/${trackingNumber}`, {
+            const response = await fetchWithTimeout(`/api/track/${trackingNumber}`, {
                 next: { revalidate: 0 }
             });
 
@@ -159,7 +158,7 @@ export class ShipmentService {
 
             const data = await response.json();
 
-            // Map backend simple status to frontend typed status
+            // Normalize status
             const normalizeStatus = (s: string): string => {
                 const upper = s.toUpperCase();
                 if (upper === 'INTRANSIT') return 'IN_TRANSIT';
@@ -186,22 +185,20 @@ export class ShipmentService {
             };
             return shipment;
         } catch (error) {
-            const apiError = handleApiError(error, 'Fetch tracking');
-            // For tracking, we return null but still log the detailed error
+            handleApiError(error, 'Fetch tracking');
             return null;
         }
     }
 
     /**
-     * Admin: Update status via Go API
+     * Admin: Update status via Next.js API
      */
     static async updateStatus(trackingNumber: string, status: string, location: string): Promise<ServiceResult<void>> {
         try {
-            const response = await fetchWithTimeout(`${API_URL}/api/shipments/${trackingNumber}`, {
+            const response = await fetchWithTimeout(`/api/admin/shipments/${trackingNumber}`, {
                 method: 'PATCH',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${AUTH_TOKEN}`
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ status: status.toLowerCase(), destination: location }),
             });
@@ -226,15 +223,12 @@ export class ShipmentService {
     }
 
     /**
-     * Admin: Delete shipment via Go API
+     * Admin: Delete shipment via Next.js API
      */
     static async delete(trackingNumber: string): Promise<ServiceResult<void>> {
         try {
-            const response = await fetchWithTimeout(`${API_URL}/api/shipments/${trackingNumber}`, {
-                method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${AUTH_TOKEN}`
-                }
+            const response = await fetchWithTimeout(`/api/admin/shipments/${trackingNumber}`, {
+                method: 'DELETE'
             });
 
             if (!response.ok) {
@@ -250,15 +244,12 @@ export class ShipmentService {
     }
 
     /**
-     * Admin: Dashboard data via Go API
+     * Admin: Dashboard data via Next.js API
      */
     static async getDashboardData(): Promise<ServiceResult<{ shipments: any[], stats: any }>> {
         try {
-            const headers = { 'Authorization': `Bearer ${AUTH_TOKEN}` };
-
             // Fetch List
-            const listRes = await fetchWithTimeout(`${API_URL}/api/shipments`, {
-                headers,
+            const listRes = await fetchWithTimeout(`/api/admin/shipments`, {
                 next: { revalidate: 0 }
             });
 
@@ -276,7 +267,6 @@ export class ShipmentService {
                 return upper;
             };
 
-            // Map to frontend expected keys (camelCase)
             const shipments = apiShipments.map((s: any) => ({
                 id: s.tracking_id,
                 trackingNumber: s.tracking_id,
@@ -294,8 +284,7 @@ export class ShipmentService {
             }));
 
             // Fetch Stats
-            const statsRes = await fetchWithTimeout(`${API_URL}/api/stats`, {
-                headers,
+            const statsRes = await fetchWithTimeout(`/api/admin/stats`, {
                 next: { revalidate: 0 }
             });
 
@@ -306,12 +295,12 @@ export class ShipmentService {
             const apiStats = await statsRes.json();
 
             const stats = {
-                total: shipments.length,
-                inTransit: shipments.filter((s: any) => s.status === 'IN_TRANSIT').length,
-                outForDelivery: shipments.filter((s: any) => s.status === 'OUT_FOR_DELIVERY').length,
-                delivered: shipments.filter((s: any) => s.status === 'DELIVERED').length,
-                pending: shipments.filter((s: any) => s.status === 'PENDING').length,
-                canceled: shipments.filter((s: any) => s.status === 'CANCELED').length,
+                total: parseInt(apiStats.total),
+                inTransit: parseInt(apiStats.intransit),
+                outForDelivery: parseInt(apiStats.outfordelivery),
+                delivered: parseInt(apiStats.delivered),
+                pending: parseInt(apiStats.pending),
+                canceled: parseInt(apiStats.canceled),
             };
 
             return { success: true, data: { shipments, stats } };
@@ -326,11 +315,8 @@ export class ShipmentService {
      */
     static async bulkDeleteDelivered(): Promise<ServiceResult<void>> {
         try {
-            const response = await fetchWithTimeout(`${API_URL}/api/shipments/cleanup`, {
-                method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${AUTH_TOKEN}`
-                }
+            const response = await fetchWithTimeout(`/api/admin/shipments/cleanup`, {
+                method: 'DELETE'
             });
 
             if (!response.ok) {
@@ -344,6 +330,4 @@ export class ShipmentService {
             return { success: false, error: apiError.userMessage };
         }
     }
-
-    static async pruneStale(): Promise<void> { }
 }
