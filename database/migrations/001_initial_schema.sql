@@ -156,6 +156,7 @@ DECLARE
     v_arrival_local TIMESTAMP;
     v_snap_hour INT := 10;
     v_final_arrival_utc TIMESTAMP;
+    v_current_hour INT;
 BEGIN
     NEW.updated_at := CURRENT_TIMESTAMP;
 
@@ -172,29 +173,29 @@ BEGIN
         SELECT zone_name INTO v_dest_tz FROM country_timezones WHERE country_name = lower(trim(NEW.destination));
         IF v_dest_tz IS NULL THEN v_dest_tz := 'UTC'; END IF;
 
-        -- Strict +1 Day Auto-Scheduling (Manual arrival edits are ignored)
         IF (TG_OP = 'INSERT') THEN
             v_now_lagos := CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Lagos';
-            IF extract(hour from v_now_lagos) >= 22 THEN
+            v_current_hour := extract(hour from v_now_lagos);
+            
+            -- Late Night Window: 10 PM (22) to 6 AM (06)
+            IF v_current_hour >= 22 OR v_current_hour < 6 THEN
+                -- Push Departure to the NEXT Day at 8 AM
                 v_departure_utc := (date_trunc('day', v_now_lagos + interval '1 day') + interval '8 hours') AT TIME ZONE 'Africa/Lagos';
             ELSE
                 v_departure_utc := CURRENT_TIMESTAMP + interval '1 hour';
             END IF;
             NEW.scheduled_transit_time := v_departure_utc;
-
-            IF v_dest_tz = 'UTC' THEN v_snap_hour := 12; END IF;
-            v_arrival_local := date_trunc('day', (v_departure_utc AT TIME ZONE v_dest_tz) + interval '1 day') + (v_snap_hour * interval '1 hour');
-            v_final_arrival_utc := v_arrival_local AT TIME ZONE v_dest_tz;
         ELSE
+            -- On Update, we respect the NEW scheduled_transit_time
             v_departure_utc := NEW.scheduled_transit_time;
-            IF (v_departure_utc <= CURRENT_TIMESTAMP + interval '10 minutes') THEN
-                v_final_arrival_utc := v_departure_utc + interval '1 day';
-            ELSE
-                IF v_dest_tz = 'UTC' THEN v_snap_hour := 12; END IF;
-                v_arrival_local := date_trunc('day', (v_departure_utc AT TIME ZONE v_dest_tz) + interval '1 day') + (v_snap_hour * interval '1 hour');
-                v_final_arrival_utc := v_arrival_local AT TIME ZONE v_dest_tz;
-            END IF;
         END IF;
+
+        -- Strict +1 Day Arrival Rule (Manual arrival edits are ignored/overridden)
+        IF v_dest_tz = 'UTC' THEN v_snap_hour := 12; END IF;
+        
+        -- Arrival is always Departure + 1 Day, snapped to 10 AM (or 12 PM for UTC)
+        v_arrival_local := date_trunc('day', (v_departure_utc AT TIME ZONE v_dest_tz) + interval '1 day') + (v_snap_hour * interval '1 hour');
+        v_final_arrival_utc := v_arrival_local AT TIME ZONE v_dest_tz;
 
         -- Enforce arrival and outfordelivery times accurately based on calculation
         NEW.expected_delivery_time := v_final_arrival_utc;
