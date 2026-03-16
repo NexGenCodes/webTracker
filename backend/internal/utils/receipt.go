@@ -167,22 +167,30 @@ func drawV11Grid(dc *gg.Context, shipment shipment.Shipment, lang i18n.Language)
 	drawSelectorV10(dc, gX+c1W+c2W, gY, c3W, selectorH, i18n.T(lang, "receipt_payment"), []string{"CASH", "CHEQUE", "ACCOUNT", "BILLED"}, "ACCOUNT")
 
 	// Use stored timestamps from database
-	departure := shipment.ScheduledTransitTime
-	arrival := shipment.ExpectedDeliveryTime
-
-	// Convert to localized time for display
-	origLoc, _ := time.LoadLocation(shipment.SenderTimezone)
-	if origLoc == nil {
-		origLoc = time.UTC
-	}
-	destLoc, _ := time.LoadLocation(shipment.RecipientTimezone)
-	if destLoc == nil {
-		destLoc = time.UTC
-	}
-
+	var depStr, arrStr string
 	dateFormat := i18n.GetDateFormat(lang)
-	depStr := departure.In(origLoc).Format(dateFormat)
-	arrStr := arrival.In(destLoc).Format(dateFormat)
+
+	if shipment.ScheduledTransitTime != nil {
+		departure := *shipment.ScheduledTransitTime
+		origLoc, _ := time.LoadLocation(shipment.SenderTimezone)
+		if origLoc == nil {
+			origLoc = time.UTC
+		}
+		depStr = departure.In(origLoc).Format(dateFormat)
+	} else {
+		depStr = "TBD"
+	}
+
+	if shipment.ExpectedDeliveryTime != nil {
+		arrival := *shipment.ExpectedDeliveryTime
+		destLoc, _ := time.LoadLocation(shipment.RecipientTimezone)
+		if destLoc == nil {
+			destLoc = time.UTC
+		}
+		arrStr = arrival.In(destLoc).Format(dateFormat)
+	} else {
+		arrStr = "TBD"
+	}
 
 	drawSmartCellV10(dc, gX+c1W, gY+selectorH, c2W, rowH, i18n.T(lang, "receipt_dep_date"), depStr)
 	drawSmartCellV10(dc, gX+c1W+c2W, gY+selectorH, c3W, rowH, i18n.T(lang, "receipt_arr_date"), arrStr)
