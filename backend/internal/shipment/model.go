@@ -23,10 +23,10 @@ type Shipment struct {
 	Status string `json:"status"`
 
 	// Core Timestamps (UTC)
-	CreatedAt            time.Time `json:"created_at"`
-	ScheduledTransitTime time.Time `json:"scheduled_transit_time"` // When it goes intransit
-	OutForDeliveryTime   time.Time `json:"out_for_delivery_time"`  // Added for Arrival Notification
-	ExpectedDeliveryTime time.Time `json:"expected_delivery_time"` // When it gets delivered
+	CreatedAt            time.Time  `json:"created_at"`
+	ScheduledTransitTime *time.Time `json:"scheduled_transit_time"` // When it goes intransit
+	OutForDeliveryTime   *time.Time `json:"out_for_delivery_time"`   // Added for Arrival Notification
+	ExpectedDeliveryTime *time.Time `json:"expected_delivery_time"` // When it gets delivered
 
 	// Timezone Metadata (Used for display logic)
 	SenderTimezone    string `json:"sender_timezone"`
@@ -52,13 +52,13 @@ func (s *Shipment) ResolveStatus(nowUTC time.Time) string {
 	if s.Status == StatusCanceled {
 		return StatusCanceled
 	}
-	if !nowUTC.Before(s.ExpectedDeliveryTime) {
+	if s.ExpectedDeliveryTime != nil && !nowUTC.Before(*s.ExpectedDeliveryTime) {
 		return StatusDelivered
 	}
-	if !nowUTC.Before(s.OutForDeliveryTime) {
+	if s.OutForDeliveryTime != nil && !nowUTC.Before(*s.OutForDeliveryTime) {
 		return StatusOutForDelivery
 	}
-	if !nowUTC.Before(s.ScheduledTransitTime) {
+	if s.ScheduledTransitTime != nil && !nowUTC.Before(*s.ScheduledTransitTime) {
 		return StatusIntransit
 	}
 	return StatusPending
