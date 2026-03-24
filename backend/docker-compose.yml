@@ -1,7 +1,7 @@
 services:
   webtracker-bot:
     build: .
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/webtracker-bot:latest
+    image: ghcr.io/nexgencodes/webtracker-bot:latest
     container_name: webtracker-bot
     restart: always
     env_file:
