@@ -10,9 +10,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"webtracker-bot/internal/localdb"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/parser"
+	"webtracker-bot/internal/shipment"
+	"webtracker-bot/internal/usecase"
 	"webtracker-bot/internal/utils"
 	"webtracker-bot/internal/whatsapp"
 
@@ -28,11 +29,12 @@ type Result struct {
 }
 
 type Handler interface {
-	Execute(ctx context.Context, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result
+	Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, args []string, lang string, isAdmin bool) Result
 }
 
 type Dispatcher struct {
-	ldb           *localdb.Client
+	shipUC        *usecase.ShipmentUsecase
+	configUC      *usecase.ConfigUsecase
 	sender        *whatsapp.Sender // Added for broadcasting
 	handlers      map[string]Handler
 	AwbCmd        string
@@ -41,9 +43,10 @@ type Dispatcher struct {
 	AdminTimezone string
 }
 
-func NewDispatcher(ldb *localdb.Client, sender *whatsapp.Sender, awbCmd string, companyName string, botPhone string, adminTimezone string) *Dispatcher {
+func NewDispatcher(shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, sender *whatsapp.Sender, awbCmd string, companyName string, botPhone string, adminTimezone string) *Dispatcher {
 	d := &Dispatcher{
-		ldb:           ldb,
+		shipUC:        shipUC,
+		configUC:      configUC,
 		sender:        sender,
 		handlers:      make(map[string]Handler),
 		AwbCmd:        awbCmd,
@@ -111,7 +114,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) 
 			h.BotPhone = d.BotPhone
 		}
 
-		lang, _ := d.ldb.GetUserLanguage(ctx, jid)
+		lang, _ := d.configUC.GetUserLanguage(ctx, jid)
 
 		isOwnerOnlyCmd := rawCmd == "broadcast" || rawCmd == "status"
 		if isOwnerOnlyCmd {
@@ -131,9 +134,9 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) 
 			}
 		}
 
-		res := handler.Execute(ctx, d.ldb, args, lang, isAdmin)
+		res := handler.Execute(ctx, d.shipUC, d.configUC, args, lang, isAdmin)
 		if res.Language != "" {
-			d.ldb.SetUserLanguage(ctx, jid, res.Language)
+			d.configUC.SetUserLanguage(ctx, jid, res.Language)
 		}
 		return &res, true
 	}
@@ -151,7 +154,7 @@ type StatsHandler struct {
 	AdminTimezone string
 }
 
-func (h *StatsHandler) Execute(ctx context.Context, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
+func (h *StatsHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, args []string, lang string, isAdmin bool) Result {
 	if len(args) > 0 {
 		return Result{Message: "⚠️ *INCORRECT USAGE*\n_Please send only `!stats` without any extra text._"}
 	}
@@ -165,7 +168,7 @@ func (h *StatsHandler) Execute(ctx context.Context, ldb *localdb.Client, args []
 	since := time.Now().In(loc)
 	since = time.Date(since.Year(), since.Month(), since.Day(), 0, 0, 0, 0, loc)
 
-	pending, transit, err := ldb.CountDailyStats(ctx, since.UTC())
+	pending, transit, err := shipUC.CountDailyStats(ctx, since.UTC())
 	if err != nil {
 		return Result{Message: "❌ *SYSTEM ERROR*\n_Could not fetch statistics._", Error: err}
 	}
@@ -184,7 +187,7 @@ type InfoHandler struct {
 	CompanyPrefix string
 }
 
-func (h *InfoHandler) Execute(ctx context.Context, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
+func (h *InfoHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, args []string, lang string, isAdmin bool) Result {
 	if len(args) < 1 {
 		company := strings.ToUpper(h.CompanyName)
 		if company == "" {
@@ -204,18 +207,46 @@ func (h *InfoHandler) Execute(ctx context.Context, ldb *localdb.Client, args []s
 		return Result{Message: msg}
 	}
 
-	// Using ldb instead of db
-	shipment, err := ldb.GetShipment(ctx, args[0])
+	dbShip, err := shipUC.Track(ctx, args[0])
 	if err != nil {
 		return Result{Message: "❌ *DATABASE ERROR*\n_Lookup failed. Please try again later._", Error: err}
 	}
 
-	// Check if shipment is nil (although GetShipment returns error on not found usually, let's look at implementation)
-	// Our new GetShipment returns error if not found? No, let's assume it might return nil if we handled SqlNoRows differently
-	// Actually typical GetShipment implementations error on Not Found.
-	// But let's keep the null check just in case logic changes.
+	if dbShip == nil {
+		return Result{Message: "❌ *NOT FOUND*\n_Could not find any shipment with that ID._"}
+	}
 
-	wb := utils.GenerateWaybill(*shipment, h.CompanyName)
+	// Map DB model to Domain model for waybill generation
+	s := shipment.Shipment{
+		TrackingID:        dbShip.TrackingID,
+		Status:            dbShip.Status.String,
+		CreatedAt:         dbShip.CreatedAt.Time,
+		SenderTimezone:    dbShip.SenderTimezone.String,
+		RecipientTimezone: dbShip.RecipientTimezone.String,
+		SenderName:        dbShip.SenderName.String,
+		SenderPhone:       dbShip.SenderPhone.String,
+		Origin:            dbShip.Origin.String,
+		RecipientName:     dbShip.RecipientName.String,
+		RecipientPhone:    dbShip.RecipientPhone.String,
+		RecipientID:       dbShip.RecipientID.String,
+		RecipientEmail:    dbShip.RecipientEmail.String,
+		RecipientAddress:  dbShip.RecipientAddress.String,
+		Destination:       dbShip.Destination.String,
+		CargoType:         dbShip.CargoType.String,
+		Weight:            dbShip.Weight.Float64,
+		Cost:              dbShip.Cost.Float64,
+	}
+	if dbShip.ScheduledTransitTime.Valid {
+		s.ScheduledTransitTime = &dbShip.ScheduledTransitTime.Time
+	}
+	if dbShip.OutfordeliveryTime.Valid {
+		s.OutForDeliveryTime = &dbShip.OutfordeliveryTime.Time
+	}
+	if dbShip.ExpectedDeliveryTime.Valid {
+		s.ExpectedDeliveryTime = &dbShip.ExpectedDeliveryTime.Time
+	}
+
+	wb := utils.GenerateWaybill(s, h.CompanyName)
 	return Result{Message: "```\n" + wb + "\n```"}
 }
 
@@ -225,7 +256,7 @@ type HelpHandler struct {
 	CompanyPrefix string
 }
 
-func (h *HelpHandler) Execute(ctx context.Context, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
+func (h *HelpHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, args []string, lang string, isAdmin bool) Result {
 	company := strings.ToUpper(h.CompanyName)
 	if company == "" {
 		company = "LOGISTICS"
@@ -272,7 +303,7 @@ func (h *HelpHandler) Execute(ctx context.Context, ldb *localdb.Client, args []s
 
 type LangHandler struct{}
 
-func (h *LangHandler) Execute(ctx context.Context, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
+func (h *LangHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, args []string, lang string, isAdmin bool) Result {
 	if len(args) < 1 {
 		return Result{Message: "🌐 *LANGUAGE MENU*\n\nUsage: `!lang [en|pt|es|de]`\n\nExample: `!lang pt` para Português"}
 	}
@@ -296,7 +327,7 @@ type EditHandler struct {
 	AdminTimezone string
 }
 
-func (h *EditHandler) Execute(ctx context.Context, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
+func (h *EditHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, args []string, lang string, isAdmin bool) Result {
 	if len(args) < 1 {
 		return Result{Message: "✏️ *EDIT SHIPMENT*\n\nUsage: `!edit [TrackingID] [Updates...]` or `!edit [Updates...]` (targets last shipment)\n\n*Example:* `!edit LGS-1234 name: John, departure: tomorrow`"}
 	}
@@ -314,7 +345,7 @@ func (h *EditHandler) Execute(ctx context.Context, ldb *localdb.Client, args []s
 	} else {
 		// Contextual Lookup: Fetch last shipment for this user
 		var err error
-		trackingID, err = ldb.GetLastShipmentIDForUser(ctx, jid)
+		trackingID, err = shipUC.GetLastForUser(ctx, jid)
 		if err != nil || trackingID == "" {
 			return Result{Message: "⚠️ *CONTEXT ERROR*\n_I couldn't find your last shipment. Please provide the tracking ID (e.g., !edit ABC-1234 ...)._"}
 		}
@@ -411,7 +442,7 @@ func (h *EditHandler) Execute(ctx context.Context, ldb *localdb.Client, args []s
 		// Check if this change triggers a schedule recalculation
 		// (Handled by DB trigger fn_shipment_auto_schedule)
 
-		err := ldb.UpdateShipmentField(ctx, trackingID, field, value)
+		err := shipUC.UpdateField(ctx, trackingID, field, value)
 		if err == nil {
 			updatedFields = append(updatedFields, strings.ToUpper(strings.ReplaceAll(field, "_", " ")))
 		}
@@ -426,12 +457,25 @@ func (h *EditHandler) Execute(ctx context.Context, ldb *localdb.Client, args []s
 	// scheduled_transit_time, outfordelivery_time, expected_delivery_time
 	// when origin or destination changes on UPDATE.
 
-	s, _ := ldb.GetShipment(ctx, trackingID)
-	if s != nil {
-		// Re-resolve status based on current UTC time
+	dbShip, _ := shipUC.Track(ctx, trackingID)
+	if dbShip != nil {
+		// Resolve status
+		s := shipment.Shipment{
+			Status: dbShip.Status.String,
+		}
+		if dbShip.ScheduledTransitTime.Valid {
+			s.ScheduledTransitTime = &dbShip.ScheduledTransitTime.Time
+		}
+		if dbShip.OutfordeliveryTime.Valid {
+			s.OutForDeliveryTime = &dbShip.OutfordeliveryTime.Time
+		}
+		if dbShip.ExpectedDeliveryTime.Valid {
+			s.ExpectedDeliveryTime = &dbShip.ExpectedDeliveryTime.Time
+		}
+
 		newStatus := s.ResolveStatus(time.Now().UTC())
-		if newStatus != s.Status {
-			_ = ldb.UpdateShipmentField(ctx, trackingID, "status", newStatus)
+		if newStatus != dbShip.Status.String {
+			_ = shipUC.UpdateField(ctx, trackingID, "status", newStatus)
 		}
 	}
 
@@ -447,13 +491,13 @@ func (h *EditHandler) Execute(ctx context.Context, ldb *localdb.Client, args []s
 // DeleteHandler handles !delete [trackingID]
 type DeleteHandler struct{}
 
-func (h *DeleteHandler) Execute(ctx context.Context, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
+func (h *DeleteHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, args []string, lang string, isAdmin bool) Result {
 	if len(args) < 1 {
 		return Result{Message: "🗑️ *DELETE SHIPMENT*\n\nUsage: `!delete [TrackingID]`"}
 	}
 
 	trackingID := args[0]
-	err := ldb.DeleteShipment(ctx, trackingID)
+	err := shipUC.Delete(ctx, trackingID)
 	if err != nil {
 		return Result{Message: fmt.Sprintf("❌ *DELETE FAILED*\n_%v_", err)}
 	}
@@ -466,7 +510,7 @@ type BroadcastHandler struct {
 	Sender *whatsapp.Sender
 }
 
-func (h *BroadcastHandler) Execute(ctx context.Context, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
+func (h *BroadcastHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, args []string, lang string, isAdmin bool) Result {
 	if len(args) < 1 {
 		return Result{Message: "📣 *GLOBAL BROADCAST*\n\nUsage: `!broadcast [your message]`\n\n_This sends a message to ALL authorized groups._"}
 	}
@@ -475,7 +519,7 @@ func (h *BroadcastHandler) Execute(ctx context.Context, ldb *localdb.Client, arg
 	broadcastMsg := "📢 *OFFICIAL UPDATE FROM LOGISTICS*\n\n" + msg
 
 	// Fetch authorized groups from DB
-	groups, err := ldb.GetAuthorizedGroups(ctx)
+	groups, err := configUC.GetAuthorizedGroups(ctx)
 	if err != nil {
 		return Result{Message: "❌ *DATABASE ERROR*\n\nCould not retrieve authorized groups."}
 	}
@@ -509,7 +553,7 @@ type StatusHandler struct {
 	BotPhone string
 }
 
-func (h *StatusHandler) Execute(ctx context.Context, ldb *localdb.Client, args []string, lang string, isAdmin bool) Result {
+func (h *StatusHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, args []string, lang string, isAdmin bool) Result {
 	// Performance Telemetry
 	uptime := time.Since(logger.GlobalVitals.StartTime)
 	jobs := atomic.LoadInt64(&logger.GlobalVitals.JobsProcessed)
@@ -521,11 +565,9 @@ func (h *StatusHandler) Execute(ctx context.Context, ldb *localdb.Client, args [
 	memMB := m.Alloc / 1024 / 1024
 
 	// System Health
-	dbStatus := "🟢 ONLINE (SQLite)"
-	// Supabase Ping removed, we assume localdb is alive if process is running
-	// Could check ldb.db.Ping() if exposed
+	dbStatus := "🟢 ONLINE (Pgx)"
 
-	groupsCount, _ := ldb.CountAuthorizedGroups(ctx)
+	groupsCount, _ := configUC.CountAuthorizedGroups(ctx)
 
 	msg := "🖥️ *SYSTEM DASHBOARD*\n\n" +
 		fmt.Sprintf("📊 UPTIME:    *%s*\n", uptime.Truncate(time.Second)) +

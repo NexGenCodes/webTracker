@@ -1,5 +1,4 @@
-name: Deploy to AWS EC2
-# Force update
+name: Deploy to AWS EC2 (Docker)
 
 on:
   push:
@@ -7,53 +6,51 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
+  build-and-push:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3.3.0
         with:
-          go-version: '1.25.6'
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build Go Binary
-        run: |
-          cd backend
-          go mod download
-          GOOS=linux GOARCH=amd64 go build -o bot ./cmd/bot
-          
-      - name: Prepare Directory
-        uses: appleboy/ssh-action@master
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6.15.0
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          port: 22
-          script: |
-            sudo mkdir -p /opt/webtracker/assets/img
-            sudo mkdir -p /opt/webtracker/assets/fonts
-            sudo chown -R ${{ secrets.EC2_USER }}:${{ secrets.EC2_USER }} /opt/webtracker
-            sudo chmod -R 755 /opt/webtracker
-            
-            # Create log directory with correct permissions
-            sudo mkdir -p /var/log/bot
-            sudo chown -R ${{ secrets.EC2_USER }}:${{ secrets.EC2_USER }} /var/log/bot
-            sudo chmod -R 755 /var/log/bot
+          context: ./backend
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/webtracker-bot:latest
+            ghcr.io/${{ github.repository_owner }}/webtracker-bot:${{ github.sha }}
 
-      - name: Deploy to EC2
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code (to get docker-compose.yml)
+        uses: actions/checkout@v4
+
+      - name: Prepare Directory and Upload Compose
         uses: appleboy/scp-action@master
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
-          source: "backend/bot,backend/webtracker-bot.service,backend/assets"
+          source: "backend/docker-compose.yml"
           target: "/opt/webtracker"
           strip_components: 1
 
-      - name: Setup and Restart Service
+      - name: Deploy to EC2 via SSH
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -61,23 +58,19 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
           script: |
-            # Set executable permissions
-            sudo chmod +x /opt/webtracker/bot
-
-            # Move service file to systemd directory
-            sudo mv /opt/webtracker/webtracker-bot.service /etc/systemd/system/webtracker-bot.service
+            # Set the image name dynamically in docker-compose
+            sed -i "s/\${GITHUB_REPOSITORY_OWNER}/${{ github.repository_owner }}/g" /opt/webtracker/docker-compose.yml
             
-            # Set the correct user in the service file (replacing 'User=root' with actual user)
-            sudo sed -i "s/User=root/User=${{ secrets.EC2_USER }}/g" /etc/systemd/system/webtracker-bot.service
-            
-            # Check if .env exists
-            if [ ! -f /opt/webtracker/.env ]; then
-              echo "⚠️ WARNING: /opt/webtracker/.env not found! Service may fail to start."
-            fi
+            # Login to GHCR on the EC2
+            echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            # Reload systemd and restart
-            sudo systemctl daemon-reload
-            sudo systemctl enable webtracker-bot
-            sudo systemctl restart webtracker-bot
-            sleep 2
-            sudo systemctl status webtracker-bot
+            # Pull and Restart
+            cd /opt/webtracker
+            docker compose pull
+            docker compose up -d
+
+            # Cleanup old images
+            docker image prune -af --filter "until=24h"
+            
+            # Show status
+            docker ps | grep webtracker-bot

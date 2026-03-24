@@ -1,7 +1,12 @@
 import { CreateShipmentDto, ShipmentData, ServiceResult, ShipmentStatus, DashboardStats, PaginatedResult } from '@/types/shipment';
 import { logger } from '@/lib/logger';
-import { getBaseUrl } from '@/lib/utils';
 
+function getNextJsBaseUrl() {
+  if (typeof window !== 'undefined') return '';
+  if (process.env.API_URL) return process.env.API_URL;
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return `http://localhost:${process.env.PORT ?? 3000}`;
+}
 
 const REQUEST_TIMEOUT = 10000;
 
@@ -30,7 +35,7 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
     // Ensure absolute URL for server-side fetches
-    const baseUrl = getBaseUrl();
+    const baseUrl = getNextJsBaseUrl();
     const fullUrl = url.startsWith('/') ? `${baseUrl}${url}` : url;
 
     try {
@@ -154,14 +159,15 @@ export class ShipmentService {
         }
     }
 
-    /**
-     * Fetch tracking details via Next.js API
-     */
     static async getByTracking(trackingNumber: string): Promise<ShipmentData | null> {
         if (!trackingNumber) return null;
 
         try {
-            const response = await fetchWithTimeout(`/api/track/${trackingNumber}`, {
+            // CRITICAL: Fetch directly from Go backend during SSR to bypass Vercel internal fetch 401 error.
+            const baseUrl = typeof window === 'undefined' ? (process.env.BACKEND_URL || 'http://localhost:5000') : '';
+            const url = typeof window === 'undefined' ? `${baseUrl}/api/track/${trackingNumber}` : `/api/track/${trackingNumber}`;
+            
+            const response = await fetchWithTimeout(url, {
                 next: { revalidate: 0 }
             });
 
@@ -171,20 +177,49 @@ export class ShipmentService {
             }
 
             const data = await response.json();
+            
+            const now = new Date();
+            const timeline = [
+                {
+                    status: 'Order Placed',
+                    timestamp: data.created_at,
+                    description: `Shipment registered at ${data.origin || 'origin'}`,
+                    is_completed: true
+                },
+                {
+                    status: 'In Transit',
+                    timestamp: data.scheduled_transit_time,
+                    description: 'Package has left the origin facility and is on its way',
+                    is_completed: now > new Date(data.scheduled_transit_time) || ['intransit', 'outfordelivery', 'delivered'].includes((data.status || '').toLowerCase())
+                },
+                {
+                    status: 'Delivered',
+                    timestamp: data.expected_delivery_time,
+                    description: 'Package has arrived at the destination',
+                    is_completed: (data.status || '').toLowerCase() === 'delivered'
+                }
+            ];
+            
+            const redactName = (name: string | null): string => {
+                if (!name) return 'N/A';
+                const parts = name.split(' ');
+                if (parts[0].length <= 2) return parts[0] + '***';
+                return parts[0].substring(0, 2) + '******';
+            };
 
             const shipment: ShipmentData = {
                 id: data.tracking_id,
                 trackingNumber: data.tracking_id,
                 status: normalizeStatus(data.status as string) as ShipmentStatus,
-                senderName: data.sender_name || 'N/A',
-                receiverName: data.recipient_name || 'N/A',
+                senderName: redactName(data.sender_name),
+                receiverName: redactName(data.recipient_name),
                 receiverPhone: data.recipient_phone || null,
                 receiverEmail: data.recipient_email || null,
                 receiverAddress: data.recipient_address || null,
-                receiverCountry: data.recipient_country || data.destination || 'N/A',
+                receiverCountry: data.destination || 'N/A',
                 weight: data.weight || 0,
                 senderCountry: data.origin || 'N/A',
-                timeline: data.timeline || [],
+                timeline: timeline,
                 events: [],
                 isArchived: data.status === 'delivered',
             };

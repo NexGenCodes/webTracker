@@ -15,13 +15,14 @@ func TestSendShipmentEmail(t *testing.T) {
 		CompanyName:  "Test Express",
 	}
 
+	expectedDelivery := time.Now().Add(24 * time.Hour)
 	s := &shipment.Shipment{
 		TrackingID:           "TEST-12345",
 		RecipientName:        "John Doe",
 		RecipientEmail:       "john@example.com",
 		RecipientAddress:     "123 Main St",
 		Destination:          "Lagos, Nigeria",
-		ExpectedDeliveryTime: time.Now().Add(24 * time.Hour),
+		ExpectedDeliveryTime: &expectedDelivery,
 	}
 
 	// This should not panic or error if SMTP is not configured

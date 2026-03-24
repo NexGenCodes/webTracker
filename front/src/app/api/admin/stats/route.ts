@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import sql from '@/lib/db';
+
+function getBackendUrl() {
+    return process.env.BACKEND_URL || 'http://localhost:5000';
+}
 
 export async function GET(request: NextRequest) {
     const session = await getServerSession(authOptions);
@@ -10,20 +13,17 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-        const stats = await sql`
-            SELECT 
-                COUNT(*) as total,
-                COUNT(*) FILTER (WHERE status = 'pending') as pending,
-                COUNT(*) FILTER (WHERE status = 'intransit') as intransit,
-                COUNT(*) FILTER (WHERE status = 'outfordelivery') as outfordelivery,
-                COUNT(*) FILTER (WHERE status = 'delivered') as delivered,
-                COUNT(*) FILTER (WHERE status = 'canceled') as canceled
-            FROM Shipment
-        `;
+        const res = await fetch(`${getBackendUrl()}/api/admin/stats`, {
+            headers: { 'Content-Type': 'application/json' },
+            cache: 'no-store'
+        });
         
-        return NextResponse.json(stats[0]);
+        if (!res.ok) throw new Error('Backend error');
+        const data = await res.json();
+        
+        return NextResponse.json(data);
     } catch (error) {
-        console.error('Stats API Error:', error);
+        console.error('Stats Proxy Error:', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 }

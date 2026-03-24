@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"webtracker-bot/internal/config"
-	"webtracker-bot/internal/localdb"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
+	"webtracker-bot/internal/usecase"
 
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/store/sqlstore"
@@ -73,15 +73,15 @@ func checkCacheCleanup() {
 	}
 }
 
-func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.Job, cfg *config.Config, ldb *localdb.Client) {
+func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.Job, cfg *config.Config, configUC *usecase.ConfigUsecase) {
 	switch v := evt.(type) {
 	case *events.JoinedGroup:
 		logger.Info().Str("chat", v.JID.String()).Msg("[RBAC EVENT] Joined group, re-verifying authority")
-		verifyGroupAuthority(client, ldb, v.JID)
+		verifyGroupAuthority(client, configUC, v.JID)
 
 	case *events.GroupInfo:
 		logger.Info().Str("chat", v.JID.String()).Msg("[RBAC EVENT] Group info updated, re-verifying authority")
-		verifyGroupAuthority(client, ldb, v.JID)
+		verifyGroupAuthority(client, configUC, v.JID)
 
 	case *events.Message:
 		checkCacheCleanup()
@@ -115,7 +115,7 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 			identityCache.Unlock()
 		}
 		if botLID == "" {
-			botLID, _ = ldb.GetSystemConfig(context.Background(), "bot_lid")
+			botLID, _ = configUC.GetSystemConfig(context.Background(), "bot_lid")
 			identityCache.Lock()
 			identityCache.botLID = botLID
 			identityCache.Unlock()
@@ -130,7 +130,7 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 				identityCache.Lock()
 				identityCache.botLID = botLID
 				identityCache.Unlock()
-				_ = ldb.SetSystemConfig(context.Background(), "bot_lid", botLID)
+				_ = configUC.SetSystemConfig(context.Background(), "bot_lid", botLID)
 			}
 		}
 
@@ -143,7 +143,7 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 				isAuthorized = val.(bool)
 			} else {
 				// Not in memory? Re-verify and populate cache
-				isAuthorized = verifyGroupAuthority(client, ldb, chatJID)
+				isAuthorized = verifyGroupAuthority(client, configUC, chatJID)
 			}
 
 			// DIAGNOSTIC LOG (As requested: non-blocking, just log)
@@ -165,14 +165,14 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 							isSenderAdmin = isAdminEntry
 						} else {
 							// If not in cache, re-verify (group might have changed)
-							verifyGroupAuthority(client, ldb, chatJID)
+							verifyGroupAuthority(client, configUC, chatJID)
 							if groupAdminsNew, okNew := participantsCache.Load(chatJID.String()); okNew {
 								isSenderAdmin = groupAdminsNew.(map[string]bool)[senderBare]
 							}
 						}
 					} else {
 						// No cache? Re-verify
-						verifyGroupAuthority(client, ldb, chatJID)
+						verifyGroupAuthority(client, configUC, chatJID)
 						if groupAdminsNew, okNew := participantsCache.Load(chatJID.String()); okNew {
 							isSenderAdmin = groupAdminsNew.(map[string]bool)[senderBare]
 						}
@@ -194,7 +194,7 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 			} else if cfg.AllowPrivateChat {
 				isAuthorized = true
 			} else {
-				hasGroups, _ := ldb.HasAuthorizedGroups(context.Background())
+				hasGroups, _ := configUC.HasAuthorizedGroups(context.Background())
 				isAuthorized = !hasGroups // Failover: Allow private if no groups exist
 			}
 
@@ -233,7 +233,7 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 }
 
 // verifyGroupAuthority performs a real-time check. Updates both DB and in-memory cache.
-func verifyGroupAuthority(client *whatsmeow.Client, ldb *localdb.Client, chat types.JID) bool {
+func verifyGroupAuthority(client *whatsmeow.Client, configUC *usecase.ConfigUsecase, chat types.JID) bool {
 	resp, err := client.GetGroupInfo(context.Background(), chat)
 	if err != nil {
 		logger.Error().Err(err).Str("chat", chat.String()).Msg("[RBAC EVENT] Failed to fetch group info")
@@ -268,7 +268,7 @@ func verifyGroupAuthority(client *whatsmeow.Client, ldb *localdb.Client, chat ty
 	// Update Memory AND Database
 	authCache.Store(chat.String(), isAuth)
 	participantsCache.Store(chat.String(), admins)
-	ldb.SetGroupAuthority(context.Background(), chat.String(), isAuth)
+	configUC.SetGroupAuthority(context.Background(), chat.String(), isAuth)
 
 	logger.Info().
 		Str("group", chat.String()).

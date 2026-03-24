@@ -2,19 +2,21 @@ package worker
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
 	"sync"
 
+	"webtracker-bot/internal/adapter/db"
 	"webtracker-bot/internal/commands"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/i18n"
-	"webtracker-bot/internal/localdb"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/notif"
 	"webtracker-bot/internal/parser"
 	"webtracker-bot/internal/shipment"
+	"webtracker-bot/internal/usecase"
 	"webtracker-bot/internal/whatsapp"
 
 	"go.mau.fi/whatsmeow"
@@ -24,7 +26,8 @@ type Worker struct {
 	ID              int
 	Client          *whatsmeow.Client
 	Sender          *whatsapp.Sender
-	LocalDB         *localdb.Client
+	ShipmentUC      *usecase.ShipmentUsecase
+	ConfigUC        *usecase.ConfigUsecase
 	Jobs            <-chan models.Job
 	WG              *sync.WaitGroup
 	Cfg             *config.Config
@@ -55,7 +58,7 @@ func (w *Worker) process(job models.Job) {
 	logger.GlobalVitals.IncJobs()
 
 	// 1. Fetch Language
-	langStr, _ := w.LocalDB.GetUserLanguage(context.Background(), job.SenderJID.String())
+	langStr, _ := w.ConfigUC.GetUserLanguage(context.Background(), job.SenderJID.String())
 	lang := i18n.Language(langStr)
 
 	// 2. Check for Commands
@@ -155,7 +158,7 @@ func (w *Worker) process(job models.Job) {
 	}
 
 	// 5b. Deduplication Check (Strict Phone, Email, or ID Match)
-	if existingID, err := w.LocalDB.FindSimilarShipment(context.Background(), job.SenderJID.String(), newShipment.RecipientPhone, newShipment.RecipientEmail, newShipment.RecipientID); err == nil && existingID != "" {
+	if existingID, err := w.ShipmentUC.FindSimilar(context.Background(), job.SenderJID.String(), newShipment.RecipientPhone, newShipment.RecipientEmail, newShipment.RecipientID); err == nil && existingID != "" {
 		logger.Info().Str("existing_id", existingID).Msg("Duplicate shipment blocked")
 		dupMsg := fmt.Sprintf("⚠️ *SHIPMENT ALREADY EXISTS*\n\nA shipment for this recipient phone is already in the system.\n\n🆔 *%s*\n\n🔹 Use `!edit %s ...` to update.\n🔹 Use `!delete %s` to remove.", existingID, existingID, existingID)
 		w.Sender.Reply(job.ChatJID, job.SenderJID, dupMsg, job.MessageID, job.Text)
@@ -163,7 +166,26 @@ func (w *Worker) process(job models.Job) {
 	}
 
 	// Insert into DB — trigger generates tracking_id and schedule
-	trackingID, err := w.LocalDB.CreateShipment(context.Background(), newShipment, w.Cfg.CompanyPrefix)
+	dbShip := &db.Shipment{
+		UserJid:           newShipment.UserJID,
+		Status:            sql.NullString{String: newShipment.Status, Valid: true},
+		SenderTimezone:    sql.NullString{String: newShipment.SenderTimezone, Valid: true},
+		RecipientTimezone: sql.NullString{String: newShipment.RecipientTimezone, Valid: true},
+		SenderName:        sql.NullString{String: newShipment.SenderName, Valid: true},
+		SenderPhone:       sql.NullString{String: newShipment.SenderPhone, Valid: true},
+		Origin:            sql.NullString{String: newShipment.Origin, Valid: true},
+		RecipientName:     sql.NullString{String: newShipment.RecipientName, Valid: true},
+		RecipientPhone:    sql.NullString{String: newShipment.RecipientPhone, Valid: true},
+		RecipientEmail:    sql.NullString{String: newShipment.RecipientEmail, Valid: true},
+		RecipientID:       sql.NullString{String: newShipment.RecipientID, Valid: true},
+		RecipientAddress:  sql.NullString{String: newShipment.RecipientAddress, Valid: true},
+		Destination:       sql.NullString{String: newShipment.Destination, Valid: true},
+		CargoType:         sql.NullString{String: newShipment.CargoType, Valid: true},
+		Weight:            sql.NullFloat64{Float64: newShipment.Weight, Valid: true},
+		Cost:              sql.NullFloat64{Float64: newShipment.Cost, Valid: true},
+	}
+
+	trackingID, err := w.ShipmentUC.CreateWithPrefix(context.Background(), dbShip, w.Cfg.CompanyPrefix)
 	if err != nil {
 		logger.GlobalVitals.IncInsertFailure()
 		logger.Error().Err(err).Str("jid", job.SenderJID.String()).Msg("Failed to insert shipment information")
@@ -205,7 +227,7 @@ func (w *Worker) generateAndSendReceipt(job models.Job, id string, lang i18n.Lan
 		TrackingID:  id,
 		Language:    lang,
 		CompanyName: w.CompanyName,
-		LocalDB:     w.LocalDB,
+		ShipmentUC:  w.ShipmentUC,
 		Sender:      w.Sender,
 	})
 }

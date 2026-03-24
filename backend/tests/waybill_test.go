@@ -10,10 +10,7 @@ import (
 )
 
 func TestGenerateWaybill(t *testing.T) {
-	cfg, err := config.LoadFromEnv()
-	if err != nil {
-		t.Fatalf("Failed to load config: %v", err)
-	}
+	cfg := config.Load()
 
 	ship := shipment.Shipment{
 		TrackingID:     "AWB-TEST-123",
@@ -46,7 +43,7 @@ func TestGenerateWaybill(t *testing.T) {
 }
 
 func TestGenerateWaybillEmptyFields(t *testing.T) {
-	cfg, _ := config.LoadFromEnv()
+	cfg := config.Load()
 	companyName := "EMPTY CORP"
 	if cfg != nil {
 		companyName = cfg.CompanyName

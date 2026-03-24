@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import sql from '@/lib/db';
+
+function getBackendUrl() {
+    return process.env.BACKEND_URL || 'http://localhost:5000';
+}
 
 export async function PATCH(
     request: NextRequest,
@@ -15,28 +18,16 @@ export async function PATCH(
     const { id } = await params;
     try {
         const input = await request.json();
-        const now = new Date();
-
-        await sql`
-            UPDATE Shipment SET
-                status = ${input.status || 'pending'},
-                sender_name = ${input.senderName},
-                sender_phone = ${input.senderPhone || null},
-                origin = ${input.senderCountry},
-                recipient_name = ${input.receiverName},
-                recipient_phone = ${input.receiverPhone},
-                recipient_email = ${input.receiverEmail},
-                recipient_address = ${input.receiverAddress},
-                destination = ${input.receiverCountry},
-                cargo_type = ${input.cargoType || null},
-                weight = ${input.weight || 0},
-                updated_at = ${now}
-            WHERE tracking_id = ${id}
-        `;
-
-        return NextResponse.json({ success: true });
+        const res = await fetch(`${getBackendUrl()}/api/admin/shipments/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(input)
+        });
+        
+        if (!res.ok) throw new Error('Backend error');
+        return NextResponse.json(await res.json());
     } catch (error) {
-        console.error('Update Shipment API Error:', error);
+        console.error('Update Shipment Proxy Error:', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 }
@@ -52,19 +43,15 @@ export async function DELETE(
 
     const { id } = await params;
     try {
-        if (id === 'cleanup') {
-            const result = await sql`
-                DELETE FROM Shipment WHERE status = 'delivered' AND updated_at < NOW() - INTERVAL '30 days'
-            `;
-            return NextResponse.json({ deleted_count: result.count });
-        } else {
-            await sql`
-                DELETE FROM Shipment WHERE tracking_id = ${id}
-            `;
-            return NextResponse.json({ success: true });
-        }
+        const endpoint = id === 'cleanup' ? 'cleanup' : id;
+        const res = await fetch(`${getBackendUrl()}/api/admin/shipments/${endpoint}`, {
+            method: 'DELETE'
+        });
+        
+        if (!res.ok) throw new Error('Backend error');
+        return NextResponse.json(await res.json());
     } catch (error) {
-        console.error('Delete Shipment API Error:', error);
+        console.error('Delete Shipment Proxy Error:', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 }

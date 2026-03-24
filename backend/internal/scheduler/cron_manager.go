@@ -8,11 +8,11 @@ import (
 	"time"
 
 	"webtracker-bot/internal/config"
-	"webtracker-bot/internal/localdb"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/notif"
 	"webtracker-bot/internal/shipment"
+	"webtracker-bot/internal/usecase"
 
 	"github.com/robfig/cron/v3"
 	"go.mau.fi/whatsmeow"
@@ -23,7 +23,8 @@ import (
 type CronManager struct {
 	scheduler *cron.Cron
 	cfg       *config.Config
-	ldb       *localdb.Client // Switch to LocalDB
+	shipUC    *usecase.ShipmentUsecase
+	configUC  *usecase.ConfigUsecase
 	wa        *whatsmeow.Client
 	locks     map[string]*sync.Mutex
 	mu        sync.RWMutex
@@ -34,14 +35,15 @@ var (
 	once     sync.Once
 )
 
-func NewManager(cfg *config.Config, ldb *localdb.Client, wa *whatsmeow.Client) *CronManager {
+func NewManager(cfg *config.Config, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, wa *whatsmeow.Client) *CronManager {
 	once.Do(func() {
 		// Use seconds precision for robfig/cron/v3
 		c := cron.New(cron.WithSeconds())
 		instance = &CronManager{
 			scheduler: c,
 			cfg:       cfg,
-			ldb:       ldb,
+			shipUC:    shipUC,
+			configUC:  configUC,
 			wa:        wa,
 			locks:     make(map[string]*sync.Mutex),
 		}
@@ -112,10 +114,9 @@ func (m *CronManager) handlePulse() {
 	now := time.Now().UTC()
 
 	// Process transitions in a loop to handle 'catch-up' (cascading statuses)
-	// Example: If a shipment is backdated to yesterday, it should move to Delivered in one pulse.
 	maxRounds := 3
 	for i := 0; i < maxRounds; i++ {
-		transitions, err := m.ldb.ProcessStatusTransitions(ctx, now)
+		transitions, err := m.shipUC.ProcessTransitions(ctx, now)
 		if err != nil {
 			logger.Error().Err(err).Msg("Pulse: Failed to process status transitions")
 			break
@@ -139,7 +140,7 @@ func (m *CronManager) handleDailyStats() {
 	// Define "Daily" as last 24h
 	since := time.Now().Add(-24 * time.Hour)
 
-	created, delivered, err := m.ldb.CountDailyStats(ctx, since)
+	created, delivered, err := m.shipUC.CountDailyStats(ctx, since)
 	if err != nil {
 		logger.Error().Err(err).Msg("Stats: Failed to count")
 		return
@@ -165,7 +166,9 @@ func (m *CronManager) handleDailyStats() {
 
 // handlePruning removes old data to save space (1GB RAM/Disk constraint)
 func (m *CronManager) handlePruning() {
-	deleted, err := m.ldb.RunAgedCleanup(context.Background())
+	deliveredCutoff := time.Now().AddDate(0, 0, -30)
+	allCutoff := time.Now().AddDate(0, 0, -90)
+	deleted, err := m.shipUC.RunAgedCleanup(context.Background(), deliveredCutoff, allCutoff)
 	if err != nil {
 		logger.Error().Err(err).Msg("Pruning: Failed to run aged cleanup")
 		return

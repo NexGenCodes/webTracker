@@ -17,10 +17,7 @@ func TestRenderReceipt(t *testing.T) {
 	}
 
 	// Use real config
-	cfg, err := config.LoadFromEnv()
-	if err != nil {
-		t.Fatalf("Failed to load config: %v", err)
-	}
+	cfg := config.Load()
 
 	ship := shipment.Shipment{
 		TrackingID:       "AWB-TEST-12345",
