@@ -23,14 +23,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set lower case owner name
+        run: |
+          echo "OWNER_LC=${OWNER,,}" >>${GITHUB_ENV}
+        env:
+          OWNER: '${{ github.repository_owner }}'
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v6.15.0
         with:
           context: ./backend
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/webtracker-bot:latest
-            ghcr.io/${{ github.repository_owner }}/webtracker-bot:${{ github.sha }}
+            ghcr.io/${{ env.OWNER_LC }}/webtracker-bot:latest
+            ghcr.io/${{ env.OWNER_LC }}/webtracker-bot:${{ github.sha }}
 
   deploy:
     needs: build-and-push
@@ -58,8 +64,9 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
           script: |
-            # Set the image name dynamically in docker-compose
-            sed -i "s/\${GITHUB_REPOSITORY_OWNER}/${{ github.repository_owner }}/g" /opt/webtracker/docker-compose.yml
+            # Set the image name dynamically in docker-compose (must be lowercase)
+            OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+            sed -i "s/\${GITHUB_REPOSITORY_OWNER}/$OWNER/g" /opt/webtracker/docker-compose.yml
             
             # Login to GHCR on the EC2
             echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
