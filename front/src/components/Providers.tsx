@@ -6,6 +6,7 @@ import { ThemeProvider } from "./ThemeProvider";
 import { I18nProvider } from "./I18nContext";
 import AuthProvider from "./AuthProvider";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import { Analytics } from "@vercel/analytics/react";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -27,6 +28,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
           <AuthProvider>
             {children}
             <SpeedInsights />
+            <Analytics />
           </AuthProvider>
         </I18nProvider>
       </ThemeProvider>
