@@ -12,6 +12,7 @@ import (
 	"webtracker-bot/internal/usecase"
 	"database/sql"
 	"time"
+	"strings"
 )
 
 type Server struct {
@@ -37,8 +38,15 @@ func NewServer(cfg *config.Config, shipmentUC *usecase.ShipmentUsecase, db *sql.
 
 	// Global Middlewares
 	app.Use(logger.New())
+
+	// Dynamic CORS Origins based on Config (Production URL + Localhost)
+	allowOrigins := cfg.TrackingBaseURL
+	if !strings.Contains(allowOrigins, "localhost") {
+		allowOrigins += ", http://localhost:3000"
+	}
+
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "*",
+		AllowOrigins: allowOrigins,
 		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
 		AllowMethods: "GET, POST, PATCH, DELETE, OPTIONS",
 	}))
