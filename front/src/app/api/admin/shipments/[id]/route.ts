@@ -21,9 +21,15 @@ export async function PATCH(
             UPDATE Shipment SET
                 status = ${input.status || 'pending'},
                 sender_name = ${input.senderName},
-                recipient_name = ${input.recipientName},
-                destination = ${input.destination},
-                origin = ${input.origin},
+                sender_phone = ${input.senderPhone || null},
+                origin = ${input.senderCountry},
+                recipient_name = ${input.receiverName},
+                recipient_phone = ${input.receiverPhone},
+                recipient_email = ${input.receiverEmail},
+                recipient_address = ${input.receiverAddress},
+                destination = ${input.receiverCountry},
+                cargo_type = ${input.cargoType || null},
+                weight = ${input.weight || 0},
                 updated_at = ${now}
             WHERE tracking_id = ${id}
         `;

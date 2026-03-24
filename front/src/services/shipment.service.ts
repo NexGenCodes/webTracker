@@ -1,4 +1,4 @@
-import { CreateShipmentDto, ShipmentData, ServiceResult, ShipmentStatus, DashboardStats } from '@/types/shipment';
+import { CreateShipmentDto, ShipmentData, ServiceResult, ShipmentStatus, DashboardStats, PaginatedResult } from '@/types/shipment';
 import { logger } from '@/lib/logger';
 import { getBaseUrl } from '@/lib/utils';
 
@@ -172,15 +172,6 @@ export class ShipmentService {
 
             const data = await response.json();
 
-            // Normalize status
-            const normalizeStatus = (s: string): string => {
-                const upper = s.toUpperCase();
-                if (upper === 'INTRANSIT') return 'IN_TRANSIT';
-                if (upper === 'OUTFORDELIVERY') return 'OUT_FOR_DELIVERY';
-                if (upper === 'CANCELLED') return 'CANCELED';
-                return upper;
-            };
-
             const shipment: ShipmentData = {
                 id: data.tracking_id,
                 trackingNumber: data.tracking_id,
@@ -258,12 +249,79 @@ export class ShipmentService {
     }
 
     /**
+     * Admin: Paginated shipment list with filtering
+     */
+    static async getShipments(params: {
+        page?: number;
+        limit?: number;
+        search?: string;
+        status?: string;
+    } = {}): Promise<ServiceResult<PaginatedResult<ShipmentData>>> {
+        try {
+            const query = new URLSearchParams();
+            if (params.page) query.set('page', params.page.toString());
+            if (params.limit) query.set('limit', params.limit.toString());
+            if (params.search) query.set('search', params.search);
+            if (params.status) query.set('status', params.status);
+
+            const res = await fetchWithTimeout(`/api/admin/shipments?${query.toString()}`, {
+                next: { revalidate: 0 }
+            });
+
+            if (!res.ok) throw new Error(`Failed to fetch shipments: ${res.status}`);
+
+            const json = await res.json();
+            
+            interface ApiShipment {
+                tracking_id: string;
+                status: string;
+                sender_name: string;
+                recipient_name: string;
+                recipient_phone?: string;
+                recipient_email?: string;
+                recipient_address?: string;
+                destination: string;
+                weight: number;
+                origin: string;
+                created_at: string;
+            }
+
+            const shipments = json.data.map((s: ApiShipment) => ({
+                id: s.tracking_id,
+                trackingNumber: s.tracking_id,
+                status: normalizeStatus(s.status) as ShipmentStatus,
+                senderName: s.sender_name,
+                receiverName: s.recipient_name,
+                receiverPhone: s.recipient_phone,
+                receiverEmail: s.recipient_email,
+                receiverAddress: s.recipient_address,
+                receiverCountry: s.destination,
+                weight: s.weight,
+                senderCountry: s.origin,
+                createdAt: s.created_at,
+                isArchived: s.status === 'delivered',
+            }));
+
+            return {
+                success: true,
+                data: {
+                    data: shipments,
+                    pagination: json.pagination
+                }
+            };
+        } catch (error) {
+            const apiError = handleApiError(error, 'Paginated shipments');
+            return { success: false, error: apiError.userMessage };
+        }
+    }
+
+    /**
      * Admin: Dashboard data via Next.js API
      */
     static async getDashboardData(): Promise<ServiceResult<{ shipments: ShipmentData[], stats: DashboardStats }>> {
         try {
-            // Fetch List
-            const listRes = await fetchWithTimeout(`/api/admin/shipments`, {
+            // Fetch Recent List (Fixed to use new API response structure)
+            const listRes = await fetchWithTimeout(`/api/admin/shipments?limit=10`, {
                 next: { revalidate: 0 }
             });
 
@@ -271,7 +329,8 @@ export class ShipmentService {
                 throw new Error(`Failed to fetch shipments: ${listRes.status}`);
             }
 
-            const apiShipments = await listRes.json();
+            const json = await listRes.json();
+            const apiShipments = json.data;
             
             interface ApiShipment {
                 tracking_id: string;

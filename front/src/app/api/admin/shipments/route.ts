@@ -10,11 +10,39 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { searchParams } = new URL(request.url);
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || '20');
+    const search = searchParams.get('search') || '';
+    const status = searchParams.get('status') || '';
+    const offset = (page - 1) * limit;
+
     try {
+        // Dynamic search and status filtering
         const shipments = await sql`
-            SELECT * FROM Shipment ORDER BY created_at DESC
+            SELECT *, COUNT(*) OVER() as full_count 
+            FROM Shipment 
+            WHERE 1=1
+            ${status ? sql`AND status = ${status}` : sql``}
+            ${search ? sql`AND (tracking_id ILIKE ${'%' + search + '%'} OR recipient_name ILIKE ${'%' + search + '%'} OR recipient_phone ILIKE ${'%' + search + '%'})` : sql``}
+            ORDER BY created_at DESC
+            LIMIT ${limit} OFFSET ${offset}
         `;
-        return NextResponse.json(shipments);
+        
+        const total = shipments.length > 0 ? parseInt(shipments[0].full_count) : 0;
+
+        return NextResponse.json({
+            data: shipments.map(s => {
+                const { full_count, ...shipment } = s;
+                return shipment;
+            }),
+            pagination: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit)
+            }
+        });
     } catch (error) {
         console.error('List Shipments API Error:', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -39,7 +67,7 @@ export async function POST(request: NextRequest) {
 
         // DB trigger auto-generates: scheduled_transit_time,
         // outfordelivery_time, expected_delivery_time, updated_at
-        const result = await sql`
+            const result = await sql`
             INSERT INTO Shipment (
                 tracking_id, user_jid, status,
                 sender_name, origin, recipient_name, recipient_phone,
@@ -48,7 +76,7 @@ export async function POST(request: NextRequest) {
             ) VALUES (
                 ${trackingId}, 'admin-ui', 'pending',
                 ${input.senderName || null}, ${input.senderCountry}, ${input.receiverName},
-                ${input.number || null}, ${input.email || null}, ${input.address || null},
+                ${input.receiverPhone || null}, ${input.receiverEmail || null}, ${input.receiverAddress || null},
                 ${input.receiverCountry}, ${input.cargoType || null}, ${input.weight || 0}
             )
             RETURNING tracking_id
