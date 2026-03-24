@@ -13,11 +13,12 @@ import (
 )
 
 type Sender struct {
-	Client *whatsmeow.Client
+	Client      *whatsmeow.Client
+	CompanyName string
 }
 
-func NewSender(client *whatsmeow.Client) *Sender {
-	return &Sender{Client: client}
+func NewSender(client *whatsmeow.Client, companyName string) *Sender {
+	return &Sender{Client: client, CompanyName: companyName}
 }
 
 const BotFooter = "\n\n_🤖Bot_"

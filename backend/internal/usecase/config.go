@@ -11,12 +11,22 @@ import (
 // ConfigUsecase handles system configuration, user preferences, and bot core authorization.
 type ConfigUsecase struct {
 	repo db.Querier
+	pool *sql.DB
 }
 
-func NewConfigUsecase(repo db.Querier) *ConfigUsecase {
+func NewConfigUsecase(repo db.Querier, pool *sql.DB) *ConfigUsecase {
 	return &ConfigUsecase{
 		repo: repo,
+		pool: pool,
 	}
+}
+
+// Ping checks if the database is responding.
+func (u *ConfigUsecase) Ping(ctx context.Context) error {
+	if u.pool == nil {
+		return fmt.Errorf("database pool is not initialized")
+	}
+	return u.pool.PingContext(ctx)
 }
 
 // GetSystemConfig retrieves a system config value. Returns empty string if not found.

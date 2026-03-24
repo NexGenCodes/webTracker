@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"webtracker-bot/internal/i18n"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/parser"
 	"webtracker-bot/internal/shipment"
@@ -19,6 +20,10 @@ import (
 
 	"go.mau.fi/whatsmeow/types"
 )
+
+func i18nLang(s string) i18n.Language {
+	return i18n.Language(strings.ToLower(s))
+}
 
 // Result represents the outcome of a command execution.
 type Result struct {
@@ -120,7 +125,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) 
 		if isOwnerOnlyCmd {
 			if !isOwner {
 				logger.Warn().Str("cmd", rawCmd).Str("sender", senderPhone).Msg("Owner-only command blocked")
-				return &Result{Message: "🚫 *OWNER ACCESS ONLY*\n\n_This command is restricted to the bot owner only._"}, true
+				return &Result{Message: i18n.T(i18nLang(lang), "ERR_OWNER_ONLY")}, true
 			}
 		}
 
@@ -129,8 +134,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) 
 			if isAdmin {
 				logger.Info().Str("cmd", rawCmd).Str("sender", senderPhone).Msg("Admin command authorized")
 			} else {
-				logger.Warn().Str("cmd", rawCmd).Str("sender", senderPhone).Msg("Command blocked: sender is not authorized")
-				return &Result{Message: "🚫 *ACCESS DENIED*\n\n_This command is restricted to the bot owner or group admins._\n\n💡 You can use `!info [ID]` to track packages."}, true
+				return &Result{Message: i18n.T(i18nLang(lang), "ERR_ACCESS_DENIED")}, true
 			}
 		}
 
@@ -156,7 +160,7 @@ type StatsHandler struct {
 
 func (h *StatsHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, args []string, lang string, isAdmin bool) Result {
 	if len(args) > 0 {
-		return Result{Message: "⚠️ *INCORRECT USAGE*\n_Please send only `!stats` without any extra text._"}
+		return Result{Message: i18n.T(i18nLang(lang), "ERR_INCORRECT_USAGE")}
 	}
 
 	tz := h.AdminTimezone
@@ -170,14 +174,16 @@ func (h *StatsHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsec
 
 	pending, transit, err := shipUC.CountDailyStats(ctx, since.UTC())
 	if err != nil {
-		return Result{Message: "❌ *SYSTEM ERROR*\n_Could not fetch statistics._", Error: err}
+		return Result{Message: i18n.T(i18nLang(lang), "ERR_SYSTEM_ERROR"), Error: err}
 	}
 
 	company := strings.ToUpper(h.CompanyName)
 	if company == "" {
 		company = "LOGISTICS"
 	}
-	msg := fmt.Sprintf("📊 *%s VITAL STATS*\n\n━━━━━━━━━━━━━━━━━━━━━━━\n📦 PENDING:    *%d*\n🚚 IN TRANSIT: *%d*\n📊 TOTAL:      *%d*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n_Total operations recorded today._", company, pending, transit, pending+transit)
+	msg := i18n.T(i18nLang(lang), "MSG_STATS_HEADER", company) + "\n\n━━━━━━━━━━━━━━━━━━━━━━━\n" +
+		fmt.Sprintf("📦 PENDING:    *%d*\n🚚 IN TRANSIT: *%d*\n📊 TOTAL:      *%d*\n", pending, transit, pending+transit) +
+		"━━━━━━━━━━━━━━━━━━━━━━━\n\n_Total operations recorded today._"
 	return Result{Message: msg}
 }
 
@@ -209,11 +215,11 @@ func (h *InfoHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUseca
 
 	dbShip, err := shipUC.Track(ctx, args[0])
 	if err != nil {
-		return Result{Message: "❌ *DATABASE ERROR*\n_Lookup failed. Please try again later._", Error: err}
+		return Result{Message: i18n.T(i18nLang(lang), "ERR_DB_ERROR"), Error: err}
 	}
 
 	if dbShip == nil {
-		return Result{Message: "❌ *NOT FOUND*\n_Could not find any shipment with that ID._"}
+		return Result{Message: i18n.T(i18nLang(lang), "ERR_NOT_FOUND")}
 	}
 
 	// Map DB model to Domain model for waybill generation
@@ -347,7 +353,7 @@ func (h *EditHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUseca
 		var err error
 		trackingID, err = shipUC.GetLastForUser(ctx, jid)
 		if err != nil || trackingID == "" {
-			return Result{Message: "⚠️ *CONTEXT ERROR*\n_I couldn't find your last shipment. Please provide the tracking ID (e.g., !edit ABC-1234 ...)._"}
+			return Result{Message: i18n.T(i18nLang(lang), "ERR_CONTEXT_ERROR")}
 		}
 		startIdx = 0
 	}
@@ -538,12 +544,16 @@ func (h *BroadcastHandler) Execute(ctx context.Context, shipUC *usecase.Shipment
 	}
 
 	msg := strings.Join(args, " ")
-	broadcastMsg := "📢 *OFFICIAL UPDATE FROM LOGISTICS*\n\n" + msg
+	company := h.Sender.CompanyName
+	if company == "" {
+		company = "LOGISTICS"
+	}
+	broadcastMsg := fmt.Sprintf("📢 *OFFICIAL UPDATE FROM %s*\n\n", strings.ToUpper(company)) + msg
 
 	// Fetch authorized groups from DB
 	groups, err := configUC.GetAuthorizedGroups(ctx)
 	if err != nil {
-		return Result{Message: "❌ *DATABASE ERROR*\n\nCould not retrieve authorized groups."}
+		return Result{Message: i18n.T(i18nLang(lang), "ERR_DB_ERROR")}
 	}
 
 	if len(groups) == 0 {
@@ -587,11 +597,15 @@ func (h *StatusHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUse
 	memMB := m.Alloc / 1024 / 1024
 
 	// System Health
-	dbStatus := "🟢 ONLINE (Pgx)"
+	dbStatus := "🟢 ONLINE"
+	if err := configUC.Ping(ctx); err != nil {
+		dbStatus = "🔴 OFFLINE"
+		logger.Error().Err(err).Msg("Database ping failed in !status")
+	}
 
 	groupsCount, _ := configUC.CountAuthorizedGroups(ctx)
 
-	msg := "🖥️ *SYSTEM DASHBOARD*\n\n" +
+	msg := i18n.T(i18nLang(lang), "MSG_STATUS_DASHBOARD") + "\n\n" +
 		fmt.Sprintf("📊 UPTIME:    *%s*\n", uptime.Truncate(time.Second)) +
 		fmt.Sprintf("🔋 MEMORY:    *%d MB* / 1024 MB\n", memMB) +
 		fmt.Sprintf("🗄️ DATABASE:  *%s*\n", dbStatus) +

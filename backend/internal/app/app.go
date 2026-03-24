@@ -65,7 +65,7 @@ func (a *App) Init() error {
 	querier := db.New(a.SqlPool)
 	shipService := &shipment.Calculator{}
 	a.ShipmentUC = usecase.NewShipmentUsecase(querier, shipService)
-	a.ConfigUC = usecase.NewConfigUsecase(querier)
+	a.ConfigUC = usecase.NewConfigUsecase(querier, a.SqlPool)
 
 	wa, err := whatsapp.NewClient(a.Cfg.DatabaseURL)
 	if err != nil {
@@ -73,7 +73,7 @@ func (a *App) Init() error {
 	}
 	a.WA = wa
 
-	worker.InitReceiptProcessor(a.Cfg.CompanyName, a.ShipmentUC, whatsapp.NewSender(a.WA))
+	worker.InitReceiptProcessor(a.Cfg.CompanyName, a.ShipmentUC, whatsapp.NewSender(a.WA, a.Cfg.CompanyName))
 
 	a.WA.AddEventHandler(a.handleWAEvent)
 
@@ -90,7 +90,7 @@ func (a *App) Init() error {
 }
 
 func (a *App) Run() error {
-	sender := whatsapp.NewSender(a.WA)
+	sender := whatsapp.NewSender(a.WA, a.Cfg.CompanyName)
 	cmdDispatcher := commands.NewDispatcher(a.ShipmentUC, a.ConfigUC, sender, a.Cfg.CompanyPrefix, a.Cfg.CompanyName, a.Cfg.PairingPhone, a.Cfg.AdminTimezone)
 
 	shipmentService := a.ShipmentUC.Service
