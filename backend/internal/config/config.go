@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -10,38 +9,44 @@ import (
 
 	"webtracker-bot/internal/utils"
 
+	"github.com/ilyakaznacheev/cleanenv"
 	"github.com/joho/godotenv"
 )
 
 type Config struct {
-	DatabaseURL    string
-	CompanyPrefix  string
-	GeminiAPIKey   string
-	AdminTimezone  string
-	HealthcheckURL string
-	LogPath        string
-	CompanyName    string
-	WorkerPoolSize int
-	BufferSize     int
-	PairingPhone   string
-	BotOwnerPhone  string // New field for notifications
+	DatabaseURL    string `env:"DATABASE_URL"`
+	DirectURL      string `env:"DIRECT_URL"`
+	CompanyPrefix  string `env:"COMPANY_PREFIX"`
+	GeminiAPIKey   string `env:"GEMINI_API_KEY"`
+	AdminTimezone  string `env:"ADMIN_TIMEZONE" env-default:"Africa/Lagos"`
+	HealthcheckURL string `env:"HEALTHCHECK_URL"`
+	LogPath        string `env:"LOG_PATH"`
+	LogLevel       string `env:"LOG_LEVEL" env-default:"info"`
+	CompanyName    string `env:"COMPANY_NAME" env-default:"Airwaybill"`
+	WorkerPoolSize int    `env:"WORKER_POOL_SIZE" env-default:"5"`
+	BufferSize     int    `env:"BUFFER_SIZE" env-default:"100"`
+	PairingPhone   string `env:"WHATSAPP_PAIRING_PHONE"`
+	BotOwnerPhone  string `env:"BOT_OWNER_PHONE"`
+	
 	// Notification Config
-	SMTPHost     string
-	SMTPPort     int
-	SMTPUsername string
-	SMTPPassword string
-	NotifyEmail  string
+	SMTPHost     string `env:"SMTP_HOST"`
+	SMTPPort     int    `env:"SMTP_PORT" env-default:"587"`
+	SMTPUsername string `env:"SMTP_USERNAME"`
+	SMTPPassword string `env:"SMTP_PASSWORD"`
+	NotifyEmail  string `env:"NOTIFY_EMAIL"`
 
 	// Access Control
-	AllowPrivateChat bool
-	AdminPhones      []string
+	AllowPrivateChat bool     `env:"WHATSAPP_ALLOW_PRIVATE_CHAT" env-default:"false"`
+	AdminPhones      []string `env:"WHATSAPP_ADMIN_PHONES" env-separator:","`
 
 	// Public Tracking URL
-	TrackingBaseURL string
+	TrackingBaseURL string `env:"TRACKING_BASE_URL" env-default:"http://localhost:3000"`
+	
+	// REST API Port
+	APIPort string `env:"API_PORT" env-default:"5000"`
 }
 
 func GetWorkDir() string {
-	// Try to find project root by looking for go.mod
 	dir, _ := os.Getwd()
 	for dir != "" && dir != "." && dir != "/" {
 		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
@@ -75,7 +80,6 @@ func GenerateAbbreviation(name string) string {
 	var abbr string
 	switch {
 	case count == 1:
-		// 1 Syllable: First | Middle | Last
 		s := syllables[0]
 		if len(s) <= 3 {
 			abbr = s
@@ -83,7 +87,6 @@ func GenerateAbbreviation(name string) string {
 			abbr = string(s[0]) + string(s[len(s)/2]) + string(s[len(s)-1])
 		}
 	case count == 2:
-		// 2 Syllables: 1st Syllable (2 chars) + 2nd Syllable (1 char)
 		s1 := syllables[0]
 		s2 := syllables[1]
 		p1 := s1
@@ -93,127 +96,51 @@ func GenerateAbbreviation(name string) string {
 		p2 := string(s2[0])
 		abbr = p1 + p2
 	default:
-		// 3+ Syllables: 1st char of each of the first 3 syllables
 		for i := 0; i < 3 && i < count; i++ {
 			abbr += string(syllables[i][0])
 		}
 	}
 
-	// Pad or truncate to ensure exactly 3 chars if possible
 	abbr = strings.ToUpper(abbr)
 	if len(abbr) > 3 {
 		abbr = abbr[:3]
 	}
 	for len(abbr) < 3 {
-		abbr += "X" // Fallback padding
+		abbr += "X"
 	}
 
 	return abbr
 }
 
 func Load() *Config {
-	cfg, err := LoadFromEnv()
-	if err != nil {
-		log.Fatalf("CRITICAL: %v", err)
-	}
-	return cfg
-}
-
-func LoadFromEnv() (*Config, error) {
 	workDir := GetWorkDir()
 
-	// Try loading from executable dir
+	// Load .env files manually to support multiple paths for different entry points (cmd/bot, cmd/migrate, etc.)
 	_ = godotenv.Load(filepath.Join(workDir, ".env.local"))
 	_ = godotenv.Load(filepath.Join(workDir, ".env"))
-
-	// Fallback to current dir for local dev
 	_ = godotenv.Load(".env.local")
 	_ = godotenv.Load()
 
-	companyNameEnv := os.Getenv("COMPANY_NAME")
-	companyName := strings.ReplaceAll(companyNameEnv, " ", "")
-	if companyName == "" {
-		companyName = "Airwaybill"
-	}
-	companyPrefix := GenerateAbbreviation(companyName)
-
-	// Parse SMTP Port
-	smtpPort := 587
-	if p := os.Getenv("SMTP_PORT"); p != "" {
-		// simple parsing, ignoring error for brevity in this block
-		fmt.Sscanf(p, "%d", &smtpPort)
+	var cfg Config
+	if err := cleanenv.ReadEnv(&cfg); err != nil {
+		panic(fmt.Sprintf("Failed to read configuration: %v", err))
 	}
 
-	var adminPhones []string
-	if admins := os.Getenv("WHATSAPP_ADMIN_PHONES"); admins != "" {
-		parts := strings.Split(admins, ",")
-		for _, p := range parts {
-			p = strings.TrimSpace(p)
-			p = strings.ReplaceAll(p, "+", "")
-			p = strings.ReplaceAll(p, "-", "")
-			p = strings.ReplaceAll(p, " ", "")
-			if p != "" {
-				adminPhones = append(adminPhones, p)
-			}
-		}
+	// Post-processing
+	cfg.CompanyName = strings.ReplaceAll(cfg.CompanyName, " ", "")
+	if cfg.CompanyPrefix == "" {
+		cfg.CompanyPrefix = GenerateAbbreviation(cfg.CompanyName)
 	}
 
-	cfg := &Config{
-		DatabaseURL:    os.Getenv("DIRECT_URL"),
-		CompanyPrefix:  companyPrefix,
-		GeminiAPIKey:   os.Getenv("GEMINI_API_KEY"),
-		AdminTimezone:  os.Getenv("ADMIN_TIMEZONE"),
-		HealthcheckURL: os.Getenv("HEALTHCHECK_URL"),
-		LogPath:        os.Getenv("LOG_PATH"),
-		CompanyName:    companyName,
-		WorkerPoolSize: 5,
-		BufferSize:     100,
-		PairingPhone:   os.Getenv("WHATSAPP_PAIRING_PHONE"),
-
-		SMTPHost:     os.Getenv("SMTP_HOST"),
-		SMTPPort:     smtpPort,
-		SMTPUsername: os.Getenv("SMTP_USERNAME"),
-		SMTPPassword: os.Getenv("SMTP_PASSWORD"),
-		NotifyEmail:  os.Getenv("NOTIFY_EMAIL"),
-
-		AllowPrivateChat:    os.Getenv("WHATSAPP_ALLOW_PRIVATE_CHAT") == "true",
-		AdminPhones:         adminPhones,
-		BotOwnerPhone:       os.Getenv("BOT_OWNER_PHONE"), // Load from env
-		TrackingBaseURL:     os.Getenv("TRACKING_BASE_URL"),
-	}
-
-	// Default BotOwnerPhone to first admin if not set
-	if cfg.BotOwnerPhone == "" && len(adminPhones) > 0 {
-		cfg.BotOwnerPhone = adminPhones[0]
-	}
-
-	if cfg.PairingPhone != "" {
-		// Clean the pairing phone just in case
-		cleanPairing := strings.ReplaceAll(cfg.PairingPhone, " ", "")
-		cleanPairing = strings.ReplaceAll(cleanPairing, "+", "")
-		cleanPairing = strings.ReplaceAll(cleanPairing, "-", "")
-
-		// Ensure it's not already in the list
-		exists := false
-		for _, p := range adminPhones {
-			if p == cleanPairing {
-				exists = true
-				break
-			}
-		}
-		if !exists {
-			adminPhones = append(adminPhones, cleanPairing)
-		}
-		cfg.PairingPhone = cleanPairing
-	}
-
-	cfg.AdminPhones = adminPhones
-
+	// Database Selection (DirectURL preferred for migrations/SQLC types)
 	if cfg.DatabaseURL == "" {
-		cfg.DatabaseURL = os.Getenv("DATABASE_URL")
+		cfg.DatabaseURL = cfg.DirectURL
+	} else if cfg.DirectURL != "" {
+		// If both are provided, we usually want DatabaseURL for runtime (pooled)
+		// but Config.DatabaseURL in our code is what the app uses.
 	}
 
-	// Ensure search_path is set to public for Neon DB pooled connections
+	// Ensure search_path is set for Neon
 	if cfg.DatabaseURL != "" && !strings.Contains(cfg.DatabaseURL, "search_path=public") {
 		if strings.Contains(cfg.DatabaseURL, "?") {
 			cfg.DatabaseURL += "&search_path=public"
@@ -222,22 +149,38 @@ func LoadFromEnv() (*Config, error) {
 		}
 	}
 
+	// Phone Cleaning
+	cfg.PairingPhone = cleanPhone(cfg.PairingPhone)
+	for i, p := range cfg.AdminPhones {
+		cfg.AdminPhones[i] = cleanPhone(p)
+	}
+
+	if cfg.BotOwnerPhone == "" && len(cfg.AdminPhones) > 0 {
+		cfg.BotOwnerPhone = cfg.AdminPhones[0]
+	} else {
+		cfg.BotOwnerPhone = cleanPhone(cfg.BotOwnerPhone)
+	}
+
 	if cfg.LogPath == "" {
 		cfg.LogPath = filepath.Join(workDir, "logs")
 	}
-	return cfg, nil
+
+	return &cfg
+}
+
+func cleanPhone(p string) string {
+	p = strings.ReplaceAll(p, "+", "")
+	p = strings.ReplaceAll(p, "-", "")
+	p = strings.ReplaceAll(p, " ", "")
+	return p
 }
 
 func (cfg *Config) Validate() error {
-	// Database is required (PostgreSQL)
 	if cfg.DatabaseURL == "" {
 		return fmt.Errorf("DATABASE_URL / DIRECT_URL is missing")
 	}
 	if cfg.GeminiAPIKey == "" {
 		return fmt.Errorf("GEMINI_API_KEY is missing")
-	}
-	if cfg.CompanyPrefix == "" {
-		cfg.CompanyPrefix = "AWB"
 	}
 	return nil
 }

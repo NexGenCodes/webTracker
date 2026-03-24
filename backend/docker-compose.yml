@@ -1,0 +1,17 @@
+services:
+  webtracker-bot:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/webtracker-bot:latest
+    container_name: webtracker-bot
+    restart: always
+    env_file:
+      - .env
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./logs:/app/logs
+      - ./assets:/app/assets # Optional: in case they want to modify assets on the host without rebuilding image
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

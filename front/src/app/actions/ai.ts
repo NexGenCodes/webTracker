@@ -2,7 +2,13 @@
 
 import { ParseResult } from '@/types/shipment';
 import { logger } from '@/lib/logger';
-import { getBaseUrl } from '@/lib/utils';
+
+function getNextJsBaseUrl() {
+  if (typeof window !== 'undefined') return '';
+  if (process.env.API_URL) return process.env.API_URL;
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return `http://localhost:${process.env.PORT ?? 3000}`;
+}
 
 export async function parseShipmentAI(text: string): Promise<ParseResult> {
     if (!text || text.trim().length < 5) {
@@ -11,7 +17,7 @@ export async function parseShipmentAI(text: string): Promise<ParseResult> {
 
     try {
         // Uses the local Next.js API route (no VPS dependency)
-        const baseUrl = getBaseUrl();
+        const baseUrl = getNextJsBaseUrl();
         const response = await fetch(`${baseUrl}/api/parse-shipment`, {
             method: 'POST',
             headers: {

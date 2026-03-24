@@ -10,7 +10,7 @@ import (
 
 func TestLoggerInit(t *testing.T) {
 	// Use real config
-	cfg, _ := config.LoadFromEnv()
+	cfg := config.Load()
 	logPath := "./test_logs"
 	if cfg != nil && cfg.LogPath != "" {
 		logPath = cfg.LogPath
