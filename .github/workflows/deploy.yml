@@ -64,15 +64,12 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
           script: |
-            # Set the image name dynamically in docker-compose (must be lowercase)
-            OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-            sed -i "s/\${GITHUB_REPOSITORY_OWNER}/$OWNER/g" /opt/webtracker/docker-compose.yml
+            # Pull and Restart (image tag is now stable in docker-compose.yml)
+            cd /opt/webtracker
             
             # Login to GHCR on the EC2
             echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            # Pull and Restart
-            cd /opt/webtracker
             docker compose pull
             docker compose up -d
 
