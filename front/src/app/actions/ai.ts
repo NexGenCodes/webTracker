@@ -2,6 +2,7 @@
 
 import { ParseResult } from '@/types/shipment';
 import { logger } from '@/lib/logger';
+import { getBaseUrl } from '@/lib/utils';
 
 export async function parseShipmentAI(text: string): Promise<ParseResult> {
     if (!text || text.trim().length < 5) {
@@ -10,7 +11,8 @@ export async function parseShipmentAI(text: string): Promise<ParseResult> {
 
     try {
         // Uses the local Next.js API route (no VPS dependency)
-        const response = await fetch(`/api/parse-shipment`, {
+        const baseUrl = getBaseUrl();
+        const response = await fetch(`${baseUrl}/api/parse-shipment`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
