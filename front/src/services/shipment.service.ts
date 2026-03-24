@@ -1,5 +1,6 @@
 import { CreateShipmentDto, ShipmentData, ServiceResult, ShipmentStatus, DashboardStats } from '@/types/shipment';
 import { logger } from '@/lib/logger';
+import { getBaseUrl } from '@/lib/utils';
 
 
 const REQUEST_TIMEOUT = 10000;
@@ -28,8 +29,12 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
+    // Ensure absolute URL for server-side fetches
+    const baseUrl = getBaseUrl();
+    const fullUrl = url.startsWith('/') ? `${baseUrl}${url}` : url;
+
     try {
-        const response = await fetch(url, {
+        const response = await fetch(fullUrl, {
             ...options,
             signal: controller.signal
         });
