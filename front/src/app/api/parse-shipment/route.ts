@@ -6,10 +6,10 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
 export async function POST(request: Request) {
   try {
-    const { message } = await request.json();
+    const { text } = await request.json();
 
-    if (!message) {
-      return NextResponse.json({ error: 'Message is required' }, { status: 400 });
+    if (!text) {
+      return NextResponse.json({ error: 'Text is required' }, { status: 400 });
     }
 
     const model = genAI.getGenerativeModel({
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     logger.info('API Parsing request received');
     const result = await model.generateContent([
       { text: systemPrompt },
-      { text: `Extract shipping data from this message:\n\n${message}` }
+      { text: `Extract shipping data from this message:\n\n${text}` }
     ]);
 
     const responseText = result.response.text();

@@ -114,6 +114,19 @@ export async function getAdminDashboardData() {
 }
 
 /**
+ * Admin: Paginated & Filtered Shipments
+ */
+export async function getAdminShipments(params: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    status?: string;
+}) {
+    if (!(await isAdmin())) return { success: false, error: 'Unauthorized' };
+    return await ShipmentService.getShipments(params);
+}
+
+/**
  * Cron: Maintenance tasks
  */
 export async function pruneOldShipments() {

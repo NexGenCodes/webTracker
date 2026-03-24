@@ -66,6 +66,18 @@ export interface DashboardStats {
     canceled: number;
 }
 
+export interface Pagination {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+}
+
+export interface PaginatedResult<T> {
+    data: T[];
+    pagination: Pagination;
+}
+
 export interface Dictionary {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [key: string]: any;
