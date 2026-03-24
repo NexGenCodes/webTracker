@@ -13,6 +13,8 @@ import (
 	"webtracker-bot/internal/usecase"
 
 	"github.com/go-playground/validator/v10"
+	"errors"
+	"strings"
 )
 
 type ShipmentHandler struct {
@@ -51,7 +53,7 @@ func (h *ShipmentHandler) Track(c *fiber.Ctx) error {
 	id := c.Params("id")
 	shipment, err := h.shipmentUC.Track(c.Context(), id)
 	if err != nil {
-		if err.Error() == "failed to get shipment: no rows in result set" {
+		if errors.Is(err, sql.ErrNoRows) || strings.Contains(err.Error(), "no rows in result set") {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Shipment not found"})
 		}
 		log.Printf("Track error: %v", err)
