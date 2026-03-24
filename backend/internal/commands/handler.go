@@ -401,6 +401,9 @@ func (h *EditHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUseca
 
 	// 3. Apply Updates
 	var updatedFields []string
+	departureUpdated := false
+	var newDeparture time.Time
+	arrivalExplicitlyUpdated := false
 
 	for field, value := range updates {
 		// Strict Policy: Weight is fixed
@@ -437,14 +440,33 @@ func (h *EditHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUseca
 					}
 				}
 			}
-		}
 
-		// Check if this change triggers a schedule recalculation
-		// (Handled by DB trigger fn_shipment_auto_schedule)
+			if field == "scheduled_transit_time" {
+				departureUpdated = true
+				newDeparture, _ = time.Parse("2006-01-02 15:04:05", value)
+			}
+			if field == "expected_delivery_time" {
+				arrivalExplicitlyUpdated = true
+			}
+		}
 
 		err := shipUC.UpdateField(ctx, trackingID, field, value)
 		if err == nil {
 			updatedFields = append(updatedFields, strings.ToUpper(strings.ReplaceAll(field, "_", " ")))
+		}
+	}
+
+	// 4. Automatic Arrival Sync (Algorithm B)
+	if departureUpdated && !arrivalExplicitlyUpdated {
+		dbShip, _ := shipUC.Track(ctx, trackingID)
+		if dbShip != nil {
+			// Recalculate Arrival based on new Departure
+			arrival, outForDelivery := shipUC.Service.CalculateArrival(newDeparture, dbShip.Origin.String, dbShip.Destination.String)
+			
+			_ = shipUC.UpdateField(ctx, trackingID, "expected_delivery_time", arrival.Format("2006-01-02 15:04:05"))
+			_ = shipUC.UpdateField(ctx, trackingID, "outfordelivery_time", outForDelivery.Format("2006-01-02 15:04:05"))
+			
+			updatedFields = append(updatedFields, "EXPECTED DELIVERY TIME (AUTO-SYNC)", "OUTFORDELIVERY TIME (AUTO-SYNC)")
 		}
 	}
 

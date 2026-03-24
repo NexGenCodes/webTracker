@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
@@ -24,6 +25,15 @@ func main() {
 		log.Fatal("DATABASE_URL / DIRECT_URL is not set in backend/.env")
 	}
 
+	// Ensure search_path=public for Neon compatibility (mirrors config.Load behavior)
+	if !strings.Contains(dbURL, "search_path=public") {
+		if strings.Contains(dbURL, "?") {
+			dbURL += "&search_path=public"
+		} else {
+			dbURL += "?search_path=public"
+		}
+	}
+
 	pool, err := pgxpool.New(context.Background(), dbURL)
 	if err != nil {
 		log.Fatalf("Failed to connect to db: %v", err)
@@ -36,7 +46,12 @@ func main() {
 		"DROP TABLE IF EXISTS GroupAuthority CASCADE;",
 		"DROP TABLE IF EXISTS UserPreference CASCADE;",
 		"DROP TABLE IF EXISTS SystemConfig CASCADE;",
-		"DROP TABLE IF EXISTS country_timezones CASCADE;", // from old schema
+		"DROP TABLE IF EXISTS whatsmeow_device CASCADE;",
+		"DROP TABLE IF EXISTS whatsmeow_identity CASCADE;",
+		"DROP TABLE IF EXISTS whatsmeow_sessions CASCADE;",
+		"DROP TABLE IF EXISTS whatsmeow_prekeys CASCADE;",
+		"DROP TABLE IF EXISTS whatsmeow_sender_keys CASCADE;",
+		"DROP TABLE IF EXISTS sessions CASCADE;",
 	}
 	for _, q := range drops {
 		_, err = pool.Exec(context.Background(), q)

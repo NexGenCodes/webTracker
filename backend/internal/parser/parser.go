@@ -32,12 +32,18 @@ type anchor struct {
 
 type labelMap struct {
 	field    string
+	pattern  *regexp.Regexp
+	priority int
+}
+
+type uncompiledLabelMap struct {
+	field    string
 	pattern  string
 	priority int
 }
 
-func GetLabelMappings() []labelMap {
-	return []labelMap{
+func GetLabelMappings() []uncompiledLabelMap {
+	return []uncompiledLabelMap{
 		{"ReceiverName", `(?i)\b(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|consignment|consignee|destinatario|destinatário|dirección|empfänger|namen?)[s']*\b[\s\-:]+name\b[\s\-:]*`, 2},
 		{"ReceiverName", `(?i)\b(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|consignment|consignee|destinatario|destinatário|empfänger)\b[\s\-:]*`, 2},
 		{"ReceiverName", `(?i)\bname\b[\s\-:]*`, 1},
@@ -61,23 +67,42 @@ func GetLabelMappings() []labelMap {
 	}
 }
 
+var (
+	footerRe     *regexp.Regexp
+	senderLabels *regexp.Regexp
+	compiledMaps []labelMap
+)
+
+func init() {
+	footerRe = regexp.MustCompile(`(?im)^[\s\-_*]{3,}$|(?i)\b(?:thank\s*you|regards|best|sincerely|kind\s*regards|thanks|saludos)\b`)
+	senderLabels = regexp.MustCompile(`(?i)\b(?:sender|sendr|origin|from|shippr|shipper|sent by)\b`)
+
+	// Pre-compile all regex maps to save CPU on the VPS
+	rawMaps := GetLabelMappings()
+	for _, raw := range rawMaps {
+		compiledMaps = append(compiledMaps, labelMap{
+			field:    raw.field,
+			pattern:  regexp.MustCompile(raw.pattern),
+			priority: raw.priority,
+		})
+	}
+}
+
 // ParseRegex extracts manifest data using a segmented heuristic approach.
 func ParseRegex(text string) models.Manifest {
 	m := models.Manifest{}
-	footerRe := regexp.MustCompile(`(?im)^[\s\-_*]{3,}$|(?i)\b(?:thank\s*you|regards|best|sincerely|kind\s*regards|thanks|saludos)\b`)
+	
 	if loc := footerRe.FindStringIndex(text); loc != nil {
 		text = text[:loc[0]]
 	}
 	text = CleanText(text)
 
 	senderStartIdx := -1
-	senderLabels := regexp.MustCompile(`(?i)\b(?:sender|sendr|origin|from|shippr|shipper|sent by)\b`)
 	if match := senderLabels.FindStringIndex(text); match != nil {
 		senderStartIdx = match[0]
 	}
 
-	labelMaps := GetLabelMappings()
-	anchors := findAnchors(text, labelMaps)
+	anchors := findAnchors(text, compiledMaps)
 	anchors = sortAndFilterAnchors(anchors)
 	results := chunkAndAssign(text, anchors)
 
@@ -153,8 +178,7 @@ func ParseRegex(text string) models.Manifest {
 
 func ParseEditPairs(text string) map[string]string {
 	text = CleanText(text)
-	maps := GetLabelMappings()
-	anchors := findAnchors(text, maps)
+	anchors := findAnchors(text, compiledMaps)
 	anchors = sortAndFilterAnchors(anchors)
 	results := chunkAndAssign(text, anchors)
 
@@ -185,8 +209,7 @@ func ParseEditPairs(text string) map[string]string {
 func findAnchors(text string, mappings []labelMap) []anchor {
 	var anchors []anchor
 	for _, lm := range mappings {
-		re := regexp.MustCompile(lm.pattern)
-		matches := re.FindAllStringIndex(text, -1)
+		matches := lm.pattern.FindAllStringIndex(text, -1)
 		for _, match := range matches {
 			anchorStart := match[0]
 			anchorText := text[match[0]:match[1]]

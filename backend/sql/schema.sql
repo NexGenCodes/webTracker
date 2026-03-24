@@ -1,22 +1,22 @@
-CREATE TABLE SystemConfig (
+CREATE TABLE IF NOT EXISTS SystemConfig (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE UserPreference (
+CREATE TABLE IF NOT EXISTS UserPreference (
     jid TEXT PRIMARY KEY,
     language TEXT NOT NULL DEFAULT 'en',
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE GroupAuthority (
+CREATE TABLE IF NOT EXISTS GroupAuthority (
     jid TEXT PRIMARY KEY,
     is_authorized BOOLEAN NOT NULL DEFAULT FALSE,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE Shipment (
+CREATE TABLE IF NOT EXISTS Shipment (
     tracking_id TEXT PRIMARY KEY,
     user_jid TEXT NOT NULL,
     status TEXT DEFAULT 'pending',
@@ -44,3 +44,4 @@ CREATE TABLE Shipment (
     
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
