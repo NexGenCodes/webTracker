@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"webtracker-bot/internal/adapter/db"
+	"webtracker-bot/internal/shipment" // Added
 )
 
 func toNullString(s string) sql.NullString {
@@ -19,13 +20,15 @@ func toNullTime(t time.Time) sql.NullTime {
 
 // ShipmentUsecase exposes business logic operations for shipments.
 type ShipmentUsecase struct {
-	repo db.Querier
+	repo    db.Querier
+	Service shipment.Service // Added
 }
 
-// NewShipmentUsecase creates a new usecase layer with the given repository.
-func NewShipmentUsecase(repo db.Querier) *ShipmentUsecase {
+// NewShipmentUsecase creates a new usecase layer with the given repository and service.
+func NewShipmentUsecase(repo db.Querier, service shipment.Service) *ShipmentUsecase {
 	return &ShipmentUsecase{
-		repo: repo,
+		repo:    repo,
+		Service: service,
 	}
 }
 

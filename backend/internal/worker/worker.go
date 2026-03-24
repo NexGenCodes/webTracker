@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"webtracker-bot/internal/adapter/db"
 	"webtracker-bot/internal/commands"
@@ -165,24 +166,32 @@ func (w *Worker) process(job models.Job) {
 		return
 	}
 
-	// Insert into DB — trigger generates tracking_id and schedule
+	// Generate schedule dates using the new Smart Anchor Algorithm (A & B)
+	now := time.Now().UTC()
+	departure := w.ShipmentService.CalculateDeparture(now, w.Cfg.AdminTimezone)
+	// Enforce "Afghanistan" as sender as per user request
+	arrival, outForDelivery := w.ShipmentService.CalculateArrival(departure, newShipment.Origin, newShipment.Destination)
+
 	dbShip := &db.Shipment{
-		UserJid:           newShipment.UserJID,
-		Status:            sql.NullString{String: newShipment.Status, Valid: true},
-		SenderTimezone:    sql.NullString{String: newShipment.SenderTimezone, Valid: true},
-		RecipientTimezone: sql.NullString{String: newShipment.RecipientTimezone, Valid: true},
-		SenderName:        sql.NullString{String: newShipment.SenderName, Valid: true},
-		SenderPhone:       sql.NullString{String: newShipment.SenderPhone, Valid: true},
-		Origin:            sql.NullString{String: newShipment.Origin, Valid: true},
-		RecipientName:     sql.NullString{String: newShipment.RecipientName, Valid: true},
-		RecipientPhone:    sql.NullString{String: newShipment.RecipientPhone, Valid: true},
-		RecipientEmail:    sql.NullString{String: newShipment.RecipientEmail, Valid: true},
-		RecipientID:       sql.NullString{String: newShipment.RecipientID, Valid: true},
-		RecipientAddress:  sql.NullString{String: newShipment.RecipientAddress, Valid: true},
-		Destination:       sql.NullString{String: newShipment.Destination, Valid: true},
-		CargoType:         sql.NullString{String: newShipment.CargoType, Valid: true},
-		Weight:            sql.NullFloat64{Float64: newShipment.Weight, Valid: true},
-		Cost:              sql.NullFloat64{Float64: newShipment.Cost, Valid: true},
+		UserJid:              newShipment.UserJID,
+		Status:               sql.NullString{String: newShipment.Status, Valid: true},
+		ScheduledTransitTime: sql.NullTime{Time: departure, Valid: true},
+		OutfordeliveryTime:   sql.NullTime{Time: outForDelivery, Valid: true},
+		ExpectedDeliveryTime: sql.NullTime{Time: arrival, Valid: true},
+		SenderTimezone:       sql.NullString{String: newShipment.SenderTimezone, Valid: true},
+		RecipientTimezone:    sql.NullString{String: newShipment.RecipientTimezone, Valid: true},
+		SenderName:           sql.NullString{String: newShipment.SenderName, Valid: true},
+		SenderPhone:          sql.NullString{String: newShipment.SenderPhone, Valid: true},
+		Origin:               sql.NullString{String: newShipment.Origin, Valid: true},
+		RecipientName:        sql.NullString{String: newShipment.RecipientName, Valid: true},
+		RecipientPhone:       sql.NullString{String: newShipment.RecipientPhone, Valid: true},
+		RecipientEmail:       sql.NullString{String: newShipment.RecipientEmail, Valid: true},
+		RecipientID:          sql.NullString{String: newShipment.RecipientID, Valid: true},
+		RecipientAddress:     sql.NullString{String: newShipment.RecipientAddress, Valid: true},
+		Destination:          sql.NullString{String: newShipment.Destination, Valid: true},
+		CargoType:            sql.NullString{String: newShipment.CargoType, Valid: true},
+		Weight:               sql.NullFloat64{Float64: newShipment.Weight, Valid: true},
+		Cost:                 sql.NullFloat64{Float64: newShipment.Cost, Valid: true},
 	}
 
 	trackingID, err := w.ShipmentUC.CreateWithPrefix(context.Background(), dbShip, w.Cfg.CompanyPrefix)

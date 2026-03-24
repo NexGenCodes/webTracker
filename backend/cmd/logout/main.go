@@ -40,21 +40,17 @@ func main() {
 	}
 	defer pool.Close()
 
-	// Read schema
-	schemaPath := "sql/schema.sql"
-	schema, err := os.ReadFile(schemaPath)
-	if err != nil {
-		schema, err = os.ReadFile("../../sql/schema.sql")
+	// Clear WhatsApp sessions to force a new pairing code
+	drops := []string{
+		"DELETE FROM whatsmeow_device;",
+		"DELETE FROM whatsmeow_sessions;",
+	}
+	for _, q := range drops {
+		_, err = pool.Exec(context.Background(), q)
 		if err != nil {
-			log.Fatalf("Failed to read schema.sql: %v", err)
+			log.Printf("Warning clearing session table: %v", err)
 		}
 	}
 
-	// Apply schema (CREATE IF NOT EXISTS — safe for existing tables)
-	_, err = pool.Exec(context.Background(), string(schema))
-	if err != nil {
-		log.Fatalf("Migration failed: %v", err)
-	}
-
-	fmt.Println("Migration applied successfully (schema.sql).")
+	fmt.Println("Logout complete. Restart the backend to generate a new pairing code.")
 }

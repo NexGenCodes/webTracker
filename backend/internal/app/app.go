@@ -63,7 +63,8 @@ func (a *App) Init() error {
 	a.SqlPool = sqlPool
 
 	querier := db.New(a.SqlPool)
-	a.ShipmentUC = usecase.NewShipmentUsecase(querier)
+	shipService := &shipment.Calculator{}
+	a.ShipmentUC = usecase.NewShipmentUsecase(querier, shipService)
 	a.ConfigUC = usecase.NewConfigUsecase(querier)
 
 	wa, err := whatsapp.NewClient(a.Cfg.DatabaseURL)
@@ -92,9 +93,9 @@ func (a *App) Run() error {
 	sender := whatsapp.NewSender(a.WA)
 	cmdDispatcher := commands.NewDispatcher(a.ShipmentUC, a.ConfigUC, sender, a.Cfg.CompanyPrefix, a.Cfg.CompanyName, a.Cfg.PairingPhone, a.Cfg.AdminTimezone)
 
-	shipmentService := &shipment.Calculator{}
+	shipmentService := a.ShipmentUC.Service
 
-	for i := 1; i <= 5; i++ {
+	for i := 1; i <= 10; i++ {
 		a.WG.Add(1)
 		w := &worker.Worker{
 			ID:              i,
@@ -113,6 +114,7 @@ func (a *App) Run() error {
 		}
 		go w.Start()
 	}
+
 
 	a.Cron = scheduler.NewManager(a.Cfg, a.ShipmentUC, a.ConfigUC, a.WA)
 	a.Cron.Start()
