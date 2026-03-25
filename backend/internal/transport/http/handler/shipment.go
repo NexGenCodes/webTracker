@@ -114,26 +114,20 @@ func (h *ShipmentHandler) Create(c *fiber.Ctx) error {
 	trackingID := fmt.Sprintf("AWB-%09d", randVal.Int64())
 	now := time.Now()
 
-	// Default transit timings logic for dummy data
-	transitHours := req.TransitTime
-	if transitHours <= 0 {
-		transitHours = 72 // Default 3 days
-	}
-
-	scheduledTransit := now.Add(2 * time.Hour)
-	outForDelivery := now.Add(time.Duration(transitHours-12) * time.Hour)
-	expectedDelivery := now.Add(time.Duration(transitHours) * time.Hour)
+	// Use industrial status calculation algorithms instead of hardcoded defaults
+	departure := h.shipmentUC.Service.CalculateDeparture(now, "Africa/Lagos") // Default origin TZ
+	arrival, outForDelivery := h.shipmentUC.Service.CalculateArrival(departure, req.SenderCountry, req.ReceiverCountry)
 
 	params := db.CreateShipmentParams{
 		TrackingID:           trackingID,
-		UserJid:              "admin_portal", // Dummy JID for admin created
+		UserJid:              "admin_portal", 
 		Status:               toNullString("pending"),
 		CreatedAt:            toNullTime(now),
-		ScheduledTransitTime: toNullTime(scheduledTransit),
+		ScheduledTransitTime: toNullTime(departure),
 		OutfordeliveryTime:   toNullTime(outForDelivery),
-		ExpectedDeliveryTime: toNullTime(expectedDelivery),
-		SenderTimezone:       toNullString("UTC"),
-		RecipientTimezone:    toNullString("UTC"),
+		ExpectedDeliveryTime: toNullTime(arrival),
+		SenderTimezone:       toNullString("Africa/Lagos"),
+		RecipientTimezone:    toNullString(h.shipmentUC.Service.ResolveTimezone(req.ReceiverCountry)),
 		SenderName:           toNullString(req.SenderName),
 		SenderPhone:          toNullString(req.SenderPhone),
 		Origin:               toNullString(req.SenderCountry),

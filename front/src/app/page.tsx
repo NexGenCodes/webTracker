@@ -11,10 +11,13 @@ import { useI18n } from '@/components/I18nContext';
 import { Footer } from '@/components/Footer';
 import { FeatureCard } from '@/components/FeatureCard';
 import { toast } from 'react-hot-toast';
+import { VisualTracker } from '@/components/VisualTracker';
 
+interface HomeProps {
+  initialId?: string | null;
+}
 
-
-function HomeContent() {
+function HomeContent({ initialId: propId }: HomeProps) {
   const { dict } = useI18n();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
@@ -27,7 +30,7 @@ function HomeContent() {
     setMounted(true);
   }, []);
 
-  const initialId = searchParams.get('id');
+  const initialId = propId || searchParams.get('id');
 
   const handleSearch = useCallback(async (trackingNumber: string) => {
     const id = trackingNumber.trim().toUpperCase();
@@ -162,8 +165,8 @@ function HomeContent() {
                   </div>
                   <div className="flex-1">
                     <span className="text-accent text-[10px] md:text-[11px] font-black uppercase tracking-[0.3em] md:tracking-[0.4em] mb-1 md:mb-2 block">{dict.shipment.status}</span>
-                    <h2 className="text-xl md:text-4xl lg:text-6xl font-black text-text-main tracking-tighter uppercase leading-none">
-                      {shippingData.isArchived ? dict.shipment.finalized : shippingData.status.replace(/_/g, ' ')}
+                    <h2 className="text-xl md:text-3xl lg:text-4xl font-black text-text-main tracking-tighter uppercase leading-none">
+                      {shippingData.isArchived ? dict.shipment.finalized : (shippingData.status === 'DELIVERED' ? dict.admin?.delivered : shippingData.status.replace(/_/g, ' '))}
                     </h2>
                   </div>
                 </div>
@@ -188,8 +191,8 @@ function HomeContent() {
                     <AlertCircle className="w-16 h-16 text-error" />
                   </div>
                   <div className="max-w-2xl">
-                    <h3 className="text-3xl md:text-7xl font-black mb-6 tracking-tighter uppercase text-error">Shipment Canceled</h3>
-                    <p className="text-text-muted text-xl leading-relaxed font-bold opacity-80">
+                    <h3 className="text-2xl md:text-5xl font-black mb-6 tracking-tighter uppercase text-error">Shipment Canceled</h3>
+                    <p className="text-text-muted text-lg md:text-xl leading-relaxed font-bold opacity-80">
                       This shipment has been canceled by the administrator. Please contact support for more details.
                     </p>
                   </div>
@@ -200,127 +203,130 @@ function HomeContent() {
                     <CheckCircle className="w-16 h-16 text-success" />
                   </div>
                   <div className="max-w-2xl">
-                    <h3 className="text-3xl md:text-7xl font-black mb-6 tracking-tighter uppercase text-gradient">{dict.shipment.deliveredTitle}</h3>
-                    <p className="text-text-muted text-xl leading-relaxed font-bold opacity-80">
+                    <h3 className="text-2xl md:text-5xl font-black mb-6 tracking-tighter uppercase text-gradient">{dict.shipment.deliveredTitle}</h3>
+                    <p className="text-text-muted text-lg md:text-xl leading-relaxed font-bold opacity-80">
                       {dict.shipment.deliveredDesc}
                     </p>
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-20 relative z-10">
-                  {/* Left Column: Details */}
-                  <div className="space-y-16 order-2 lg:order-1">
-                    <div className="space-y-8">
+                <>
+                  <VisualTracker shipment={shippingData} dict={dict} />
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-20 relative z-10">
+                    {/* Left Column: Details */}
+                    <div className="space-y-16 order-2 lg:order-1">
+                      <div className="space-y-8">
+                        <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-accent flex items-center gap-4">
+                          {dict.shipment.details}
+                          <span className="h-px flex-1 bg-accent/20" />
+                        </h4>
+                        <div className="space-y-2">
+                          {[
+                            { label: dict.shipment.receiver, value: shippingData.receiverName },
+                            { label: dict.shipment.destination, value: shippingData.receiverCountry, italic: true },
+                            { label: dict.shipment.from, value: shippingData.senderName },
+                            { label: dict.shipment.origin, value: shippingData.senderCountry },
+                            { label: "Weight", value: `${shippingData.weight || 15} KGS` },
+                          ].map((detail, idx) => (
+                            <div key={idx} className="flex justify-between items-center py-6 border-b border-border last:border-0 group/item">
+                              <span className="text-text-muted font-black text-xs uppercase tracking-widest">{detail.label}</span>
+                              <span className={cn("font-black text-text-main text-lg md:text-xl group-hover:text-accent transition-colors", detail.italic && "italic")}>{detail.value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right Column: Timeline */}
+                    <div className="space-y-8 order-1 lg:order-2">
                       <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-accent flex items-center gap-4">
-                        {dict.shipment.details}
+                        {dict.shipment.latestUpdates}
                         <span className="h-px flex-1 bg-accent/20" />
                       </h4>
-                      <div className="space-y-2">
-                        {[
-                          { label: dict.shipment.receiver, value: shippingData.receiverName },
-                          { label: dict.shipment.destination, value: shippingData.receiverCountry, italic: true },
-                          { label: dict.shipment.from, value: shippingData.senderName },
-                          { label: dict.shipment.origin, value: shippingData.senderCountry },
-                          { label: "Weight", value: `${shippingData.weight || 15} KGS` },
-                        ].map((detail, idx) => (
-                          <div key={idx} className="flex justify-between items-center py-6 border-b border-border last:border-0 group/item">
-                            <span className="text-text-muted font-black text-xs uppercase tracking-widest">{detail.label}</span>
-                            <span className={cn("font-black text-text-main text-lg md:text-xl group-hover:text-accent transition-colors", detail.italic && "italic")}>{detail.value}</span>
-                          </div>
-                        ))}
+                      <div className="space-y-8 md:space-y-12 relative border-l-2 border-border ml-2 md:ml-3 pl-6 md:pl-10 py-2">
+                        {shippingData.timeline ? (
+                          shippingData.timeline.map((event, i) => (
+                            <div key={i} className="relative group/event">
+                              <div className={cn(
+                                "absolute left-[-35px] md:left-[-47px] top-1.5 w-5 h-5 md:w-6 md:h-6 rounded-full border-3 md:border-4 border-bg transition-all duration-500",
+                                event.is_completed ? "bg-accent scale-125 shadow-lg shadow-accent/40" : "bg-border opacity-50"
+                              )} />
+                              <div className="flex flex-wrap items-center gap-2 md:gap-4 mb-2">
+                                <p className={cn("font-black text-base md:text-lg lg:text-xl tracking-tight leading-none uppercase", event.is_completed ? "text-text-main" : "text-text-muted opacity-50")}>
+                                  {event.status}
+                                </p>
+                                {event.is_completed && !shippingData.timeline?.[i + 1]?.is_completed && (
+                                  <span className="bg-accent text-white text-[8px] md:text-[9px] font-black uppercase px-2 md:px-2.5 py-0.5 md:py-1 rounded-lg animate-pulse tracking-wider md:tracking-widest">{dict.shipment.live}</span>
+                                )}
+                              </div>
+                              <span className="text-[9px] md:text-[10px] font-black text-accent/60 uppercase tracking-[0.15em] md:tracking-[0.2em] block mb-3">
+                                {new Date(event.timestamp).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+                              </span>
+                              <div className="mt-3 md:mt-4 flex items-start gap-2 md:gap-3 text-xs md:text-sm font-bold text-text-muted bg-surface-muted/50 p-3 md:p-4 rounded-xl md:rounded-2xl border border-border group-hover/event:border-accent/20 transition-colors">
+                                <Package size={14} className="text-accent/60 mt-0.5 md:w-4 md:h-4 shrink-0" />
+                                <span className="leading-relaxed">{event.description}</span>
+                              </div>
+                              {/* Additional Timeline Detail Layers */}
+                              {event.is_completed && (
+                                <>
+                                  {/* First Detail Layer: Location & Date */}
+                                  <div className="mt-2 md:mt-3 flex items-center gap-2 text-[10px] md:text-xs font-bold text-text-muted/70 bg-surface/30 px-3 py-2 rounded-lg border border-border/50">
+                                    <MapPin size={12} className="text-accent/50 shrink-0 md:w-3.5 md:h-3.5" />
+                                    <span className="truncate">
+                                      {event.status.toLowerCase().includes('delivered') || event.status.toLowerCase().includes('arrival')
+                                        ? `${shippingData.receiverCountry} (Destination)`
+                                        : event.status.toLowerCase().includes('depart') || event.status.toLowerCase().includes('origin')
+                                          ? `${shippingData.senderCountry} (Origin)`
+                                          : 'In Transit'}
+                                    </span>
+                                    <span className="text-accent/30">•</span>
+                                    <span className="text-[9px] md:text-[10px] opacity-60 truncate">{new Date(event.timestamp).toLocaleDateString()}</span>
+                                  </div>
+
+                                  {/* Second Detail Layer: Carrier & Handler Info */}
+                                  <div className="mt-2 flex items-center justify-between gap-2 text-[9px] md:text-[10px] text-text-muted/60 bg-surface/20 px-3 py-1.5 rounded-md border border-border/30">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-accent/60"></span>
+                                      <span className="font-bold uppercase tracking-wider">Air Freight</span>
+                                    </div>
+                                    <span className="opacity-50">|</span>
+                                    <div className="flex items-center gap-1">
+                                      <span className="font-mono">ID: #{shippingData.trackingNumber.slice(-6)}</span>
+                                    </div>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          ))
+                        ) : (
+                          shippingData.events?.map((event, i: number) => (
+                            <div key={event.id} className="relative group/event">
+                              <div className={cn(
+                                "absolute left-[-47px] top-1.5 w-6 h-6 rounded-full border-4 border-bg transition-all duration-500",
+                                i === 0 ? "bg-accent scale-125 shadow-lg shadow-accent/40" : "bg-border group-hover/event:bg-accent/40"
+                              )} />
+                              <div className="flex items-center gap-4 mb-2">
+                                <p className={cn("font-black text-lg md:text-xl tracking-tight leading-none uppercase", i === 0 ? "text-text-main" : "text-text-muted")}>
+                                  {event.status.replace(/_/g, ' ')}
+                                </p>
+                                {i === 0 && (
+                                  <span className="bg-accent text-white text-[9px] font-black uppercase px-2.5 py-1 rounded-lg animate-pulse tracking-widest">{dict.shipment.live}</span>
+                                )}
+                              </div>
+                              <span className="text-[10px] font-black text-accent/60 uppercase tracking-[0.2em]">
+                                {new Date(event.timestamp).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+                              </span>
+                              <div className="mt-4 flex items-center gap-3 text-sm font-bold text-text-muted bg-surface-muted/50 p-4 rounded-2xl border border-border group-hover/event:border-accent/20 transition-colors">
+                                <MapPin size={16} className="text-accent/60" />
+                                {event.location}
+                              </div>
+                            </div>
+                          ))
+                        )}
                       </div>
                     </div>
                   </div>
-
-                  {/* Right Column: Timeline */}
-                  <div className="space-y-8 order-1 lg:order-2">
-                    <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-accent flex items-center gap-4">
-                      {dict.shipment.latestUpdates}
-                      <span className="h-px flex-1 bg-accent/20" />
-                    </h4>
-                    <div className="space-y-8 md:space-y-12 relative border-l-2 border-border ml-2 md:ml-3 pl-6 md:pl-10 py-2">
-                      {shippingData.timeline ? (
-                        shippingData.timeline.map((event, i) => (
-                          <div key={i} className="relative group/event">
-                            <div className={cn(
-                              "absolute left-[-35px] md:left-[-47px] top-1.5 w-5 h-5 md:w-6 md:h-6 rounded-full border-3 md:border-4 border-bg transition-all duration-500",
-                              event.is_completed ? "bg-accent scale-125 shadow-lg shadow-accent/40" : "bg-border opacity-50"
-                            )} />
-                            <div className="flex flex-wrap items-center gap-2 md:gap-4 mb-2">
-                              <p className={cn("font-black text-base md:text-lg lg:text-xl tracking-tight leading-none uppercase", event.is_completed ? "text-text-main" : "text-text-muted opacity-50")}>
-                                {event.status}
-                              </p>
-                              {event.is_completed && !shippingData.timeline?.[i + 1]?.is_completed && (
-                                <span className="bg-accent text-white text-[8px] md:text-[9px] font-black uppercase px-2 md:px-2.5 py-0.5 md:py-1 rounded-lg animate-pulse tracking-wider md:tracking-widest">{dict.shipment.live}</span>
-                              )}
-                            </div>
-                            <span className="text-[9px] md:text-[10px] font-black text-accent/60 uppercase tracking-[0.15em] md:tracking-[0.2em] block mb-3">
-                              {new Date(event.timestamp).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
-                            </span>
-                            <div className="mt-3 md:mt-4 flex items-start gap-2 md:gap-3 text-xs md:text-sm font-bold text-text-muted bg-surface-muted/50 p-3 md:p-4 rounded-xl md:rounded-2xl border border-border group-hover/event:border-accent/20 transition-colors">
-                              <Package size={14} className="text-accent/60 mt-0.5 md:w-4 md:h-4 shrink-0" />
-                              <span className="leading-relaxed">{event.description}</span>
-                            </div>
-                            {/* Additional Timeline Detail Layers */}
-                            {event.is_completed && (
-                              <>
-                                {/* First Detail Layer: Location & Date */}
-                                <div className="mt-2 md:mt-3 flex items-center gap-2 text-[10px] md:text-xs font-bold text-text-muted/70 bg-surface/30 px-3 py-2 rounded-lg border border-border/50">
-                                  <MapPin size={12} className="text-accent/50 shrink-0 md:w-3.5 md:h-3.5" />
-                                  <span className="truncate">
-                                    {event.status.toLowerCase().includes('delivered') || event.status.toLowerCase().includes('arrival')
-                                      ? `${shippingData.receiverCountry} (Destination)`
-                                      : event.status.toLowerCase().includes('depart') || event.status.toLowerCase().includes('origin')
-                                        ? `${shippingData.senderCountry} (Origin)`
-                                        : 'In Transit'}
-                                  </span>
-                                  <span className="text-accent/30">•</span>
-                                  <span className="text-[9px] md:text-[10px] opacity-60 truncate">{new Date(event.timestamp).toLocaleDateString()}</span>
-                                </div>
-
-                                {/* Second Detail Layer: Carrier & Handler Info */}
-                                <div className="mt-2 flex items-center justify-between gap-2 text-[9px] md:text-[10px] text-text-muted/60 bg-surface/20 px-3 py-1.5 rounded-md border border-border/30">
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-accent/60"></span>
-                                    <span className="font-bold uppercase tracking-wider">Air Freight</span>
-                                  </div>
-                                  <span className="opacity-50">|</span>
-                                  <div className="flex items-center gap-1">
-                                    <span className="font-mono">ID: #{shippingData.trackingNumber.slice(-6)}</span>
-                                  </div>
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        ))
-                      ) : (
-                        shippingData.events?.map((event, i: number) => (
-                          <div key={event.id} className="relative group/event">
-                            <div className={cn(
-                              "absolute left-[-47px] top-1.5 w-6 h-6 rounded-full border-4 border-bg transition-all duration-500",
-                              i === 0 ? "bg-accent scale-125 shadow-lg shadow-accent/40" : "bg-border group-hover/event:bg-accent/40"
-                            )} />
-                            <div className="flex items-center gap-4 mb-2">
-                              <p className={cn("font-black text-lg md:text-xl tracking-tight leading-none uppercase", i === 0 ? "text-text-main" : "text-text-muted")}>
-                                {event.status.replace(/_/g, ' ')}
-                              </p>
-                              {i === 0 && (
-                                <span className="bg-accent text-white text-[9px] font-black uppercase px-2.5 py-1 rounded-lg animate-pulse tracking-widest">{dict.shipment.live}</span>
-                              )}
-                            </div>
-                            <span className="text-[10px] font-black text-accent/60 uppercase tracking-[0.2em]">
-                              {new Date(event.timestamp).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
-                            </span>
-                            <div className="mt-4 flex items-center gap-3 text-sm font-bold text-text-muted bg-surface-muted/50 p-4 rounded-2xl border border-border group-hover/event:border-accent/20 transition-colors">
-                              <MapPin size={16} className="text-accent/60" />
-                              {event.location}
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </div>
+                </>
               )}
             </div>
           </div>
@@ -352,14 +358,14 @@ function HomeContent() {
   );
 }
 
-export default function Home() {
+export default function Home({ initialId }: HomeProps) {
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent"></div>
       </div>
     }>
-      <HomeContent />
+      <HomeContent initialId={initialId} />
     </Suspense>
   );
 }

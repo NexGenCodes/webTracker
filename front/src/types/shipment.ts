@@ -32,6 +32,9 @@ export interface ShipmentData {
     originCoords?: [number, number];
     destinationCoords?: [number, number];
     createdAt?: string | Date;
+    scheduledTransitTime?: string | Date;
+    outfordeliveryTime?: string | Date;
+    expectedDeliveryTime?: string | Date;
     estimatedDelivery?: string | Date;
     timeline?: TimelineEvent[];
     // Added for WhatsApp context in services

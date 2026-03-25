@@ -30,15 +30,10 @@ export async function generateMetadata(
   };
 }
 
-export default function TrackPage({ params: _params }: Props) {
+export default function TrackPage({ params }: Props) {
   // We reuse the Home component logic which already supports ?id= query param
   // but we can also just render a specialized view if needed.
-  // For now, redirecting to home with the ID is easiest for code reuse,
-  // but the generateMetadata here will still work for the link preview.
+  // We pass the ID to Home to ensure it loads directly.
 
-  // Actually, let's just render the Home component and pass the ID via a redirected prop or similar,
-  // but Home uses useSearchParams.
-  // A cleaner way is to refactor Home to accept an initialId prop.
-
-  return <Home />;
+  return <Home initialId={params.id} />;
 }
