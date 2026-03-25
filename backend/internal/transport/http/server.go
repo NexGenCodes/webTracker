@@ -9,6 +9,7 @@ import (
 
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/transport/http/handler"
+	"webtracker-bot/internal/transport/http/middleware"
 	"webtracker-bot/internal/usecase"
 	"database/sql"
 	"time"
@@ -47,9 +48,14 @@ func NewServer(cfg *config.Config, shipmentUC *usecase.ShipmentUsecase, db *sql.
 
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: allowOrigins,
-		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
+		AllowHeaders: "Origin, Content-Type, Accept, Authorization, X-API-Key",
 		AllowMethods: "GET, POST, PATCH, DELETE, OPTIONS",
 	}))
+
+	// API Key Authentication (skip if no key is configured, e.g. local dev)
+	if cfg.APISecretKey != "" {
+		app.Use(middleware.APIKeyAuth(cfg.APISecretKey))
+	}
 
 	return &Server{
 		app:        app,

@@ -51,7 +51,7 @@ function HomeContent() {
           icon: '🔍',
         });
       }
-    } catch (err) {
+    } catch (_) {
       const errorMsg = dict.common.error;
       setError(errorMsg);
       toast.error(errorMsg, {
@@ -60,7 +60,7 @@ function HomeContent() {
     } finally {
       setLoading(false);
     }
-  }, [dict, dict.admin, dict.common]);
+  }, [dict]);
 
   // Deep linking effect
   useEffect(() => {
@@ -77,7 +77,7 @@ function HomeContent() {
       icon: '📋',
     });
     setTimeout(() => setCopied(false), 2000);
-  }, [dict.admin]);
+  }, []);
 
   if (!mounted) return null;
 

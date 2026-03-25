@@ -7,7 +7,6 @@ import { Package, Lock, User, AlertCircle, ChevronLeft, Loader2 } from 'lucide-r
 import Link from 'next/link';
 import { APP_NAME } from '@/lib/constants';
 import { useI18n } from '@/components/I18nContext';
-import { ThemeToggle } from '@/components/ThemeToggle';
 import { Header } from '@/components/Header';
 
 function SignInForm() {
@@ -40,7 +39,7 @@ function SignInForm() {
             } else {
                 router.push(callbackUrl);
             }
-        } catch (err) {
+        } catch {
             setError("Something went wrong. Please try again later.");
         } finally {
             setLoading(false);

@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-
-function getBackendUrl() {
-    return process.env.BACKEND_URL || 'http://localhost:5000';
-}
+import { getBackendUrl, backendHeaders } from '@/lib/backend';
 
 export async function PATCH(
     request: NextRequest,
@@ -20,7 +17,7 @@ export async function PATCH(
         const input = await request.json();
         const res = await fetch(`${getBackendUrl()}/api/admin/shipments/${id}`, {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
+            headers: backendHeaders(),
             body: JSON.stringify(input)
         });
         
@@ -45,7 +42,8 @@ export async function DELETE(
     try {
         const endpoint = id === 'cleanup' ? 'cleanup' : id;
         const res = await fetch(`${getBackendUrl()}/api/admin/shipments/${endpoint}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: backendHeaders(),
         });
         
         if (!res.ok) throw new Error('Backend error');

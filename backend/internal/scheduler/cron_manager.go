@@ -4,14 +4,13 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/logger"
-	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/notif"
-	"webtracker-bot/internal/shipment"
 	"webtracker-bot/internal/usecase"
 
 	"github.com/robfig/cron/v3"
@@ -128,7 +127,7 @@ func (m *CronManager) handlePulse() {
 
 		for _, t := range transitions {
 			logger.Info().Str("id", t.TrackingID).Str("new_status", t.NewStatus).Msg("Pulse: Shipment status updated via DB trigger")
-			m.sendStatusAlert(t.UserJID, t.TrackingID, t.NewStatus, t.RecipientEmail)
+			notif.SendStatusAlert(ctx, m.wa, m.cfg, t.UserJID, t.TrackingID, t.NewStatus, t.RecipientEmail)
 		}
 	}
 }
@@ -152,9 +151,11 @@ func (m *CronManager) handleDailyStats() {
 		"_System is running smoothly._", created, delivered)
 
 	// Send to Admin/Owner Phone (loaded from config)
-	// We use the first admin phone or bot owner if configured
 	target := m.cfg.BotOwnerPhone
-	// If owner phone format is needing parse:
+	// Ensure proper JID format for WhatsApp
+	if target != "" && !strings.Contains(target, "@") {
+		target = target + "@s.whatsapp.net"
+	}
 	jid, err := types.ParseJID(target)
 	if err == nil {
 		txt := msg
@@ -185,41 +186,4 @@ func (m *CronManager) handleHealthCheck() {
 	if err != nil {
 		logger.Error().Err(err).Msg("Health check ping failed")
 	}
-}
-
-// DELETED DUPLICATE HANDLERS
-
-func (m *CronManager) sendStatusAlert(jidStr, tracking, status, email string) {
-	if jidStr == "" {
-		return
-	}
-	jid, err := types.ParseJID(jidStr)
-	if err != nil {
-		logger.Warn().Str("jid", jidStr).Msg("Failed to parse JID for status alert")
-		return
-	}
-
-	var msg string
-	switch status {
-	case shipment.StatusIntransit:
-		msg = fmt.Sprintf("🚚 *Status Update*\nID: *%s*\n\nYour package is now *IN TRANSIT*. Our team is handling it at the origin center.", tracking)
-	case shipment.StatusOutForDelivery:
-		msg = fmt.Sprintf("📦 *Status Update*\nID: *%s*\n\nYour package is *OUT FOR DELIVERY*! Our local agent will contact you shortly.", tracking)
-	case shipment.StatusDelivered:
-		msg = fmt.Sprintf("✅ *Package Delivered*\nID: *%s*\n\nYour shipment has arrived at the destination. Thank you for choosing our service!", tracking)
-		// Fire professional delivery email
-		if email != "" {
-			notif.SendDeliveryEmail(m.cfg, &shipment.Shipment{
-				TrackingID:     tracking,
-				RecipientEmail: email,
-				// We need RecipientName but only have Email here? 
-				// The email template will use it. Let's assume we can fetch it or just use a generic 'Customer'
-			})
-		}
-	default:
-		return
-	}
-
-	content := &waProto.Message{Conversation: models.StrPtr(msg)}
-	_, _ = m.wa.SendMessage(context.Background(), jid, content)
 }

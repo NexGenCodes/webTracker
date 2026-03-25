@@ -43,6 +43,51 @@ func (q *Queries) CountDeliveredSince(ctx context.Context, updatedAt sql.NullTim
 	return count, err
 }
 
+const countShipments = `-- name: CountShipments :one
+SELECT COUNT(*) FROM Shipment
+`
+
+func (q *Queries) CountShipments(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countShipments)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countShipmentsByStatus = `-- name: CountShipmentsByStatus :one
+SELECT
+    COUNT(*) AS total,
+    COUNT(*) FILTER (WHERE status = 'pending') AS pending,
+    COUNT(*) FILTER (WHERE status = 'intransit') AS intransit,
+    COUNT(*) FILTER (WHERE status = 'outfordelivery') AS outfordelivery,
+    COUNT(*) FILTER (WHERE status = 'delivered') AS delivered,
+    COUNT(*) FILTER (WHERE status = 'canceled') AS canceled
+FROM Shipment
+`
+
+type CountShipmentsByStatusRow struct {
+	Total          int64 `json:"total"`
+	Pending        int64 `json:"pending"`
+	Intransit      int64 `json:"intransit"`
+	Outfordelivery int64 `json:"outfordelivery"`
+	Delivered      int64 `json:"delivered"`
+	Canceled       int64 `json:"canceled"`
+}
+
+func (q *Queries) CountShipmentsByStatus(ctx context.Context) (CountShipmentsByStatusRow, error) {
+	row := q.db.QueryRowContext(ctx, countShipmentsByStatus)
+	var i CountShipmentsByStatusRow
+	err := row.Scan(
+		&i.Total,
+		&i.Pending,
+		&i.Intransit,
+		&i.Outfordelivery,
+		&i.Delivered,
+		&i.Canceled,
+	)
+	return i, err
+}
+
 const createShipment = `-- name: CreateShipment :exec
 INSERT INTO Shipment (
     tracking_id, user_jid, status, created_at, scheduled_transit_time, outfordelivery_time, expected_delivery_time, sender_timezone, recipient_timezone, sender_name, sender_phone, origin, recipient_name, recipient_phone, recipient_email, recipient_id, recipient_address, destination, cargo_type, weight, cost, updated_at

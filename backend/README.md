@@ -42,14 +42,17 @@ $env:GOOS="linux"; $env:GOARCH="amd64"
 go build -ldflags="-s -w" -o bot-linux ./cmd/bot
 ```
 
-### Run with PM2
+### Run with Systemd
 
-1. Upload `bot-linux`, `.env`, and `ecosystem.config.js` to your VPS.
-2. Run with PM2:
+1. Upload `bot-linux` to `/opt/webtracker/bot` and `.env` to `/opt/webtracker/.env`.
+2. Configure your cloud provider's firewall (AWS/DigitalOcean) to allow TCP port `8080`.
+3. Set a strong `API_SECRET_KEY` in your `.env` to secure the REST API.
+4. Run the service using systemd:
 
    ```bash
-   pm2 start ecosystem.config.js
-   pm2 save
+   sudo systemctl daemon-reload
+   sudo systemctl restart webtracker-bot
+   sudo systemctl status webtracker-bot
    ```
 
 ## 🧪 Local Dev (Windows)

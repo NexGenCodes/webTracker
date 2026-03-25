@@ -97,6 +97,19 @@ SELECT COUNT(*) FROM Shipment WHERE status = 'delivered' AND updated_at >= $1;
 -- name: ListAllShipments :many
 SELECT * FROM Shipment ORDER BY created_at DESC;
 
+-- name: CountShipments :one
+SELECT COUNT(*) FROM Shipment;
+
+-- name: CountShipmentsByStatus :one
+SELECT
+    COUNT(*) AS total,
+    COUNT(*) FILTER (WHERE status = 'pending') AS pending,
+    COUNT(*) FILTER (WHERE status = 'intransit') AS intransit,
+    COUNT(*) FILTER (WHERE status = 'outfordelivery') AS outfordelivery,
+    COUNT(*) FILTER (WHERE status = 'delivered') AS delivered,
+    COUNT(*) FILTER (WHERE status = 'canceled') AS canceled
+FROM Shipment;
+
 -- name: UpdateShipmentFieldSenderName :exec
 UPDATE Shipment SET sender_name = $2, updated_at = CURRENT_TIMESTAMP WHERE tracking_id = $1;
 

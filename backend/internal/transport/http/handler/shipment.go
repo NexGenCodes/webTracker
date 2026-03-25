@@ -1,9 +1,12 @@
 package handler
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"fmt"
 	"log"
 	"math"
+	"math/big"
 	"strconv"
 	"time"
 
@@ -11,6 +14,7 @@ import (
 
 	"webtracker-bot/internal/adapter/db"
 	"webtracker-bot/internal/usecase"
+	"webtracker-bot/internal/utils/dbutil"
 
 	"github.com/go-playground/validator/v10"
 	"errors"
@@ -80,15 +84,15 @@ type CreateRequest struct {
 }
 
 func toNullTime(t time.Time) sql.NullTime {
-	return sql.NullTime{Time: t, Valid: !t.IsZero()}
+	return dbutil.ToNullTime(t)
 }
 
 func toNullString(s string) sql.NullString {
-	return sql.NullString{String: s, Valid: s != ""}
+	return dbutil.ToNullString(s)
 }
 
 func toNullFloat64(f float64) sql.NullFloat64 {
-	return sql.NullFloat64{Float64: f, Valid: true}
+	return dbutil.ToNullFloat64(f)
 }
 
 // Create - POST /api/admin/shipments
@@ -105,8 +109,9 @@ func (h *ShipmentHandler) Create(c *fiber.Ctx) error {
 		})
 	}
 
-	// Generate a tracking ID (simple example, you can implement your own logic)
-	trackingID := "AWB-" + strconv.FormatInt(time.Now().UnixNano(), 10)[:9]
+	// Generate a collision-resistant tracking ID
+	randVal, _ := rand.Int(rand.Reader, big.NewInt(999999999))
+	trackingID := fmt.Sprintf("AWB-%09d", randVal.Int64())
 	now := time.Now()
 
 	// Default transit timings logic for dummy data
@@ -167,14 +172,20 @@ func (h *ShipmentHandler) List(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	// We'd typically calculate total pages here, but returning dummy pagination for now
+	// Get real total count for pagination
+	total, countErr := h.shipmentUC.CountAll(c.Context())
+	if countErr != nil {
+		log.Printf("Count error: %v", countErr)
+		total = 0
+	}
+
 	return c.JSON(fiber.Map{
 		"data": shipments,
 		"pagination": fiber.Map{
 			"page":  page,
 			"limit": limit,
-			"total": 100, // Placeholder
-			"pages": int(math.Ceil(float64(100) / float64(limit))),
+			"total": total,
+			"pages": int(math.Ceil(float64(total) / float64(limit))),
 		},
 	})
 }
@@ -229,13 +240,17 @@ func (h *ShipmentHandler) DeleteDelivered(c *fiber.Ctx) error {
 
 // GetStats - GET /api/admin/stats
 func (h *ShipmentHandler) GetStats(c *fiber.Ctx) error {
-	// Stub implementation to satisfy the frontend requirement
+	stats, err := h.shipmentUC.CountByStatus(c.Context())
+	if err != nil {
+		log.Printf("Stats error: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch stats"})
+	}
 	return c.JSON(fiber.Map{
-		"total": "100",
-		"intransit": "40",
-		"outfordelivery": "20",
-		"delivered": "30",
-		"pending": "5",
-		"canceled": "5",
+		"total":          stats.Total,
+		"intransit":      stats.Intransit,
+		"outfordelivery": stats.Outfordelivery,
+		"delivered":      stats.Delivered,
+		"pending":        stats.Pending,
+		"canceled":       stats.Canceled,
 	})
 }

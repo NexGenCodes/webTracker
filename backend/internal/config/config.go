@@ -44,6 +44,9 @@ type Config struct {
 	
 	// REST API Port
 	APIPort string `env:"API_PORT" env-default:"5000"`
+
+	// API Security
+	APISecretKey string `env:"API_SECRET_KEY"`
 }
 
 func GetWorkDir() string {

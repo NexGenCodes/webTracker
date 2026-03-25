@@ -8,7 +8,7 @@ import (
 	"webtracker-bot/internal/shipment"
 )
 
-func TestSendShipmentEmail(t *testing.T) {
+func TestSendDeliveryEmail(t *testing.T) {
 	cfg := &config.Config{
 		SMTPHost:     "", // Empty SMTPHost should cause the function to return early without error
 		SMTPUsername: "",
@@ -26,5 +26,5 @@ func TestSendShipmentEmail(t *testing.T) {
 	}
 
 	// This should not panic or error if SMTP is not configured
-	notif.SendShipmentEmail(cfg, s, "http://localhost:3000/track/TEST-12345")
+	notif.SendDeliveryEmail(cfg, s)
 }

@@ -7,15 +7,16 @@ import (
 	"time"
 
 	"webtracker-bot/internal/adapter/db"
-	"webtracker-bot/internal/shipment" // Added
+	"webtracker-bot/internal/shipment"
+	"webtracker-bot/internal/utils/dbutil"
 )
 
 func toNullString(s string) sql.NullString {
-	return sql.NullString{String: s, Valid: s != ""}
+	return dbutil.ToNullString(s)
 }
 
 func toNullTime(t time.Time) sql.NullTime {
-	return sql.NullTime{Time: t, Valid: !t.IsZero()}
+	return dbutil.ToNullTime(t)
 }
 
 // ShipmentUsecase exposes business logic operations for shipments.
@@ -307,4 +308,18 @@ func (u *ShipmentUsecase) ProcessTransitions(ctx context.Context, now time.Time)
 	}
 
 	return results, nil
+}
+
+// CountAll returns the total number of shipments.
+func (u *ShipmentUsecase) CountAll(ctx context.Context) (int64, error) {
+	return u.repo.CountShipments(ctx)
+}
+
+// CountByStatus returns shipment counts broken down by status.
+func (u *ShipmentUsecase) CountByStatus(ctx context.Context) (*db.CountShipmentsByStatusRow, error) {
+	stats, err := u.repo.CountShipmentsByStatus(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count by status: %w", err)
+	}
+	return &stats, nil
 }

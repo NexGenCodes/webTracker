@@ -10,7 +10,7 @@ export const authOptions: NextAuthOptions = {
                 username: { label: "Username", type: "text", placeholder: "admin" },
                 password: { label: "Password", type: "password" }
             },
-            async authorize(credentials, req) {
+            async authorize(credentials, _req) {
                 const adminUser = process.env.ADMIN_USERNAME;
                 const adminPass = process.env.ADMIN_PASSWORD;
                 const adminEmail = process.env.ADMIN_EMAIL;
@@ -27,7 +27,7 @@ export const authOptions: NextAuthOptions = {
         })
     ],
     callbacks: {
-        async session({ session, token }) {
+        async session({ session, token: _token }) {
             return session
         },
     },
