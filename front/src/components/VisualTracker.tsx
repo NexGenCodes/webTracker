@@ -74,6 +74,12 @@ export const VisualTracker: React.FC<VisualTrackerProps> = ({ shipment, dict }) 
   };
 
   const journeyProgress = calculateJourneyProgress();
+
+  // Plane position: map 0-100% progress → 10%-90% left, with S-curve vertical offset
+  const planeLeft = 10 + (journeyProgress / 100) * 80;
+  const normalizedP = journeyProgress / 100;
+  // sin(2π·p) gives: 0 → +1 → 0 → -1 → 0, matching the S-curve up-center-down-center
+  const planeTop = 50 - 15 * Math.sin(normalizedP * Math.PI * 2);
   
   const { scrollY } = useScroll();
   const scale = useTransform(scrollY, [0, 100], [1, 0.98]);
@@ -84,11 +90,11 @@ export const VisualTracker: React.FC<VisualTrackerProps> = ({ shipment, dict }) 
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="sticky top-0 z-40 w-full pt-4 pb-12 mb-8 bg-surface/90 backdrop-blur-3xl border-b border-border/50 shadow-sm transition-all duration-300 overflow-hidden"
+      className="sticky top-0 z-40 w-full pt-4 pb-16 mb-8 bg-surface/90 backdrop-blur-3xl border-b border-border/50 shadow-sm transition-all duration-300 overflow-x-clip"
     >
-      <div className="max-w-4xl mx-auto px-6 overflow-visible">
+      <div className="max-w-4xl mx-auto px-4 md:px-6 overflow-visible">
         {/* Card Header with Live Badge */}
-        <div className="flex justify-between items-end mb-8 px-1">
+        <div className="flex flex-wrap justify-between items-end mb-8 gap-2 px-1">
            <div className="flex flex-col">
               <span className="text-[10px] font-black uppercase tracking-[0.3em] text-accent/60 mb-1">
                 Live Shipment Radar
@@ -113,25 +119,25 @@ export const VisualTracker: React.FC<VisualTrackerProps> = ({ shipment, dict }) 
            )}
         </div>
 
-        <div className="relative h-24 md:h-32 flex items-center justify-between px-10 md:px-16">
+        <div className="relative h-20 sm:h-24 md:h-32 flex items-center justify-between px-2 sm:px-6 md:px-16">
           
           {/* SVG Path - Centered within [0, 100] viewbox, spanning 20% to 80% to avoid edge clipping */}
           <svg className="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none" viewBox="0 0 100 100">
             <path
               id="journey-path"
-              d="M 20 50 Q 35 20, 50 50 T 80 50"
+              d="M 10 50 Q 30 20, 50 50 T 90 50"
               fill="none"
               stroke="currentColor"
-              strokeWidth="1.2"
+              strokeWidth="2"
               strokeDasharray="4 6"
-              className="text-border/40"
+              className="text-text-muted/50"
             />
             
             <motion.path
-              d="M 20 50 Q 35 20, 50 50 T 80 50"
+              d="M 10 50 Q 30 20, 50 50 T 90 50"
               fill="none"
               stroke="var(--color-accent)"
-              strokeWidth="2.5"
+              strokeWidth="3"
               initial={{ pathLength: 0 }}
               animate={{ pathLength: journeyProgress / 100 }}
               transition={{ duration: 1.5, ease: "easeInOut" }}
@@ -143,12 +149,13 @@ export const VisualTracker: React.FC<VisualTrackerProps> = ({ shipment, dict }) 
           {status !== 'CANCELED' && status !== 'PENDING' && status !== 'DELIVERED' && (
             <motion.div
               className="absolute z-30 text-accent"
-              animate={{ offsetDistance: `${journeyProgress}%` }}
-              transition={{ duration: 1.5, ease: "easeInOut" }}
-              style={{ 
-                offsetPath: "path('M 20 50 Q 35 20, 50 50 T 80 50')",
-                transform: 'translate(-50%, -50%)' 
+              animate={{ 
+                left: `${planeLeft}%`,
+                top: `${planeTop}%`,
+                x: '-50%',
+                y: '-50%',
               }}
+              transition={{ duration: 1.5, ease: "easeInOut" }}
             >
               <motion.div
                 animate={{ 
@@ -157,7 +164,7 @@ export const VisualTracker: React.FC<VisualTrackerProps> = ({ shipment, dict }) 
                 }}
                 transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
               >
-                <Plane size={26} className="fill-accent drop-shadow-2xl" />
+                <Plane className="w-5 h-5 sm:w-6 sm:h-6 fill-accent drop-shadow-2xl" />
               </motion.div>
             </motion.div>
           )}
@@ -167,13 +174,13 @@ export const VisualTracker: React.FC<VisualTrackerProps> = ({ shipment, dict }) 
             const Icon = step.icon;
             const isCompleted = index <= progressIndex && status !== 'CANCELED';
             const isActive = index === progressIndex && status !== 'CANCELED';
-            const positions = [20, 50, 80]; 
+            const positions = [10, 50, 90]; 
             
             return (
               <motion.div 
                 key={step.key} 
                 variants={itemVariants}
-                className="relative z-20 flex flex-col items-center"
+                className="absolute z-20 flex flex-col items-center"
                 style={{ left: `${positions[index]}%`, transform: 'translateX(-50%)' }}
               >
                 <motion.div
@@ -185,23 +192,23 @@ export const VisualTracker: React.FC<VisualTrackerProps> = ({ shipment, dict }) 
                     boxShadow: isActive ? '0 0 35px rgba(var(--color-accent-rgb), 0.45)' : 'none',
                   }}
                   className={cn(
-                    "w-12 h-12 md:w-16 md:h-16 rounded-[20px] flex items-center justify-center border-2 transition-all duration-600",
+                    "w-9 h-9 sm:w-12 sm:h-12 md:w-16 md:h-16 rounded-2xl sm:rounded-[20px] flex items-center justify-center border-2 transition-all duration-600",
                     isCompleted ? "text-white" : "text-text-muted border-dashed bg-surface-muted"
                   )}
                 >
                   {isCompleted && !isActive ? (
-                    <CheckCircle2 size={24} className="md:w-7 md:h-7" />
+                    <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 md:w-7 md:h-7" />
                   ) : (
-                    <Icon size={24} className={cn("md:w-7 md:h-7", isActive && "animate-pulse")} />
+                    <Icon className={cn("w-4 h-4 sm:w-5 sm:h-5 md:w-7 md:h-7", isActive && "animate-pulse")} />
                   )}
                 </motion.div>
 
-                <div className="absolute top-[100%] mt-3 flex flex-col items-center">
+                <div className="absolute top-[100%] mt-2 sm:mt-3 flex flex-col items-center w-16 sm:w-20 md:w-24">
                    <p className={cn(
-                    "text-[9px] md:text-[11px] font-black uppercase tracking-widest whitespace-nowrap text-center",
+                    "text-[7px] sm:text-[9px] md:text-[11px] font-black uppercase tracking-wider sm:tracking-widest text-center leading-tight",
                     isCompleted ? "text-text-main" : "text-text-muted opacity-30"
                   )}>
-                    {dict.admin?.[step.labelKey] || step.key}
+                    {dict.admin?.[step.labelKey] || step.key.replace(/_/g, ' ')}
                   </p>
                 </div>
               </motion.div>
