@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { TrackingSearch } from '@/components/TrackingSearch';
 import { getTracking } from './actions/shipment';
 import { CheckCircle, MapPin, AlertCircle, ShieldCheck, Globe, Zap, Copy, Check, Package } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { ShipmentData } from '@/types/shipment';
 import { useI18n } from '@/components/I18nContext';
@@ -246,11 +247,26 @@ function HomeContent({ initialId: propId }: HomeProps) {
                       <div className="space-y-8 md:space-y-12 relative border-l-2 border-border ml-2 md:ml-3 pl-6 md:pl-10 py-2">
                         {shippingData.timeline ? (
                           shippingData.timeline.map((event, i) => (
-                            <div key={i} className="relative group/event">
+                            <motion.div
+                              key={i}
+                              className="relative group/event"
+                              initial={{ opacity: 0, x: -20 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ duration: 0.5, delay: i * 0.15, ease: "easeOut" }}
+                            >
                               <div className={cn(
-                                "absolute left-[-35px] md:left-[-47px] top-1.5 w-5 h-5 md:w-6 md:h-6 rounded-full border-3 md:border-4 border-bg transition-all duration-500",
+                                "absolute left-[-33px] md:left-[-51px] top-1.5 w-5 h-5 md:w-6 md:h-6 rounded-full border-3 md:border-4 border-bg transition-all duration-500",
                                 event.is_completed ? "bg-accent scale-125 shadow-lg shadow-accent/40" : "bg-border opacity-50"
-                              )} />
+                              )}>
+                                {/* Pulse ring on the latest active event */}
+                                {event.is_completed && !shippingData.timeline?.[i + 1]?.is_completed && (
+                                  <motion.div
+                                    className="absolute inset-0 rounded-full border-2 border-accent"
+                                    animate={{ scale: [1, 2], opacity: [0.6, 0] }}
+                                    transition={{ duration: 1.5, repeat: Infinity, ease: "easeOut" }}
+                                  />
+                                )}
+                              </div>
                               <div className="flex flex-wrap items-center gap-2 md:gap-4 mb-2">
                                 <p className={cn("font-black text-base md:text-lg lg:text-xl tracking-tight leading-none uppercase", event.is_completed ? "text-text-main" : "text-text-muted opacity-50")}>
                                   {event.status}
@@ -259,18 +275,33 @@ function HomeContent({ initialId: propId }: HomeProps) {
                                   <span className="bg-accent text-white text-[8px] md:text-[9px] font-black uppercase px-2 md:px-2.5 py-0.5 md:py-1 rounded-lg animate-pulse tracking-wider md:tracking-widest">{dict.shipment.live}</span>
                                 )}
                               </div>
-                              <span className="text-[9px] md:text-[10px] font-black text-accent/60 uppercase tracking-[0.15em] md:tracking-[0.2em] block mb-3">
+                              <motion.span
+                                className="text-[9px] md:text-[10px] font-black text-accent/60 uppercase tracking-[0.15em] md:tracking-[0.2em] block mb-3"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                transition={{ duration: 0.4, delay: i * 0.15 + 0.2 }}
+                              >
                                 {new Date(event.timestamp).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
-                              </span>
-                              <div className="mt-3 md:mt-4 flex items-start gap-2 md:gap-3 text-xs md:text-sm font-bold text-text-muted bg-surface-muted/50 p-3 md:p-4 rounded-xl md:rounded-2xl border border-border group-hover/event:border-accent/20 transition-colors">
+                              </motion.span>
+                              <motion.div
+                                className="mt-3 md:mt-4 flex items-start gap-2 md:gap-3 text-xs md:text-sm font-bold text-text-muted bg-surface-muted/50 p-3 md:p-4 rounded-xl md:rounded-2xl border border-border group-hover/event:border-accent/20 transition-colors"
+                                initial={{ opacity: 0, y: 8 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.4, delay: i * 0.15 + 0.3 }}
+                              >
                                 <Package size={14} className="text-accent/60 mt-0.5 md:w-4 md:h-4 shrink-0" />
                                 <span className="leading-relaxed">{event.description}</span>
-                              </div>
+                              </motion.div>
                               {/* Additional Timeline Detail Layers */}
                               {event.is_completed && (
                                 <>
                                   {/* First Detail Layer: Location & Date */}
-                                  <div className="mt-2 md:mt-3 flex items-center gap-2 text-[10px] md:text-xs font-bold text-text-muted/70 bg-surface/30 px-3 py-2 rounded-lg border border-border/50">
+                                  <motion.div
+                                    className="mt-2 md:mt-3 flex items-center gap-2 text-[10px] md:text-xs font-bold text-text-muted/70 bg-surface/30 px-3 py-2 rounded-lg border border-border/50"
+                                    initial={{ opacity: 0, y: 6 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.4, delay: i * 0.15 + 0.4 }}
+                                  >
                                     <MapPin size={12} className="text-accent/50 shrink-0 md:w-3.5 md:h-3.5" />
                                     <span className="truncate">
                                       {event.status.toLowerCase().includes('delivered') || event.status.toLowerCase().includes('arrival')
@@ -281,10 +312,15 @@ function HomeContent({ initialId: propId }: HomeProps) {
                                     </span>
                                     <span className="text-accent/30">•</span>
                                     <span className="text-[9px] md:text-[10px] opacity-60 truncate">{new Date(event.timestamp).toLocaleDateString()}</span>
-                                  </div>
+                                  </motion.div>
 
                                   {/* Second Detail Layer: Carrier & Handler Info */}
-                                  <div className="mt-2 flex items-center justify-between gap-2 text-[9px] md:text-[10px] text-text-muted/60 bg-surface/20 px-3 py-1.5 rounded-md border border-border/30">
+                                  <motion.div
+                                    className="mt-2 flex items-center justify-between gap-2 text-[9px] md:text-[10px] text-text-muted/60 bg-surface/20 px-3 py-1.5 rounded-md border border-border/30"
+                                    initial={{ opacity: 0, y: 4 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.4, delay: i * 0.15 + 0.5 }}
+                                  >
                                     <div className="flex items-center gap-1.5">
                                       <span className="w-1.5 h-1.5 rounded-full bg-accent/60"></span>
                                       <span className="font-bold uppercase tracking-wider">Air Freight</span>
@@ -293,16 +329,16 @@ function HomeContent({ initialId: propId }: HomeProps) {
                                     <div className="flex items-center gap-1">
                                       <span className="font-mono">ID: #{shippingData.trackingNumber.slice(-6)}</span>
                                     </div>
-                                  </div>
+                                  </motion.div>
                                 </>
                               )}
-                            </div>
+                            </motion.div>
                           ))
                         ) : (
                           shippingData.events?.map((event, i: number) => (
                             <div key={event.id} className="relative group/event">
                               <div className={cn(
-                                "absolute left-[-47px] top-1.5 w-6 h-6 rounded-full border-4 border-bg transition-all duration-500",
+                                "absolute left-[-33px] md:left-[-51px] top-1.5 w-6 h-6 rounded-full border-4 border-bg transition-all duration-500",
                                 i === 0 ? "bg-accent scale-125 shadow-lg shadow-accent/40" : "bg-border group-hover/event:bg-accent/40"
                               )} />
                               <div className="flex items-center gap-4 mb-2">
