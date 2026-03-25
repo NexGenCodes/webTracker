@@ -1,4 +1,4 @@
-name: Deploy to AWS EC2 (Docker)
+name: Deploy to AWS EC2 (Bare Metal)
 
 on:
   push:
@@ -6,75 +6,62 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-push:
+  build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3.3.0
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          go-version: '1.21'
+          cache-dependency-path: backend/go.sum
 
-      - name: Set lower case owner name
+      - name: Build Binary
         run: |
-          echo "OWNER_LC=${OWNER,,}" >>${GITHUB_ENV}
-        env:
-          OWNER: '${{ github.repository_owner }}'
+          cd backend
+          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o bot ./cmd/bot/main.go
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v6.15.0
-        with:
-          context: ./backend
-          push: true
-          tags: |
-            ghcr.io/${{ env.OWNER_LC }}/webtracker-bot:latest
-            ghcr.io/${{ env.OWNER_LC }}/webtracker-bot:${{ github.sha }}
-
-  deploy:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code (to get docker-compose.yml)
-        uses: actions/checkout@v4
-
-      - name: Prepare Directory and Upload Compose
-        uses: appleboy/scp-action@master
+      - name: Upload Binary and Service File
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
-          source: "backend/docker-compose.yml"
-          target: "/opt/webtracker"
+          source: "backend/bot,backend/webtracker-bot.service"
+          target: "/tmp"
           strip_components: 1
 
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
       - name: Deploy to EC2 via SSH
-        uses: appleboy/ssh-action@master
+        uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
           script: |
-            # Pull and Restart (image tag is now stable in docker-compose.yml)
-            cd /opt/webtracker
+            # 1. Setup Directories
+            sudo mkdir -p /opt/webtracker/assets
             
-            # Login to GHCR on the EC2
-            echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-            docker compose pull
-            docker compose up -d
-
-            # Cleanup old images
-            docker image prune -af --filter "until=24h"
+            # 2. Stop existing service if running
+            sudo systemctl stop webtracker-bot || true
             
-            # Show status
-            docker ps | grep webtracker-bot
+            # 3. Move Files
+            sudo mv /tmp/bot /opt/webtracker/bot
+            sudo chmod +x /opt/webtracker/bot
+            sudo mv /tmp/webtracker-bot.service /etc/systemd/system/webtracker-bot.service
+            
+            # 4. Systemd Reload & Start
+            sudo systemctl daemon-reload
+            sudo systemctl enable webtracker-bot
+            sudo systemctl restart webtracker-bot
+            
+            # 5. Verify
+            systemctl is-active webtracker-bot
+            tail -n 20 /opt/webtracker/logs/bot.log
