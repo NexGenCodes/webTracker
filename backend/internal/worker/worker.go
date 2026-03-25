@@ -62,6 +62,10 @@ func (w *Worker) process(job models.Job) {
 	langStr, _ := w.ConfigUC.GetUserLanguage(context.Background(), job.SenderJID.String())
 	lang := i18n.Language(langStr)
 
+	// A. Initial Feedback (Typing)
+	w.Sender.SetTyping(job.ChatJID, true)
+	defer w.Sender.SetTyping(job.ChatJID, false)
+
 	// 2. Check for Commands
 	ctx := context.WithValue(context.Background(), "jid", job.SenderJID.String())
 	ctx = context.WithValue(ctx, "sender_phone", job.SenderPhone)

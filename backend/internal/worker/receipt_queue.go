@@ -34,6 +34,8 @@ const (
 func InitReceiptProcessor(companyName string, shipUC *usecase.ShipmentUsecase, sender *whatsapp.Sender) {
 	once.Do(func() {
 		receiptQueue = make(chan ReceiptJob, QueueSize)
+		// Increased concurrency to 2 for better performance with Swap support
+		go startWorker(companyName, shipUC, sender)
 		go startWorker(companyName, shipUC, sender)
 	})
 }

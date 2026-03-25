@@ -127,3 +127,15 @@ func (s *Sender) SendImage(chat, sender types.JID, imageBytes []byte, caption st
 	logger.Info().Str("resp_id", resp.ID).Int("size_kb", len(imageBytes)/1024).Msg("Image sent successfully")
 	return nil
 }
+
+// SetTyping sends a typing indicator to a chat
+func (s *Sender) SetTyping(chat types.JID, typing bool) {
+	presence := types.ChatPresencePaused
+	if typing {
+		presence = types.ChatPresenceComposing
+	}
+	err := s.Client.SendChatPresence(context.Background(), chat, presence, types.ChatPresenceMediaText)
+	if err != nil {
+		logger.Error().Err(err).Str("chat", chat.String()).Msg("Failed to set chat presence")
+	}
+}
