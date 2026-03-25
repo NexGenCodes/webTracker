@@ -11,7 +11,6 @@ interface ShipmentFormProps {
     onSubmit: (data: CreateShipmentDto) => Promise<void>;
     loading: boolean;
     error: string | null;
-    marketingDict: Dictionary;
 }
 
 export const ShipmentForm: React.FC<ShipmentFormProps> = ({ onSubmit, loading, error }) => {
@@ -56,7 +55,7 @@ export const ShipmentForm: React.FC<ShipmentFormProps> = ({ onSubmit, loading, e
             // Populate form with AI results
             Object.entries(result.data).forEach(([key, value]) => {
                 if (value) {
-                    setValue(key as keyof ShipmentFormData, value as any);
+                    setValue(key as keyof ShipmentFormData, value as ShipmentFormData[keyof ShipmentFormData]);
                 }
             });
             

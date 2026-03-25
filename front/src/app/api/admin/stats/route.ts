@@ -1,12 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { getBackendUrl, backendHeaders } from '@/lib/backend';
 
-function getBackendUrl() {
-    return process.env.BACKEND_URL || 'http://localhost:5000';
-}
-
-export async function GET(request: NextRequest) {
+export async function GET() {
     const session = await getServerSession(authOptions);
     if (!session) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -14,13 +11,13 @@ export async function GET(request: NextRequest) {
 
     try {
         const res = await fetch(`${getBackendUrl()}/api/admin/stats`, {
-            headers: { 'Content-Type': 'application/json' },
+            headers: backendHeaders(),
             cache: 'no-store'
         });
-        
+
         if (!res.ok) throw new Error('Backend error');
         const data = await res.json();
-        
+
         return NextResponse.json(data);
     } catch (error) {
         console.error('Stats Proxy Error:', error);

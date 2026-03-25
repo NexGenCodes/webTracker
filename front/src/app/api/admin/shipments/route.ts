@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-
-function getBackendUrl() {
-    return process.env.BACKEND_URL || 'http://localhost:5000';
-}
+import { getBackendUrl, backendHeaders } from '@/lib/backend';
 
 export async function GET(request: NextRequest) {
     const session = await getServerSession(authOptions);
@@ -15,7 +12,7 @@ export async function GET(request: NextRequest) {
     try {
         const { search } = new URL(request.url);
         const res = await fetch(`${getBackendUrl()}/api/admin/shipments${search}`, {
-            headers: { 'Content-Type': 'application/json' },
+            headers: backendHeaders(),
             cache: 'no-store'
         });
         
@@ -39,7 +36,7 @@ export async function POST(request: NextRequest) {
         const input = await request.json();
         const res = await fetch(`${getBackendUrl()}/api/admin/shipments`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: backendHeaders(),
             body: JSON.stringify(input)
         });
         

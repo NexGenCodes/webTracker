@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { createShipment, getAdminDashboardData, deleteShipment, bulkDeleteDelivered, markAsDelivered, cancelShipment, getAdminShipments } from '../actions/shipment';
 import { CreateShipmentDto, ShipmentData, DashboardStats, Pagination } from '@/types/shipment';
 import { LayoutDashboard, List, Package, PlusCircle, Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -39,7 +39,7 @@ export default function AdminPage() {
     const [statusFilter, setStatusFilter] = useState('');
     const [tableLoading, setTableLoading] = useState(false);
 
-    const loadDashboardData = async () => {
+    const loadDashboardData = useCallback(async () => {
         setDataLoading(true);
         try {
             const result = await getAdminDashboardData();
@@ -50,9 +50,9 @@ export default function AdminPage() {
         } finally {
             setDataLoading(false);
         }
-    };
+    }, []);
 
-    const loadPaginatedShipments = async () => {
+    const loadPaginatedShipments = useCallback(async () => {
         setTableLoading(true);
         try {
             const result = await getAdminShipments({
@@ -68,14 +68,14 @@ export default function AdminPage() {
         } finally {
             setTableLoading(false);
         }
-    };
+    }, [currentPage, searchQuery, statusFilter]);
 
     useEffect(() => {
         if (status === 'authenticated') {
             if (activeTab === 'dashboard') loadDashboardData();
             if (activeTab === 'manage') loadPaginatedShipments();
         }
-    }, [status, activeTab, currentPage, statusFilter]);
+    }, [status, activeTab, loadDashboardData, loadPaginatedShipments]);
 
     // Debounced search for manage tab
     useEffect(() => {
@@ -86,7 +86,7 @@ export default function AdminPage() {
             }, 500);
             return () => clearTimeout(timer);
         }
-    }, [searchQuery]);
+    }, [searchQuery, activeTab, status, loadPaginatedShipments]);
 
     const refreshData = () => {
         if (activeTab === 'dashboard') loadDashboardData();
@@ -301,7 +301,6 @@ export default function AdminPage() {
                         onSubmit={handleCreateShipment}
                         loading={loading}
                         error={error}
-                        marketingDict={dict}
                     />
                 )}
             </div>

@@ -14,7 +14,6 @@ import (
 	"webtracker-bot/internal/i18n"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
-	"webtracker-bot/internal/notif"
 	"webtracker-bot/internal/parser"
 	"webtracker-bot/internal/shipment"
 	"webtracker-bot/internal/usecase"
@@ -226,12 +225,6 @@ func (w *Worker) process(job models.Job) {
 		trackingMsg += "\n\n_✨ Parsed by AI_"
 	}
 	w.Sender.Reply(job.ChatJID, job.SenderJID, trackingMsg, job.MessageID, job.Text)
-
-	// 11. Send Email Notification (if email provided)
-	if newShipment.RecipientEmail != "" {
-		trackingURL := fmt.Sprintf("%s?id=%s", baseURL, trackingID)
-		notif.SendShipmentEmail(w.Cfg, newShipment, trackingURL)
-	}
 }
 
 func (w *Worker) generateAndSendReceipt(job models.Job, id string, lang i18n.Language) {

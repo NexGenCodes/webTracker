@@ -132,6 +132,24 @@ const normalizeStatus = (s: string): string => {
     return upper;
 };
 
+const flattenSqlc = (obj: any): any => {
+    if (obj === null || typeof obj !== 'object') return obj;
+    if (Array.isArray(obj)) return obj.map(flattenSqlc);
+    if ('Valid' in obj && Object.keys(obj).length === 2) {
+        if (!obj.Valid) return null;
+        if ('String' in obj) return obj.String;
+        if ('Time' in obj) return obj.Time;
+        if ('Float64' in obj) return obj.Float64;
+        if ('Int64' in obj) return obj.Int64;
+        if ('Bool' in obj) return obj.Bool;
+    }
+    const res: any = {};
+    for (const k in obj) {
+        res[k] = flattenSqlc(obj[k]);
+    }
+    return res;
+};
+
 export class ShipmentService {
     /**
      * Create a new shipment via Next.js API
@@ -151,7 +169,7 @@ export class ShipmentService {
                 throw new Error(errorData.error || `Server error: ${response.status}`);
             }
 
-            const result = await response.json();
+            const result = flattenSqlc(await response.json());
             return { success: true, data: { trackingNumber: result.tracking_id } };
         } catch (error) {
             const apiError = handleApiError(error, 'Create shipment');
@@ -167,7 +185,12 @@ export class ShipmentService {
             const baseUrl = typeof window === 'undefined' ? (process.env.BACKEND_URL || 'http://localhost:5000') : '';
             const url = typeof window === 'undefined' ? `${baseUrl}/api/track/${trackingNumber}` : `/api/track/${trackingNumber}`;
             
+            const apiKey = process.env.API_SECRET_KEY;
+            const headers: Record<string, string> = {};
+            if (apiKey) headers['X-API-Key'] = apiKey;
+
             const response = await fetchWithTimeout(url, {
+                headers,
                 next: { revalidate: 0 }
             });
 
@@ -176,7 +199,7 @@ export class ShipmentService {
                 throw new Error(`API error: ${response.statusText} (${response.status})`);
             }
 
-            const data = await response.json();
+            const data = flattenSqlc(await response.json());
             
             const now = new Date();
             const timeline = [
@@ -305,7 +328,7 @@ export class ShipmentService {
 
             if (!res.ok) throw new Error(`Failed to fetch shipments: ${res.status}`);
 
-            const json = await res.json();
+            const json = flattenSqlc(await res.json());
             
             interface ApiShipment {
                 tracking_id: string;
@@ -364,7 +387,7 @@ export class ShipmentService {
                 throw new Error(`Failed to fetch shipments: ${listRes.status}`);
             }
 
-            const json = await listRes.json();
+            const json = flattenSqlc(await listRes.json());
             const apiShipments = json.data;
             
             interface ApiShipment {
@@ -406,7 +429,7 @@ export class ShipmentService {
                 throw new Error(`Failed to fetch stats: ${statsRes.status}`);
             }
 
-            const apiStats = await statsRes.json();
+            const apiStats = flattenSqlc(await statsRes.json());
 
             const stats = {
                 total: parseInt(apiStats.total),

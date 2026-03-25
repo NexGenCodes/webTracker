@@ -7,10 +7,10 @@ import { PremiumInput, PremiumTextarea } from "@/components/PremiumInput";
 import { IconInfoItem } from "@/components/IconInfoItem";
 import { Mail, Phone, MapPin, Send, ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { APP_NAME, CONTACT_EMAIL, CONTACT_PHONE, CONTACT_HQ } from "@/lib/constants";
+import { CONTACT_EMAIL, CONTACT_PHONE, CONTACT_HQ } from "@/lib/constants";
 import { useState, useRef } from "react";
 import { submitContactMessage } from "@/app/actions/contact";
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 
 export default function ContactPage() {
     const { dict } = useI18n();

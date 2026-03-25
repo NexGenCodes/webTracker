@@ -10,8 +10,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/i18n"
 	"webtracker-bot/internal/logger"
+	"webtracker-bot/internal/notif"
 	"webtracker-bot/internal/parser"
 	"webtracker-bot/internal/shipment"
 	"webtracker-bot/internal/usecase"
@@ -38,6 +40,7 @@ type Handler interface {
 }
 
 type Dispatcher struct {
+	cfg           *config.Config
 	shipUC        *usecase.ShipmentUsecase
 	configUC      *usecase.ConfigUsecase
 	sender        *whatsapp.Sender // Added for broadcasting
@@ -48,8 +51,9 @@ type Dispatcher struct {
 	AdminTimezone string
 }
 
-func NewDispatcher(shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, sender *whatsapp.Sender, awbCmd string, companyName string, botPhone string, adminTimezone string) *Dispatcher {
+func NewDispatcher(cfg *config.Config, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, sender *whatsapp.Sender, awbCmd string, companyName string, botPhone string, adminTimezone string) *Dispatcher {
 	d := &Dispatcher{
+		cfg:           cfg,
 		shipUC:        shipUC,
 		configUC:      configUC,
 		sender:        sender,
@@ -113,6 +117,8 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) 
 		case *EditHandler:
 			h.CompanyPrefix = d.AwbCmd
 			h.AdminTimezone = d.AdminTimezone
+			h.Sender        = d.sender
+			h.Cfg           = d.cfg
 		case *BroadcastHandler:
 			h.Sender = d.sender
 		case *StatusHandler:
@@ -331,6 +337,8 @@ func (h *LangHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUseca
 type EditHandler struct {
 	CompanyPrefix string
 	AdminTimezone string
+	Sender        *whatsapp.Sender
+	Cfg           *config.Config
 }
 
 func (h *EditHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, args []string, lang string, isAdmin bool) Result {
@@ -504,6 +512,11 @@ func (h *EditHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUseca
 		newStatus := s.ResolveStatus(time.Now().UTC())
 		if newStatus != dbShip.Status.String {
 			_ = shipUC.UpdateField(ctx, trackingID, "status", newStatus)
+			
+			// If it transitions, optionally trigger the notification explicitly!
+			if h.Sender != nil && h.Sender.Client != nil {
+				notif.SendStatusAlert(ctx, h.Sender.Client, h.Cfg, dbShip.UserJid, trackingID, newStatus, dbShip.RecipientEmail.String)
+			}
 		}
 	}
 

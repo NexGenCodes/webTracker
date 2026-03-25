@@ -91,11 +91,11 @@ func (a *App) Init() error {
 
 func (a *App) Run() error {
 	sender := whatsapp.NewSender(a.WA, a.Cfg.CompanyName)
-	cmdDispatcher := commands.NewDispatcher(a.ShipmentUC, a.ConfigUC, sender, a.Cfg.CompanyPrefix, a.Cfg.CompanyName, a.Cfg.PairingPhone, a.Cfg.AdminTimezone)
+	cmdDispatcher := commands.NewDispatcher(a.Cfg, a.ShipmentUC, a.ConfigUC, sender, a.Cfg.CompanyPrefix, a.Cfg.CompanyName, a.Cfg.PairingPhone, a.Cfg.AdminTimezone)
 
 	shipmentService := a.ShipmentUC.Service
 
-	for i := 1; i <= 10; i++ {
+	for i := 1; i <= a.Cfg.WorkerPoolSize; i++ {
 		a.WG.Add(1)
 		w := &worker.Worker{
 			ID:              i,

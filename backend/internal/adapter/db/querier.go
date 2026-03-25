@@ -13,6 +13,8 @@ type Querier interface {
 	CountAuthorizedGroups(ctx context.Context) (int64, error)
 	CountCreatedSince(ctx context.Context, createdAt sql.NullTime) (int64, error)
 	CountDeliveredSince(ctx context.Context, updatedAt sql.NullTime) (int64, error)
+	CountShipments(ctx context.Context) (int64, error)
+	CountShipmentsByStatus(ctx context.Context) (CountShipmentsByStatusRow, error)
 	CreateShipment(ctx context.Context, arg CreateShipmentParams) error
 	DeleteDeliveredShipments(ctx context.Context) error
 	DeleteShipment(ctx context.Context, trackingID string) error
