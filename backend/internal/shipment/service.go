@@ -119,23 +119,62 @@ func (c *Calculator) CalculateDeparture(now time.Time, adminTZ string) time.Time
 	return transit.UTC()
 }
 
+var CountryRegionMap = map[string]string{
+	"nigeria":        "africa",
+	"ghana":          "africa",
+	"benin":          "africa",
+	"togo":           "africa",
+	"usa":            "north_america",
+	"united states":  "north_america",
+	"canada":         "north_america",
+	"uk":             "europe",
+	"united kingdom": "europe",
+	"germany":        "europe",
+	"spain":          "europe",
+	"turkey":         "europe",
+	"uae":            "middle_east",
+	"dubai":          "middle_east",
+	"pakistan":       "middle_east",
+	"china":          "asia",
+	"india":          "asia",
+	"colombia":       "south_america",
+	"argentina":      "south_america",
+	"chile":          "south_america",
+	"peru":           "south_america",
+	"venezuela":      "south_america",
+	"mexico":         "north_america",
+}
+
 // CalculateArrival (Algorithm B) determines the final delivery window relative to Departure.
-// Maintains the 24-30h illusion and ensures destination arrival is within 9am-4pm local business hours.
 func (c *Calculator) CalculateArrival(departure time.Time, senderCountry, receiverCountry string) (time.Time, time.Time) {
+	sender := strings.ToLower(strings.TrimSpace(senderCountry))
 	dest := strings.ToLower(strings.TrimSpace(receiverCountry))
 	
-	// Default to 24-30h window
+	// Base baseline
 	baseDuration := 26
 	if d, ok := TransitDurationMap[dest]; ok {
 		baseDuration = d
 	}
 
-	// Calculate initial arrival in UTC
-	// Add 0-4 hours of organic jitter
-	jitter := rand.Intn(4)
-	arrival := departure.Add(time.Duration(baseDuration+jitter) * time.Hour)
+	// Proximity Multiplier
+	multiplier := 1.0
+	senderRegion := CountryRegionMap[sender]
+	destRegion := CountryRegionMap[dest]
 
-	// Calibrate to Recipient's local timezone
+	if senderRegion != "" && destRegion != "" {
+		if senderRegion == destRegion {
+			multiplier = 0.6 // Same region (e.g. West Africa)
+		} else if (senderRegion == "europe" && destRegion == "middle_east") || (senderRegion == "middle_east" && destRegion == "europe") {
+			multiplier = 0.8 // Close regions
+		} else if (senderRegion == "africa" && (destRegion == "north_america" || destRegion == "asia")) {
+			multiplier = 1.3 // Long haul
+		}
+	}
+
+	finalDuration := float64(baseDuration) * multiplier
+	jitter := rand.Intn(4)
+	arrival := departure.Add(time.Duration(int(finalDuration)+jitter) * time.Hour)
+
 	recipientTZ := c.ResolveTimezone(receiverCountry)
 	loc, err := time.LoadLocation(recipientTZ)
 	if err != nil {
@@ -143,18 +182,12 @@ func (c *Calculator) CalculateArrival(departure time.Time, senderCountry, receiv
 	}
 
 	localArrival := arrival.In(loc)
-	
-	// Boundary Check ("Reduce to Fit" 9 AM - 4 PM window)
 	if localArrival.Hour() < 9 {
-		// Too early: Cap at 9:00 AM same day
 		arrival = time.Date(localArrival.Year(), localArrival.Month(), localArrival.Day(), 9, 0, 0, 0, loc).UTC()
 	} else if localArrival.Hour() >= 16 {
-		// Too late: Cap at 4:00 PM same day
 		arrival = time.Date(localArrival.Year(), localArrival.Month(), localArrival.Day(), 16, 0, 0, 0, loc).UTC()
 	}
 
-	// OutForDelivery is 3-5 hours before final arrival
 	outfordelivery := arrival.Add(-time.Duration(3+rand.Intn(3)) * time.Hour)
-
 	return arrival, outfordelivery
 }

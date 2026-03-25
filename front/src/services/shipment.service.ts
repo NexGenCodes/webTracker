@@ -244,6 +244,10 @@ export class ShipmentService {
                 senderCountry: data.origin || 'N/A',
                 timeline: timeline,
                 events: [],
+                createdAt: data.created_at,
+                scheduledTransitTime: data.scheduled_transit_time,
+                outfordeliveryTime: data.outfordelivery_time,
+                expectedDeliveryTime: data.expected_delivery_time,
                 isArchived: data.status === 'delivered',
             };
             return shipment;
@@ -357,6 +361,9 @@ export class ShipmentService {
                 weight: s.weight,
                 senderCountry: s.origin,
                 createdAt: s.created_at,
+                scheduledTransitTime: (s as any).scheduled_transit_time,
+                outfordeliveryTime: (s as any).outfordelivery_time,
+                expectedDeliveryTime: (s as any).expected_delivery_time,
                 isArchived: s.status === 'delivered',
             }));
 
@@ -417,6 +424,9 @@ export class ShipmentService {
                 weight: s.weight,
                 senderCountry: s.origin,
                 createdAt: s.created_at,
+                scheduledTransitTime: (s as any).scheduled_transit_time,
+                outfordeliveryTime: (s as any).outfordelivery_time,
+                expectedDeliveryTime: (s as any).expected_delivery_time,
                 isArchived: s.status === 'delivered',
             }));
 
