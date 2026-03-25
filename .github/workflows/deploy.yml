@@ -64,4 +64,4 @@ jobs:
             
             # 5. Verify
             systemctl is-active webtracker-bot
-            tail -n 20 /opt/webtracker/logs/bot.log
+            sudo tail -n 20 /opt/webtracker/logs/bot.log
