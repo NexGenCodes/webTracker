@@ -10,6 +10,7 @@ import (
 )
 
 type Querier interface {
+	BulkUpdateStatus(ctx context.Context, arg BulkUpdateStatusParams) error
 	CountAuthorizedGroups(ctx context.Context) (int64, error)
 	CountCreatedSince(ctx context.Context, createdAt sql.NullTime) (int64, error)
 	CountDeliveredSince(ctx context.Context, updatedAt sql.NullTime) (int64, error)
@@ -22,12 +23,15 @@ type Querier interface {
 	GetAuthorizedGroups(ctx context.Context) ([]string, error)
 	GetGroupAuthority(ctx context.Context, jid string) (GetGroupAuthorityRow, error)
 	GetLastShipmentIDForUser(ctx context.Context, userJid string) (string, error)
+	GetRecentEvents(ctx context.Context, limit int32) ([]Telemetry, error)
 	GetShipment(ctx context.Context, trackingID string) (Shipment, error)
 	GetSystemConfig(ctx context.Context, key string) (string, error)
+	GetTelemetryStats(ctx context.Context, createdAt sql.NullTime) ([]GetTelemetryStatsRow, error)
 	GetUserLanguage(ctx context.Context, jid string) (string, error)
 	HasAuthorizedGroups(ctx context.Context) (int64, error)
 	ListAllShipments(ctx context.Context) ([]Shipment, error)
 	ListShipments(ctx context.Context, arg ListShipmentsParams) ([]Shipment, error)
+	RecordEvent(ctx context.Context, arg RecordEventParams) error
 	RunAgedCleanup(ctx context.Context, arg RunAgedCleanupParams) error
 	SetGroupAuthority(ctx context.Context, arg SetGroupAuthorityParams) error
 	SetSystemConfig(ctx context.Context, arg SetSystemConfigParams) error

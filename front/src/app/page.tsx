@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { TrackingSearch } from '@/components/TrackingSearch';
 import { getTracking } from './actions/shipment';
-import { CheckCircle, MapPin, AlertCircle, ShieldCheck, Globe, Zap, Copy, Check, Package } from 'lucide-react';
+import { CheckCircle, MapPin, AlertCircle, ShieldCheck, Globe, Zap, Copy, Check, Package, Share2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { ShipmentData } from '@/types/shipment';
@@ -12,7 +12,8 @@ import { useI18n } from '@/components/I18nContext';
 import { Footer } from '@/components/Footer';
 import { FeatureCard } from '@/components/FeatureCard';
 import { toast } from 'react-hot-toast';
-import { VisualTracker } from '@/components/VisualTracker';
+import DynamicMap from '@/components/DynamicMap';
+import { useShipmentProgress } from '@/hooks/useShipmentProgress';
 
 interface HomeProps {
   initialId?: string | null;
@@ -23,6 +24,51 @@ function HomeContent({ initialId: propId }: HomeProps) {
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [shippingData, setShippingData] = useState<ShipmentData | null>(null);
+  const liveProgress = useShipmentProgress(shippingData);
+  
+  const [originCoords, setOriginCoords] = useState<[number, number]>([51.5074, -0.1278]);
+  const [destCoords, setDestCoords] = useState<[number, number]>([40.7128, -74.0060]);
+  
+  useEffect(() => {
+    if (!shippingData) return;
+
+    let isMounted = true;
+
+    const fetchCoords = async (country: string): Promise<[number, number] | null> => {
+      try {
+        const res = await fetch(`https://restcountries.com/v3.1/name/${encodeURIComponent(country)}?fullText=true`);
+        if (!res.ok) {
+           const resFallback = await fetch(`https://restcountries.com/v3.1/name/${encodeURIComponent(country)}`);
+           if (!resFallback.ok) return null;
+           const data = await resFallback.json();
+           return data[0]?.latlng as [number, number];
+        }
+        const data = await res.json();
+        return data[0]?.latlng as [number, number];
+      } catch {
+        return null;
+      }
+    };
+
+    if (shippingData.originCoords) {
+      setOriginCoords(shippingData.originCoords);
+    } else if (shippingData.senderCountry && shippingData.senderCountry !== 'N/A') {
+      fetchCoords(shippingData.senderCountry).then(coords => {
+        if (coords && isMounted) setOriginCoords(coords);
+      });
+    }
+
+    if (shippingData.destinationCoords) {
+      setDestCoords(shippingData.destinationCoords);
+    } else if (shippingData.receiverCountry && shippingData.receiverCountry !== 'N/A') {
+      fetchCoords(shippingData.receiverCountry).then(coords => {
+        if (coords && isMounted) setDestCoords(coords);
+      });
+    }
+
+    return () => { isMounted = false; };
+  }, [shippingData]);
+
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -167,7 +213,7 @@ function HomeContent({ initialId: propId }: HomeProps) {
                   <div className="flex-1">
                     <span className="text-accent text-[10px] md:text-[11px] font-black uppercase tracking-[0.3em] md:tracking-[0.4em] mb-1 md:mb-2 block">{dict.shipment.status}</span>
                     <h2 className="text-xl md:text-3xl lg:text-4xl font-black text-text-main tracking-tighter uppercase leading-none">
-                      {shippingData.isArchived ? dict.shipment.finalized : (shippingData.status === 'DELIVERED' ? dict.admin?.delivered : shippingData.status.replace(/_/g, ' '))}
+                      {shippingData.isArchived ? dict.shipment.finalized : (dict.admin?.[shippingData.status.toLowerCase() as keyof typeof dict.admin] || shippingData.status.replace(/_/g, ' '))}
                     </h2>
                   </div>
                 </div>
@@ -176,12 +222,37 @@ function HomeContent({ initialId: propId }: HomeProps) {
                   <span className="text-text-muted text-[10px] md:text-[11px] font-black uppercase tracking-[0.3em] md:tracking-[0.4em] mb-2 md:mb-3">{dict.shipment.trackingId}</span>
                   <div className="flex items-center gap-2 md:gap-4 bg-surface-muted px-3 md:px-6 py-3 md:py-4 rounded-2xl md:rounded-3xl border border-border group/copy transition-all hover:border-accent/30 shadow-inner w-full md:w-auto">
                     <span className="font-mono text-sm md:text-lg lg:text-2xl font-black tracking-wide md:tracking-widest text-text-main group-hover:text-accent transition-colors break-all">{shippingData.trackingNumber}</span>
-                    <button
-                      onClick={() => copyToClipboard(shippingData.trackingNumber)}
-                      className="p-2 md:p-2.5 hover:bg-accent/10 rounded-xl md:rounded-2xl text-text-muted hover:text-accent transition-all active:scale-90 shrink-0"
-                    >
-                      {copied ? <Check size={18} className="text-success md:w-5 md:h-5" /> : <Copy size={18} strokeWidth={2.5} className="md:w-5 md:h-5" />}
-                    </button>
+                    <div className="flex items-center gap-1 md:gap-2 ml-auto md:ml-0">
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(shippingData.trackingNumber);
+                          toast.success(dict.admin?.copied || "Copied!");
+                        }}
+                        className="p-1 md:p-2 rounded-xl md:rounded-2xl transition-all bg-surface hover:bg-surface-muted text-text-muted hover:text-accent border border-border flex items-center justify-center active:scale-90"
+                        title={dict.admin?.copy || "Copy"}
+                      >
+                        <Copy size={14} className="md:w-[18px] md:h-[18px]" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          const shareData = {
+                            title: `Shipment ${shippingData.trackingNumber}`,
+                            text: `Tracking status for ${shippingData.trackingNumber}: ${shippingData.status}`,
+                            url: `${window.location.origin}/api/receipt/${shippingData.trackingNumber}?status=${shippingData.status}&origin=${shippingData.senderCountry}&dest=${shippingData.receiverCountry}&sender=${shippingData.senderName}&receiver=${shippingData.receiverName}&weight=${shippingData.weight}%20KGS&content=${shippingData.cargoType}`,
+                          };
+                          if (navigator.share) {
+                            navigator.share(shareData);
+                          } else {
+                            navigator.clipboard.writeText(shareData.url);
+                            toast.success("Link copied to share!");
+                          }
+                        }}
+                        className="p-1 md:p-2 rounded-xl md:rounded-2xl transition-all bg-accent/10 hover:bg-accent/20 text-accent border border-accent/30 flex items-center justify-center active:scale-95"
+                        title="Share Receipt"
+                      >
+                        <Share2 size={14} className="md:w-[18px] md:h-[18px]" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -212,7 +283,15 @@ function HomeContent({ initialId: propId }: HomeProps) {
                 </div>
               ) : (
                 <>
-                  <VisualTracker shipment={shippingData} dict={dict} />
+                  <div className="mt-4 mb-16 relative z-10 animate-fade-in delay-300 w-full max-w-6xl mx-auto shadow-2xl rounded-[2rem] overflow-hidden">
+                    <DynamicMap 
+                      origin={originCoords} 
+                      destination={destCoords} 
+                      progress={liveProgress}
+                      shipment={shippingData}
+                      dict={dict}
+                    />
+                  </div>
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-20 relative z-10">
                     {/* Left Column: Details */}
                     <div className="space-y-16 order-2 lg:order-1">
@@ -255,7 +334,7 @@ function HomeContent({ initialId: propId }: HomeProps) {
                               transition={{ duration: 0.5, delay: i * 0.15, ease: "easeOut" }}
                             >
                               <div className={cn(
-                                "absolute left-[-33px] md:left-[-51px] top-1.5 w-5 h-5 md:w-6 md:h-6 rounded-full border-3 md:border-4 border-bg transition-all duration-500",
+                                "absolute left-[-32px] md:left-[-52px] top-1.5 w-4 h-4 md:w-8 md:h-8 rounded-full border-[3px] md:border-4 border-bg transition-all duration-500",
                                 event.is_completed ? "bg-accent scale-125 shadow-lg shadow-accent/40" : "bg-border opacity-50"
                               )}>
                                 {/* Pulse ring on the latest active event */}
@@ -269,14 +348,14 @@ function HomeContent({ initialId: propId }: HomeProps) {
                               </div>
                               <div className="flex flex-wrap items-center gap-2 md:gap-4 mb-2">
                                 <p className={cn("font-black text-base md:text-lg lg:text-xl tracking-tight leading-none uppercase", event.is_completed ? "text-text-main" : "text-text-muted opacity-50")}>
-                                  {event.status}
+                                  {dict.statuses?.[event.status as keyof typeof dict.statuses] || event.status}
                                 </p>
                                 {event.is_completed && !shippingData.timeline?.[i + 1]?.is_completed && (
-                                  <span className="bg-accent text-white text-[8px] md:text-[9px] font-black uppercase px-2 md:px-2.5 py-0.5 md:py-1 rounded-lg animate-pulse tracking-wider md:tracking-widest">{dict.shipment.live}</span>
+                                  <span className="bg-accent text-white text-[8px] md:text-[9px] font-black uppercase px-2 md:px-2 py-0.5 md:py-1 rounded-lg animate-pulse tracking-wider md:tracking-widest">{dict.shipment.live}</span>
                                 )}
                               </div>
                               <motion.span
-                                className="text-[9px] md:text-[10px] font-black text-accent/60 uppercase tracking-[0.15em] md:tracking-[0.2em] block mb-3"
+                                className="text-[9px] md:text-[10px] font-black text-accent/60 uppercase tracking-[0.15em] md:tracking-[0.2em] block mb-4"
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
                                 transition={{ duration: 0.4, delay: i * 0.15 + 0.2 }}
@@ -284,7 +363,7 @@ function HomeContent({ initialId: propId }: HomeProps) {
                                 {new Date(event.timestamp).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
                               </motion.span>
                               <motion.div
-                                className="mt-3 md:mt-4 flex items-start gap-2 md:gap-3 text-xs md:text-sm font-bold text-text-muted bg-surface-muted/50 p-3 md:p-4 rounded-xl md:rounded-2xl border border-border group-hover/event:border-accent/20 transition-colors"
+                                className="mt-4 md:mt-4 flex items-start gap-2 md:gap-4 text-xs md:text-sm font-bold text-text-muted bg-surface-muted/50 p-4 md:p-4 rounded-xl md:rounded-2xl border border-border group-hover/event:border-accent/20 transition-colors"
                                 initial={{ opacity: 0, y: 8 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 0.4, delay: i * 0.15 + 0.3 }}

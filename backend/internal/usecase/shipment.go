@@ -3,12 +3,14 @@ package usecase
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"webtracker-bot/internal/adapter/db"
 	"webtracker-bot/internal/shipment"
 	"webtracker-bot/internal/utils/dbutil"
+	"github.com/sqlc-dev/pqtype"
 )
 
 func toNullString(s string) sql.NullString {
@@ -322,4 +324,30 @@ func (u *ShipmentUsecase) CountByStatus(ctx context.Context) (*db.CountShipments
 		return nil, fmt.Errorf("failed to count by status: %w", err)
 	}
 	return &stats, nil
+}
+
+// RecordEvent logs a system event for analytics.
+func (u *ShipmentUsecase) RecordEvent(ctx context.Context, eventType string, metadata []byte) error {
+	return u.repo.RecordEvent(ctx, db.RecordEventParams{
+		EventType: eventType,
+		Metadata:  pqtype.NullRawMessage{RawMessage: json.RawMessage(metadata), Valid: len(metadata) > 0},
+	})
+}
+
+// GetTelemetryStats retrieves event counts categorized by type since a specific time.
+func (u *ShipmentUsecase) GetTelemetryStats(ctx context.Context, since time.Time) ([]db.GetTelemetryStatsRow, error) {
+	return u.repo.GetTelemetryStats(ctx, toNullTime(since))
+}
+
+// GetRecentEvents retrieves the latest telemetry logs.
+func (u *ShipmentUsecase) GetRecentEvents(ctx context.Context, limit int32) ([]db.Telemetry, error) {
+	return u.repo.GetRecentEvents(ctx, limit)
+}
+
+// BulkUpdateStatus updates the status of multiple shipments at once.
+func (u *ShipmentUsecase) BulkUpdateStatus(ctx context.Context, ids []string, status string) error {
+	return u.repo.BulkUpdateStatus(ctx, db.BulkUpdateStatusParams{
+		Column1: ids,
+		Status:  toNullString(status),
+	})
 }

@@ -8,7 +8,26 @@ package db
 import (
 	"context"
 	"database/sql"
+
+	"github.com/lib/pq"
+	"github.com/sqlc-dev/pqtype"
 )
+
+const bulkUpdateStatus = `-- name: BulkUpdateStatus :exec
+UPDATE Shipment
+SET status = $2, updated_at = CURRENT_TIMESTAMP
+WHERE tracking_id = ANY($1::text[])
+`
+
+type BulkUpdateStatusParams struct {
+	Column1 []string       `json:"column_1"`
+	Status  sql.NullString `json:"status"`
+}
+
+func (q *Queries) BulkUpdateStatus(ctx context.Context, arg BulkUpdateStatusParams) error {
+	_, err := q.db.ExecContext(ctx, bulkUpdateStatus, pq.Array(arg.Column1), arg.Status)
+	return err
+}
 
 const countAuthorizedGroups = `-- name: CountAuthorizedGroups :one
 SELECT COUNT(*) FROM GroupAuthority WHERE is_authorized = true
@@ -251,6 +270,40 @@ func (q *Queries) GetLastShipmentIDForUser(ctx context.Context, userJid string) 
 	return tracking_id, err
 }
 
+const getRecentEvents = `-- name: GetRecentEvents :many
+SELECT id, event_type, metadata, created_at FROM Telemetry
+ORDER BY created_at DESC
+LIMIT $1
+`
+
+func (q *Queries) GetRecentEvents(ctx context.Context, limit int32) ([]Telemetry, error) {
+	rows, err := q.db.QueryContext(ctx, getRecentEvents, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Telemetry
+	for rows.Next() {
+		var i Telemetry
+		if err := rows.Scan(
+			&i.ID,
+			&i.EventType,
+			&i.Metadata,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getShipment = `-- name: GetShipment :one
 SELECT tracking_id, user_jid, status, created_at, scheduled_transit_time, outfordelivery_time, expected_delivery_time, sender_timezone, recipient_timezone, sender_name, sender_phone, origin, recipient_name, recipient_phone, recipient_email, recipient_id, recipient_address, destination, cargo_type, weight, cost, updated_at FROM Shipment WHERE tracking_id = $1
 `
@@ -294,6 +347,41 @@ func (q *Queries) GetSystemConfig(ctx context.Context, key string) (string, erro
 	var value string
 	err := row.Scan(&value)
 	return value, err
+}
+
+const getTelemetryStats = `-- name: GetTelemetryStats :many
+SELECT event_type, COUNT(*) as count
+FROM Telemetry
+WHERE created_at >= $1
+GROUP BY event_type
+`
+
+type GetTelemetryStatsRow struct {
+	EventType string `json:"event_type"`
+	Count     int64  `json:"count"`
+}
+
+func (q *Queries) GetTelemetryStats(ctx context.Context, createdAt sql.NullTime) ([]GetTelemetryStatsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTelemetryStats, createdAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTelemetryStatsRow
+	for rows.Next() {
+		var i GetTelemetryStatsRow
+		if err := rows.Scan(&i.EventType, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getUserLanguage = `-- name: GetUserLanguage :one
@@ -421,6 +509,21 @@ func (q *Queries) ListShipments(ctx context.Context, arg ListShipmentsParams) ([
 		return nil, err
 	}
 	return items, nil
+}
+
+const recordEvent = `-- name: RecordEvent :exec
+INSERT INTO Telemetry (event_type, metadata, created_at)
+VALUES ($1, $2, CURRENT_TIMESTAMP)
+`
+
+type RecordEventParams struct {
+	EventType string                `json:"event_type"`
+	Metadata  pqtype.NullRawMessage `json:"metadata"`
+}
+
+func (q *Queries) RecordEvent(ctx context.Context, arg RecordEventParams) error {
+	_, err := q.db.ExecContext(ctx, recordEvent, arg.EventType, arg.Metadata)
+	return err
 }
 
 const runAgedCleanup = `-- name: RunAgedCleanup :exec

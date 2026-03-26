@@ -1,5 +1,6 @@
 import React from 'react';
-import { Trash2, XCircle } from 'lucide-react';
+import { Trash2, XCircle, Share2 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 import { ShipmentData, Dictionary } from '@/types/shipment';
 
@@ -84,6 +85,23 @@ export const ShipmentTable: React.FC<ShipmentTableProps> = ({
                                                     </button>
                                                 </>
                                             )}
+                                            <button
+                                                onClick={() => {
+                                                    const shareUrl = `${window.location.origin}/api/receipt/${s.trackingNumber}?status=${s.status}&origin=${s.senderCountry || 'N/A'}&dest=${s.receiverCountry || 'N/A'}&sender=${s.senderName || 'N/A'}&receiver=${s.receiverName || 'N/A'}&weight=${s.weight || '0'}%20KGS&content=${s.cargoType || 'Standard'}`;
+                                                    if (navigator.share) {
+                                                        navigator.share({
+                                                            title: `Shipment ${s.trackingNumber}`,
+                                                            url: shareUrl
+                                                        });
+                                                    } else {
+                                                        window.open(shareUrl, '_blank');
+                                                    }
+                                                }}
+                                                className="px-2 sm:px-3 py-1 bg-accent/10 hover:bg-accent text-accent hover:text-white rounded-lg text-[10px] sm:text-xs font-black uppercase transition-all"
+                                                title="View Receipt"
+                                            >
+                                                <Share2 size={14} />
+                                            </button>
                                             <button
                                                 onClick={() => onDelete(s.trackingNumber)}
                                                 className="px-2 sm:px-3 py-1 bg-error/10 hover:bg-error text-error hover:text-white rounded-lg text-[10px] sm:text-xs font-black uppercase transition-all"

@@ -148,3 +148,23 @@ UPDATE Shipment SET expected_delivery_time = $2, updated_at = CURRENT_TIMESTAMP 
 
 -- name: UpdateShipmentFieldOutfordeliveryTime :exec
 UPDATE Shipment SET outfordelivery_time = $2, updated_at = CURRENT_TIMESTAMP WHERE tracking_id = $1;
+
+-- name: RecordEvent :exec
+INSERT INTO Telemetry (event_type, metadata, created_at)
+VALUES ($1, $2, CURRENT_TIMESTAMP);
+
+-- name: GetTelemetryStats :many
+SELECT event_type, COUNT(*) as count
+FROM Telemetry
+WHERE created_at >= $1
+GROUP BY event_type;
+
+-- name: GetRecentEvents :many
+SELECT * FROM Telemetry
+ORDER BY created_at DESC
+LIMIT $1;
+
+-- name: BulkUpdateStatus :exec
+UPDATE Shipment
+SET status = $2, updated_at = CURRENT_TIMESTAMP
+WHERE tracking_id = ANY($1::text[]);

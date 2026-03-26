@@ -63,7 +63,9 @@ export const dictionaries = {
             live: "Live",
             currentLocation: "Current Location:",
             origin: "Origin",
+            originFacility: "Origin Facility",
             estimatedDelivery: "Est. Delivery",
+            weight: "Weight",
         },
         errors: {
             unauthorized: "Unauthorized",
@@ -172,6 +174,13 @@ export const dictionaries = {
             emailLabel: "Corporate Email",
             phoneLabel: "Support Line",
             hqLabel: "Global HQ",
+        },
+        statuses: {
+            PENDING: "Pending",
+            IN_TRANSIT: "In Transit",
+            OUT_FOR_DELIVERY: "Out for Delivery",
+            DELIVERED: "Arrived",
+            CANCELED: "Canceled",
         }
     },
     es: {
@@ -236,7 +245,9 @@ export const dictionaries = {
             live: "En Vivo",
             currentLocation: "Ubicación Actual:",
             origin: "Origen",
+            originFacility: "Instalación de Origen",
             estimatedDelivery: "Entrega Est.",
+            weight: "Peso",
         },
         errors: {
             unauthorized: "No autorizado",
@@ -345,6 +356,13 @@ export const dictionaries = {
             emailLabel: "Correo Corporativo",
             phoneLabel: "Línea de Soporte",
             hqLabel: "Sede Global",
+        },
+        statuses: {
+            PENDING: "Pendiente",
+            IN_TRANSIT: "En Tránsito",
+            OUT_FOR_DELIVERY: "En Reparto",
+            DELIVERED: "Llegado",
+            CANCELED: "Cancelado",
         }
     },
     de: {
@@ -409,7 +427,9 @@ export const dictionaries = {
             live: "Live",
             currentLocation: "Aktueller Standort:",
             origin: "Ursprung",
+            originFacility: "Ursprungseinrichtung",
             estimatedDelivery: "Voraussichtl. Lieferung",
+            weight: "Gewicht",
         },
         errors: {
             unauthorized: "Nicht autorisiert",
@@ -518,6 +538,13 @@ export const dictionaries = {
             emailLabel: "Unternehmens-E-Mail",
             phoneLabel: "Support-Hotline",
             hqLabel: "Hauptsitz",
+        },
+        statuses: {
+            PENDING: "Ausstehend",
+            IN_TRANSIT: "Unterwegs",
+            OUT_FOR_DELIVERY: "In Zustellung",
+            DELIVERED: "Angekommen",
+            CANCELED: "Abgebrochen",
         }
     },
     zh: {
@@ -582,7 +609,9 @@ export const dictionaries = {
             live: "实时",
             currentLocation: "当前位置：",
             origin: "始发地",
+            originFacility: "始发地设施",
             estimatedDelivery: "预计送达",
+            weight: "重量",
         },
         errors: {
             unauthorized: "未授权",
@@ -691,6 +720,13 @@ export const dictionaries = {
             emailLabel: "公司邮箱",
             phoneLabel: "服务热线",
             hqLabel: "全球总部",
+        },
+        statuses: {
+            PENDING: "待处理",
+            IN_TRANSIT: "运输中",
+            OUT_FOR_DELIVERY: "派送中",
+            DELIVERED: "已送达",
+            CANCELED: "已取消",
         }
     },
     fr: {
@@ -755,7 +791,9 @@ export const dictionaries = {
             live: "Direct",
             currentLocation: "Position Actuelle :",
             origin: "Origine",
+            originFacility: "Installation d'Origine",
             estimatedDelivery: "Livraison Est.",
+            weight: "Poids",
         },
         errors: {
             unauthorized: "Non autorisé",
@@ -864,6 +902,13 @@ export const dictionaries = {
             emailLabel: "E-mail d'entreprise",
             phoneLabel: "Ligne de support",
             hqLabel: "Siège mondial",
+        },
+        statuses: {
+            PENDING: "En attente",
+            IN_TRANSIT: "En transit",
+            OUT_FOR_DELIVERY: "En livraison",
+            DELIVERED: "Arrivé",
+            CANCELED: "Annulé",
         }
     },
     pt: {
@@ -927,9 +972,11 @@ export const dictionaries = {
             live: "Ao Vivo",
             currentLocation: "Localização Atual:",
             origin: "Origem",
+            originFacility: "Instalação de Origen",
             estimatedDelivery: "Entrega Est.",
             created: "Criado",
             address: "Endereço",
+            weight: "Peso",
         },
         errors: {
             unauthorized: "Não autorizado",
@@ -1038,6 +1085,13 @@ export const dictionaries = {
             emailLabel: "E-mail Corporativo",
             phoneLabel: "Linha de Suporte",
             hqLabel: "Sede Global",
+        },
+        statuses: {
+            PENDING: "Pendente",
+            IN_TRANSIT: "Em Trânsito",
+            OUT_FOR_DELIVERY: "Saiu para Entrega",
+            DELIVERED: "Chegou",
+            CANCELED: "Cancelado",
         }
     },
     it: {
@@ -1101,8 +1155,10 @@ export const dictionaries = {
             live: "Live",
             currentLocation: "Posizione Attuale:",
             origin: "Origine",
+            originFacility: "Struttura di Origine",
             estimatedDelivery: "Consegna Stim.",
             address: "Indirizzo",
+            weight: "Peso",
         },
         errors: {
             unauthorized: "Non autorizzato",
@@ -1211,6 +1267,13 @@ export const dictionaries = {
             emailLabel: "Email Aziendale",
             phoneLabel: "Linea di Supporto",
             hqLabel: "Sede Centrale",
+        },
+        statuses: {
+            PENDING: "In Attesa",
+            IN_TRANSIT: "In Transito",
+            OUT_FOR_DELIVERY: "In Consegna",
+            DELIVERED: "Arrivato",
+            CANCELED: "Annullato",
         }
     },
     ar: {
@@ -1274,7 +1337,9 @@ export const dictionaries = {
             live: "مباشر",
             currentLocation: "الموقع الحالي:",
             origin: "الأصل",
+            originFacility: "مرفق الأصل",
             estimatedDelivery: "التسليم المقدر",
+            weight: "الوزن",
             address: "العنوان",
         },
         errors: {
@@ -1384,6 +1449,13 @@ export const dictionaries = {
             emailLabel: "البريد الإلكتروني للشركة",
             phoneLabel: "خط الدعم",
             hqLabel: "المقر الرئيسي",
+        },
+        statuses: {
+            PENDING: "قيد الانتظار",
+            IN_TRANSIT: "قيد النقل",
+            OUT_FOR_DELIVERY: "جاري التوصيل",
+            DELIVERED: "تم الوصول",
+            CANCELED: "ملغى",
         }
     }
 };

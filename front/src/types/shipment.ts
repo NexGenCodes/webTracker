@@ -21,6 +21,7 @@ export interface ShipmentData {
     status: ShipmentStatus;
     senderName: string | null;
     senderCountry?: string | null;
+    cargoType?: string | null;
     receiverName: string | null;
     receiverAddress: string | null;
     receiverCountry: string | null;
@@ -51,6 +52,7 @@ export interface CreateShipmentDto {
     senderName: string;
     senderCountry: string;
     weight?: number;
+    cargoType?: string;
 }
 
 export interface ServiceResult<T = unknown> {

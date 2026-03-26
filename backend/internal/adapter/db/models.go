@@ -6,6 +6,8 @@ package db
 
 import (
 	"database/sql"
+
+	"github.com/sqlc-dev/pqtype"
 )
 
 type Groupauthority struct {
@@ -43,6 +45,13 @@ type Systemconfig struct {
 	Key       string       `json:"key"`
 	Value     string       `json:"value"`
 	UpdatedAt sql.NullTime `json:"updated_at"`
+}
+
+type Telemetry struct {
+	ID        int32                 `json:"id"`
+	EventType string                `json:"event_type"`
+	Metadata  pqtype.NullRawMessage `json:"metadata"`
+	CreatedAt sql.NullTime          `json:"created_at"`
 }
 
 type Userpreference struct {

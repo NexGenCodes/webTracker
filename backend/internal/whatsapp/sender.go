@@ -139,3 +139,45 @@ func (s *Sender) SetTyping(chat types.JID, typing bool) {
 		logger.Error().Err(err).Str("chat", chat.String()).Msg("Failed to set chat presence")
 	}
 }
+
+// SendList sends an interactive list message
+func (s *Sender) SendList(chat types.JID, title, description, buttonText string, sections []*waProto.ListMessage_Section) {
+	content := &waProto.Message{
+		ListMessage: &waProto.ListMessage{
+			Title:          models.StrPtr(title),
+			Description:    models.StrPtr(description),
+			ButtonText:     models.StrPtr(buttonText),
+			ListType:       waProto.ListMessage_SINGLE_SELECT.Enum(),
+			Sections:       sections,
+			FooterText:     models.StrPtr(s.CompanyName + BotFooter),
+		},
+	}
+
+	jitter := time.Duration(300+rand.Intn(700)) * time.Millisecond
+	time.Sleep(jitter)
+
+	_, err := s.Client.SendMessage(context.Background(), chat, content)
+	if err != nil {
+		logger.Error().Err(err).Str("chat", chat.String()).Msg("Failed to send context list")
+	}
+}
+
+// SendButtons sends an interactive button message
+func (s *Sender) SendButtons(chat types.JID, text string, buttons []*waProto.ButtonsMessage_Button) {
+	content := &waProto.Message{
+		ButtonsMessage: &waProto.ButtonsMessage{
+			ContentText:  models.StrPtr(text),
+			FooterText:   models.StrPtr(s.CompanyName + BotFooter),
+			HeaderType:   waProto.ButtonsMessage_EMPTY.Enum(),
+			Buttons:      buttons,
+		},
+	}
+
+	jitter := time.Duration(300+rand.Intn(700)) * time.Millisecond
+	time.Sleep(jitter)
+
+	_, err := s.Client.SendMessage(context.Background(), chat, content)
+	if err != nil {
+		logger.Error().Err(err).Str("chat", chat.String()).Msg("Failed to send buttons")
+	}
+}

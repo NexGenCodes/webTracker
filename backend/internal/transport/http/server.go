@@ -66,7 +66,7 @@ func NewServer(cfg *config.Config, shipmentUC *usecase.ShipmentUsecase, db *sql.
 }
 
 func (s *Server) SetupRoutes() {
-	shipmentHandler := handler.NewShipmentHandler(s.shipmentUC)
+	shipmentHandler := handler.NewShipmentHandler(s.shipmentUC, s.cfg)
 	shipmentHandler.RegisterRoutes(s.app)
 	
 	// Enhanced Healthcheck

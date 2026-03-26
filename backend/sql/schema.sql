@@ -45,3 +45,12 @@ CREATE TABLE IF NOT EXISTS Shipment (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS Telemetry (
+    id SERIAL PRIMARY KEY,
+    event_type TEXT NOT NULL,
+    metadata JSONB,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_telemetry_event_type ON Telemetry(event_type);
+CREATE INDEX IF NOT EXISTS idx_telemetry_created_at ON Telemetry(created_at);
