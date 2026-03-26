@@ -19,17 +19,21 @@ import (
 	"github.com/go-playground/validator/v10"
 	"errors"
 	"strings"
+	"webtracker-bot/internal/parser"
+	"webtracker-bot/internal/config"
 )
 
 type ShipmentHandler struct {
 	shipmentUC *usecase.ShipmentUsecase
 	validate   *validator.Validate
+	cfg        *config.Config
 }
 
-func NewShipmentHandler(shipmentUC *usecase.ShipmentUsecase) *ShipmentHandler {
+func NewShipmentHandler(shipmentUC *usecase.ShipmentUsecase, cfg *config.Config) *ShipmentHandler {
 	return &ShipmentHandler{
 		shipmentUC: shipmentUC,
 		validate:   validator.New(),
+		cfg:        cfg,
 	}
 }
 
@@ -40,14 +44,19 @@ func (h *ShipmentHandler) RegisterRoutes(router fiber.Router) {
 	// Admin Routes (Next.js protects these via NextAuth before calling Go)
 	admin := router.Group("/api/admin")
 	
-	// Stats
+	// Stats & Telemetry
 	admin.Get("/stats", h.GetStats)
+	admin.Get("/telemetry", h.GetTelemetry)
 
 	// Shipments
 	shipments := admin.Group("/shipments")
+	shipments.Post("/parse", h.ParseText)
+	shipments.Post("/bulk_csv", h.BulkCreateCSV)
 	shipments.Post("/", h.Create)
 	shipments.Get("/", h.List)
 	shipments.Delete("/cleanup", h.DeleteDelivered)
+	shipments.Patch("/bulk_status", h.BulkUpdateStatus)
+	shipments.Delete("/bulk_delete", h.BulkDelete)
 	shipments.Patch("/:id", h.UpdateStatus)
 	shipments.Delete("/:id", h.Delete)
 }
@@ -143,10 +152,12 @@ func (h *ShipmentHandler) Create(c *fiber.Ctx) error {
 	}
 
 	if err := h.shipmentUC.Create(c.Context(), params); err != nil {
-		log.Printf("Create error: %v", err)
+		log.Printf("Create shipment error: %v", err)
+		h.shipmentUC.RecordEvent(c.Context(), "admin_create_fail", []byte(fmt.Sprintf(`{"error": "%s"}`, err.Error())))
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create shipment"})
 	}
 
+	h.shipmentUC.RecordEvent(c.Context(), "admin_create_success", []byte(fmt.Sprintf(`{"id": "%s"}`, trackingID)))
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"tracking_id": trackingID})
 }
 
@@ -247,4 +258,171 @@ func (h *ShipmentHandler) GetStats(c *fiber.Ctx) error {
 		"pending":        stats.Pending,
 		"canceled":       stats.Canceled,
 	})
+}
+
+// ParseRequest for ParseText endpoint
+type ParseRequest struct {
+	Text string `json:"text" validate:"required"`
+}
+
+// ParseText - POST /api/admin/shipments/parse
+func (h *ShipmentHandler) ParseText(c *fiber.Ctx) error {
+	var req ParseRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid payload"})
+	}
+
+	if err := h.validate.Struct(req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error":   "Validation failed",
+			"details": err.Error(),
+		})
+	}
+
+	// 1. Regex Parse
+	m := parser.ParseRegex(req.Text)
+
+	// 2. AI Fallback Parse
+	if m.ReceiverName == "" || m.ReceiverPhone == "" || m.ReceiverAddress == "" {
+		if aiM, err := parser.ParseAI(req.Text, h.cfg.GeminiAPIKey); err == nil {
+			m.Merge(aiM)
+			m.IsAI = true
+			m.Validate()
+			h.shipmentUC.RecordEvent(c.Context(), "admin_parse_ai", []byte(fmt.Sprintf(`{"text_len": %d}`, len(req.Text))))
+		} else {
+			log.Printf("AI Parse error: %v", err)
+			h.shipmentUC.RecordEvent(c.Context(), "admin_parse_fail", []byte(fmt.Sprintf(`{"error": "%s"}`, err.Error())))
+		}
+	} else {
+		h.shipmentUC.RecordEvent(c.Context(), "admin_parse_regex", []byte(fmt.Sprintf(`{"text_len": %d}`, len(req.Text))))
+	}
+
+	return c.JSON(m)
+}
+
+// BulkCreateCSV - POST /api/admin/shipments/bulk_csv
+func (h *ShipmentHandler) BulkCreateCSV(c *fiber.Ctx) error {
+	var req ParseRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid payload"})
+	}
+
+	manifests, err := parser.ParseCSV(req.Text)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	if len(manifests) == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "No shipments found in CSV"})
+	}
+
+	createdIds := []string{}
+	failed := 0
+
+	for _, m := range manifests {
+		randVal, _ := rand.Int(rand.Reader, big.NewInt(999999999))
+		trackingID := fmt.Sprintf("AWB-%09d", randVal.Int64())
+		now := time.Now()
+
+		departure := h.shipmentUC.Service.CalculateDeparture(now, "Africa/Lagos")
+		arrival, outForDelivery := h.shipmentUC.Service.CalculateArrival(departure, m.SenderCountry, m.ReceiverCountry)
+
+		if err := h.shipmentUC.Create(c.Context(), db.CreateShipmentParams{
+			TrackingID:           trackingID,
+			UserJid:              "admin_portal",
+			Status:               toNullString("pending"),
+			CreatedAt:            toNullTime(now),
+			ScheduledTransitTime: toNullTime(departure),
+			OutfordeliveryTime:   toNullTime(outForDelivery),
+			ExpectedDeliveryTime: toNullTime(arrival),
+			SenderTimezone:       toNullString("Africa/Lagos"),
+			RecipientTimezone:    toNullString(h.shipmentUC.Service.ResolveTimezone(m.ReceiverCountry)),
+			SenderName:           toNullString(m.SenderName),
+			Origin:               toNullString(m.SenderCountry),
+			RecipientName:        toNullString(m.ReceiverName),
+			RecipientPhone:       toNullString(m.ReceiverPhone),
+			RecipientEmail:       toNullString(m.ReceiverEmail),
+			RecipientAddress:     toNullString(m.ReceiverAddress),
+			Destination:          toNullString(m.ReceiverCountry),
+			CargoType:            toNullString(m.CargoType),
+			Weight:               toNullFloat64(m.Weight),
+			UpdatedAt:            toNullTime(now),
+		}); err != nil {
+			log.Printf("Bulk create error: %v", err)
+			failed++
+		} else {
+			createdIds = append(createdIds, trackingID)
+		}
+	}
+
+	h.shipmentUC.RecordEvent(c.Context(), "admin_bulk_csv", []byte(fmt.Sprintf(`{"created": %d, "failed": %d}`, len(createdIds), failed)))
+
+	return c.JSON(fiber.Map{
+		"success": true,
+		"created": len(createdIds),
+		"failed":  failed,
+		"ids":     createdIds,
+	})
+}
+
+// GetTelemetry - GET /api/admin/telemetry
+func (h *ShipmentHandler) GetTelemetry(c *fiber.Ctx) error {
+	stats, err := h.shipmentUC.GetTelemetryStats(c.Context(), time.Now().Add(-24*7*time.Hour))
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	recent, _ := h.shipmentUC.GetRecentEvents(c.Context(), 50)
+
+	return c.JSON(fiber.Map{
+		"stats":  stats,
+		"recent": recent,
+	})
+}
+
+// BulkUpdateStatusRequest for BulkUpdateStatus endpoint
+type BulkUpdateStatusRequest struct {
+	IDs    []string `json:"ids" validate:"required,min=1"`
+	Status string   `json:"status" validate:"required"`
+}
+
+// BulkUpdateStatus - PATCH /api/admin/shipments/bulk_status
+func (h *ShipmentHandler) BulkUpdateStatus(c *fiber.Ctx) error {
+	var req BulkUpdateStatusRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid payload"})
+	}
+
+	if err := h.validate.Struct(req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	if err := h.shipmentUC.BulkUpdateStatus(c.Context(), req.IDs, req.Status); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	h.shipmentUC.RecordEvent(c.Context(), "admin_bulk_update", []byte(fmt.Sprintf(`{"count": %d, "status": "%s"}`, len(req.IDs), req.Status)))
+
+	return c.JSON(fiber.Map{"success": true, "updated": len(req.IDs)})
+}
+
+// BulkDeleteRequest for BulkDelete endpoint
+type BulkDeleteRequest struct {
+	IDs []string `json:"ids" validate:"required,min=1"`
+}
+
+// BulkDelete - DELETE /api/admin/shipments/bulk_delete
+func (h *ShipmentHandler) BulkDelete(c *fiber.Ctx) error {
+	var req BulkDeleteRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid payload"})
+	}
+
+	for _, id := range req.IDs {
+		_ = h.shipmentUC.Delete(c.Context(), id)
+	}
+
+	h.shipmentUC.RecordEvent(c.Context(), "admin_bulk_delete", []byte(fmt.Sprintf(`{"count": %d}`, len(req.IDs))))
+
+	return c.JSON(fiber.Map{"success": true, "deleted": len(req.IDs)})
 }

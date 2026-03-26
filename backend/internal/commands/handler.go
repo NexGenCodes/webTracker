@@ -13,6 +13,7 @@ import (
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/i18n"
 	"webtracker-bot/internal/logger"
+	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/notif"
 	"webtracker-bot/internal/parser"
 	"webtracker-bot/internal/shipment"
@@ -20,6 +21,7 @@ import (
 	"webtracker-bot/internal/utils"
 	"webtracker-bot/internal/whatsapp"
 
+	waProto "go.mau.fi/whatsmeow/binary/proto"
 	"go.mau.fi/whatsmeow/types"
 )
 
@@ -29,10 +31,12 @@ func i18nLang(s string) i18n.Language {
 
 // Result represents the outcome of a command execution.
 type Result struct {
-	Message  string
-	Language string
-	EditID   string // Signals that this ID was edited and needs a new receipt
-	Error    error
+	Message     string
+	Language    string
+	EditID      string
+	List        *waProto.ListMessage
+	Buttons     *waProto.ButtonsMessage
+	Error       error
 }
 
 type Handler interface {
@@ -117,8 +121,8 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) 
 		case *EditHandler:
 			h.CompanyPrefix = d.AwbCmd
 			h.AdminTimezone = d.AdminTimezone
-			h.Sender        = d.sender
-			h.Cfg           = d.cfg
+			h.Sender = d.sender
+			h.Cfg = d.cfg
 		case *BroadcastHandler:
 			h.Sender = d.sender
 		case *StatusHandler:
@@ -148,6 +152,18 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) 
 		if res.Language != "" {
 			d.configUC.SetUserLanguage(ctx, jid, res.Language)
 		}
+
+		// Handle Interactive Content
+		targetJID, _ := types.ParseJID(jid)
+		if res.List != nil {
+			d.sender.SendList(targetJID, *res.List.Title, *res.List.Description, *res.List.ButtonText, res.List.Sections)
+			return &res, true
+		}
+		if res.Buttons != nil {
+			d.sender.SendButtons(targetJID, *res.Buttons.ContentText, res.Buttons.Buttons)
+			return &res, true
+		}
+
 		return &res, true
 	}
 
@@ -274,43 +290,52 @@ func (h *HelpHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUseca
 		company = "LOGISTICS"
 	}
 
-	var msg string
 	if isAdmin {
-		msg = fmt.Sprintf("🛠️ *%s - ADMIN CONTROL PANEL*\n\n", company) +
-			"━━━━ MANAGEMENT ━━━━\n" +
-			"📊 `!stats` - Daily Operations\n" +
-			" `!broadcast [msg]` - Global Update\n" +
-			"🖥️ `!status` - System Health/Groups\n" +
-			" `!edit [field] [value]` - Fix shipment mistakes\n" +
-			"🗑️ `!delete [ID]` - Permanently remove shipment\n" +
-			"━━━━ GENERAL ━━━━\n" +
-			"🔍 `!info [ID]` - Check shipment status\n" +
-			"🌐 `!lang [code]` - Switch language (en, pt, es, de)\n" +
-			"❓ `!help` - Show this admin menu\n" +
-			"━━━━━━━━━━━━━━━━━━━\n\n" +
-			"*🛠️ HOW TO EDIT:*\n" +
-			"`!edit name Jane Doe` (Fixes last shipment)\n" +
-			fmt.Sprintf("`!edit %s-123 name Jane Doe` (Fixes specific ID)\n", h.CompanyPrefix) +
-			"_Fields: name, phone, address, country, origin, departure, arrival_\n\n" +
-			"*📅 DATE EDITING:*\n" +
-			"_Use: today, tomorrow, next tomorrow, yesterday_\n" +
-			"_Example: `!edit departure tomorrow`_"
-	} else {
-		msg = fmt.Sprintf("📖 *%s - CUSTOMER SERVICE*\n\n", company) +
-			"━━━━ AVAILABLE COMMANDS ━━━━\n" +
-			"🔍 `!info [ID]` - Track your shipment\n" +
-			"❓ `!help` - Show this instructions menu\n" +
-			"━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
-			"*📦 HOW TO REGISTER SHIPMENT:*\n" +
-			"_Send a message with these details:_\n\n" +
-			"Sender: John Doe\n" +
-			"Receiver Name: Jane Smith\n" +
-			"Receiver Phone: +234 800 123 4567\n" +
-			"Receiver Address: 123 Main St, Lagos\n\n" +
-			"*PRO TIP:* _You can use shortcuts like #info or #help._"
+		// Admin Help Menu as Interactive List
+		return Result{
+			List: &waProto.ListMessage{
+				Title:       models.StrPtr(fmt.Sprintf("%s ADMIN", company)),
+				Description: models.StrPtr("Select a management action below:"),
+				ButtonText:  models.StrPtr("Open Menu"),
+				Sections: []*waProto.ListMessage_Section{
+					{
+						Title: models.StrPtr("MANAGEMENT"),
+						Rows: []*waProto.ListMessage_Row{
+							{Title: models.StrPtr("Stats"), Description: models.StrPtr("Daily operations summary"), RowID: models.StrPtr("!stats")},
+							{Title: models.StrPtr("Status"), Description: models.StrPtr("System health & vitals"), RowID: models.StrPtr("!status")},
+							{Title: models.StrPtr("Broadcast"), Description: models.StrPtr("Send msg to all groups"), RowID: models.StrPtr("!broadcast")},
+						},
+					},
+					{
+						Title: models.StrPtr("SHIPMENT CONTROL"),
+						Rows: []*waProto.ListMessage_Row{
+							{Title: models.StrPtr("Edit"), Description: models.StrPtr("!edit [field] [value]"), RowID: models.StrPtr("!help_edit")},
+							{Title: models.StrPtr("Delete"), Description: models.StrPtr("Permanently remove shipment"), RowID: models.StrPtr("!help_delete")},
+							{Title: models.StrPtr("Info"), Description: models.StrPtr("Detailed tracking data"), RowID: models.StrPtr("!info")},
+						},
+					},
+					{
+						Title: models.StrPtr("SETTINGS"),
+						Rows: []*waProto.ListMessage_Row{
+							{Title: models.StrPtr("Language"), Description: models.StrPtr("Switch bot language"), RowID: models.StrPtr("!lang")},
+						},
+					},
+				},
+			},
+		}
 	}
 
-	return Result{Message: msg}
+	// Customer Help Menu as Buttons
+	return Result{
+		Buttons: &waProto.ButtonsMessage{
+			ContentText: models.StrPtr(fmt.Sprintf("📖 *%s CUSTOMER SERVICE*\n\nHow can we help you today?", company)),
+			Buttons: []*waProto.ButtonsMessage_Button{
+				{ButtonID: models.StrPtr("!info"), ButtonText: &waProto.ButtonsMessage_Button_ButtonText{DisplayText: models.StrPtr("Track Shipment")}},
+				{ButtonID: models.StrPtr("!help"), ButtonText: &waProto.ButtonsMessage_Button_ButtonText{DisplayText: models.StrPtr("Instructions")}},
+				{ButtonID: models.StrPtr("!lang"), ButtonText: &waProto.ButtonsMessage_Button_ButtonText{DisplayText: models.StrPtr("Change Language")}},
+			},
+		},
+	}
 }
 
 type LangHandler struct{}
@@ -476,10 +501,10 @@ func (h *EditHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUseca
 		if dbShip != nil {
 			// Recalculate Arrival based on new Departure
 			arrival, outForDelivery := shipUC.Service.CalculateArrival(newDeparture, dbShip.Origin.String, dbShip.Destination.String)
-			
+
 			_ = shipUC.UpdateField(ctx, trackingID, "expected_delivery_time", arrival.Format("2006-01-02 15:04:05"))
 			_ = shipUC.UpdateField(ctx, trackingID, "outfordelivery_time", outForDelivery.Format("2006-01-02 15:04:05"))
-			
+
 			updatedFields = append(updatedFields, "EXPECTED DELIVERY TIME (AUTO-SYNC)", "OUTFORDELIVERY TIME (AUTO-SYNC)")
 		}
 	}
@@ -512,7 +537,7 @@ func (h *EditHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUseca
 		newStatus := s.ResolveStatus(time.Now().UTC())
 		if newStatus != dbShip.Status.String {
 			_ = shipUC.UpdateField(ctx, trackingID, "status", newStatus)
-			
+
 			// If it transitions, optionally trigger the notification explicitly!
 			if h.Sender != nil && h.Sender.Client != nil {
 				notif.SendStatusAlert(ctx, h.Sender.Client, h.Cfg, dbShip.UserJid, trackingID, newStatus, dbShip.RecipientEmail.String)
@@ -520,12 +545,18 @@ func (h *EditHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUseca
 		}
 	}
 
-	summary := fmt.Sprintf("✅ *INFORMATION UPDATED*\n\n🆔 *%s*\n\n📝 *FIELDS MODIFIED:*\n• %s\n\n━━━━━━━━━━━━━━━━━━━━━━━\n_Generating your updated receipt..._",
+	summary := fmt.Sprintf("✅ *INFORMATION UPDATED*\n\n🆔 *%s*\n\n📝 *FIELDS MODIFIED:*\n• %s\n\n━━━━━━━━━━━━━━━━━━━━━━━\n_Updates have been successfully persisted to the cloud._",
 		trackingID, strings.Join(updatedFields, "\n• "))
 
 	return Result{
-		Message: summary,
-		EditID:  trackingID,
+		Buttons: &waProto.ButtonsMessage{
+			ContentText: models.StrPtr(summary),
+			Buttons: []*waProto.ButtonsMessage_Button{
+				{ButtonID: models.StrPtr(fmt.Sprintf("!info %s", trackingID)), ButtonText: &waProto.ButtonsMessage_Button_ButtonText{DisplayText: models.StrPtr("View Final Receipt")}},
+				{ButtonID: models.StrPtr("!help"), ButtonText: &waProto.ButtonsMessage_Button_ButtonText{DisplayText: models.StrPtr("Back to Menu")}},
+			},
+		},
+		EditID: trackingID,
 	}
 }
 

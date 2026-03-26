@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { createShipment, getAdminDashboardData, deleteShipment, bulkDeleteDelivered, markAsDelivered, cancelShipment, getAdminShipments } from '../actions/shipment';
 import { CreateShipmentDto, ShipmentData, DashboardStats, Pagination } from '@/types/shipment';
 import { LayoutDashboard, List, Package, PlusCircle, Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 // Components
 import { useI18n } from '@/components/I18nContext';
@@ -22,6 +23,7 @@ export default function AdminPage() {
     const [activeTab, setActiveTab] = useState<Tab>('dashboard');
 
     const [trackingId, setTrackingId] = useState<string | null>(null);
+    const [createdShipment, setCreatedShipment] = useState<CreateShipmentDto | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [copied, setCopied] = useState(false);
@@ -100,6 +102,7 @@ export default function AdminPage() {
             const result = await createShipment(data);
             if (result.success) {
                 setTrackingId(result.data?.trackingNumber ?? null);
+                setCreatedShipment(data);
                 refreshData();
             } else {
                 setError(result.error ?? dict.admin.failedCreate);
@@ -121,37 +124,75 @@ export default function AdminPage() {
 
     const handleBack = () => {
         setTrackingId(null);
+        setCreatedShipment(null);
         setCopied(false);
     };
 
     const handleDelete = async (trackingNumber: string) => {
-        if (confirm(dict.admin.confirmDelete)) {
-            const result = await deleteShipment(trackingNumber);
-            if (result.success) refreshData();
-        }
+        toast((t) => (
+            <div className="flex flex-col gap-4">
+                <p className="font-bold text-sm">Delete shipment {trackingNumber}?</p>
+                <div className="flex gap-2">
+                    <button onClick={() => toast.dismiss(t.id)} className="px-3 py-1.5 bg-surface-muted rounded-lg text-xs font-bold">Cancel</button>
+                    <button onClick={async () => {
+                        toast.dismiss(t.id);
+                        const result = await deleteShipment(trackingNumber);
+                        if (result.success) {
+                            toast.success('Shipment deleted');
+                            refreshData();
+                        }
+                    }} className="px-3 py-1.5 bg-error text-white rounded-lg text-xs font-bold">Delete</button>
+                </div>
+            </div>
+        ), { duration: 5000 });
     };
 
     const handleBulkDelete = async () => {
-        if (confirm(dict.admin.confirmBulkDelete)) {
-            const result = await bulkDeleteDelivered();
-            if (result.success) refreshData();
-        }
+        toast((t) => (
+            <div className="flex flex-col gap-4">
+                <p className="font-bold text-sm">Bulk delete all delivered shipments?</p>
+                <div className="flex gap-2">
+                    <button onClick={() => toast.dismiss(t.id)} className="px-3 py-1.5 bg-surface-muted rounded-lg text-xs font-bold">Cancel</button>
+                    <button onClick={async () => {
+                        toast.dismiss(t.id);
+                        const result = await bulkDeleteDelivered();
+                        if (result.success) {
+                            toast.success('Cleaned up delivered shipments');
+                            refreshData();
+                        }
+                    }} className="px-3 py-1.5 bg-error text-white rounded-lg text-xs font-bold">Confirm</button>
+                </div>
+            </div>
+        ), { duration: 5000 });
     };
 
     const handleMarkDelivered = async (trackingNumber: string) => {
         const result = await markAsDelivered(trackingNumber);
-        if (result.success) refreshData();
+        if (result.success) {
+            toast.success('Marked as delivered');
+            refreshData();
+        }
     };
 
     const handleCancel = async (trackingNumber: string) => {
-        if (confirm('Are you sure you want to cancel this shipment?')) {
-            const result = await cancelShipment(trackingNumber);
-            if (result.success) {
-                refreshData();
-            } else {
-                alert(result.error);
-            }
-        }
+        toast((t) => (
+            <div className="flex flex-col gap-4">
+                <p className="font-bold text-sm">Cancel shipment {trackingNumber}?</p>
+                <div className="flex gap-2">
+                    <button onClick={() => toast.dismiss(t.id)} className="px-3 py-1.5 bg-surface-muted rounded-lg text-xs font-bold">No, Keep</button>
+                    <button onClick={async () => {
+                        toast.dismiss(t.id);
+                        const result = await cancelShipment(trackingNumber);
+                        if (result.success) {
+                            toast.success('Shipment canceled');
+                            refreshData();
+                        } else {
+                            toast.error(result.error || 'Failed to cancel');
+                        }
+                    }} className="px-3 py-1.5 bg-warning text-white rounded-lg text-xs font-bold">Yes, Cancel</button>
+                </div>
+            </div>
+        ), { duration: 5000 });
     };
 
     useEffect(() => {
@@ -175,10 +216,11 @@ export default function AdminPage() {
         );
     }
 
-    if (trackingId) {
+    if (trackingId && createdShipment) {
         return (
             <SuccessDisplay
                 trackingId={trackingId}
+                shipmentData={createdShipment}
                 copied={copied}
                 onCopy={handleCopy}
                 onBack={handleBack}

@@ -1,11 +1,11 @@
-import { CreateShipmentDto, ShipmentData, ServiceResult, ShipmentStatus, DashboardStats, PaginatedResult } from '@/types/shipment';
+import { CreateShipmentDto, ShipmentData, ServiceResult, ShipmentStatus, DashboardStats, PaginatedResult, Pagination } from '@/types/shipment';
 import { logger } from '@/lib/logger';
 
 function getNextJsBaseUrl() {
-  if (typeof window !== 'undefined') return '';
-  if (process.env.API_URL) return process.env.API_URL;
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return `http://localhost:${process.env.PORT ?? 3000}`;
+    if (typeof window !== 'undefined') return '';
+    if (process.env.API_URL) return process.env.API_URL;
+    if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+    return `http://localhost:${process.env.PORT ?? 3000}`;
 }
 
 const REQUEST_TIMEOUT = 10000;
@@ -132,20 +132,21 @@ const normalizeStatus = (s: string): string => {
     return upper;
 };
 
-const flattenSqlc = (obj: any): any => {
+const flattenSqlc = (obj: unknown): unknown => {
     if (obj === null || typeof obj !== 'object') return obj;
     if (Array.isArray(obj)) return obj.map(flattenSqlc);
-    if ('Valid' in obj && Object.keys(obj).length === 2) {
-        if (!obj.Valid) return null;
-        if ('String' in obj) return obj.String;
-        if ('Time' in obj) return obj.Time;
-        if ('Float64' in obj) return obj.Float64;
-        if ('Int64' in obj) return obj.Int64;
-        if ('Bool' in obj) return obj.Bool;
+    const objAsRecord = obj as Record<string, unknown>;
+    if ('Valid' in objAsRecord && Object.keys(objAsRecord).length === 2) {
+        if (!objAsRecord.Valid) return null;
+        if ('String' in objAsRecord) return objAsRecord.String;
+        if ('Time' in objAsRecord) return objAsRecord.Time;
+        if ('Float64' in objAsRecord) return objAsRecord.Float64;
+        if ('Int64' in objAsRecord) return objAsRecord.Int64;
+        if ('Bool' in objAsRecord) return objAsRecord.Bool;
     }
-    const res: any = {};
-    for (const k in obj) {
-        res[k] = flattenSqlc(obj[k]);
+    const res: Record<string, unknown> = {};
+    for (const k in objAsRecord) {
+        res[k] = flattenSqlc(objAsRecord[k]);
     }
     return res;
 };
@@ -169,10 +170,31 @@ export class ShipmentService {
                 throw new Error(errorData.error || `Server error: ${response.status}`);
             }
 
-            const result = flattenSqlc(await response.json());
+            const result = flattenSqlc(await response.json()) as { tracking_id: string };
             return { success: true, data: { trackingNumber: result.tracking_id } };
         } catch (error) {
             const apiError = handleApiError(error, 'Create shipment');
+            return { success: false, error: apiError.userMessage };
+        }
+    }
+
+    static async parseText(text: string): Promise<ServiceResult<Record<string, unknown>>> {
+        try {
+            const response = await fetchWithTimeout(`/api/admin/shipments/parse`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: response.statusText }));
+                throw new Error(errorData.error || `Server error: ${response.status}`);
+            }
+
+            const data = await response.json();
+            return { success: true, data };
+        } catch (error) {
+            const apiError = handleApiError(error, 'Parse AI text');
             return { success: false, error: apiError.userMessage };
         }
     }
@@ -184,7 +206,7 @@ export class ShipmentService {
             // CRITICAL: Fetch directly from Go backend during SSR to bypass Vercel internal fetch 401 error.
             const baseUrl = typeof window === 'undefined' ? (process.env.BACKEND_URL || 'http://localhost:5000') : '';
             const url = typeof window === 'undefined' ? `${baseUrl}/api/track/${trackingNumber}` : `/api/track/${trackingNumber}`;
-            
+
             const apiKey = process.env.API_SECRET_KEY;
             const headers: Record<string, string> = {};
             if (apiKey) headers['X-API-Key'] = apiKey;
@@ -199,56 +221,61 @@ export class ShipmentService {
                 throw new Error(`API error: ${response.statusText} (${response.status})`);
             }
 
-            const data = flattenSqlc(await response.json());
-            
+            const data = flattenSqlc(await response.json()) as Record<string, unknown>;
+
             const now = new Date();
+            const timelineStr = (val: unknown) => typeof val === 'string' ? val : '';
+            const statusStr = typeof data.status === 'string' ? data.status.toLowerCase() : '';
+            const scheduledTransit = timelineStr(data.scheduled_transit_time);
+            const expectedDelivery = timelineStr(data.expected_delivery_time);
+
             const timeline = [
                 {
                     status: 'Order Placed',
-                    timestamp: data.created_at,
-                    description: `Shipment registered at ${data.origin || 'origin'}`,
+                    timestamp: timelineStr(data.created_at),
+                    description: `Shipment registered at ${timelineStr(data.origin) || 'origin'}`,
                     is_completed: true
                 },
                 {
                     status: 'In Transit',
-                    timestamp: data.scheduled_transit_time,
+                    timestamp: scheduledTransit,
                     description: 'Package has left the origin facility and is on its way',
-                    is_completed: now > new Date(data.scheduled_transit_time) || ['intransit', 'outfordelivery', 'delivered'].includes((data.status || '').toLowerCase())
+                    is_completed: scheduledTransit ? now > new Date(scheduledTransit) : false || ['intransit', 'outfordelivery', 'delivered'].includes(statusStr)
                 },
                 {
                     status: 'Delivered',
-                    timestamp: data.expected_delivery_time,
+                    timestamp: expectedDelivery,
                     description: 'Package has arrived at the destination',
-                    is_completed: (data.status || '').toLowerCase() === 'delivered'
+                    is_completed: statusStr === 'delivered'
                 }
             ];
-            
-            const redactName = (name: string | null): string => {
-                if (!name) return 'N/A';
+
+            const redactName = (name: unknown): string => {
+                if (typeof name !== 'string' || !name) return 'N/A';
                 const parts = name.split(' ');
                 if (parts[0].length <= 2) return parts[0] + '***';
                 return parts[0].substring(0, 2) + '******';
             };
 
             const shipment: ShipmentData = {
-                id: data.tracking_id,
-                trackingNumber: data.tracking_id,
-                status: normalizeStatus(data.status as string) as ShipmentStatus,
+                id: timelineStr(data.tracking_id),
+                trackingNumber: timelineStr(data.tracking_id),
+                status: normalizeStatus(statusStr) as ShipmentStatus,
                 senderName: redactName(data.sender_name),
                 receiverName: redactName(data.recipient_name),
-                receiverPhone: data.recipient_phone || null,
-                receiverEmail: data.recipient_email || null,
-                receiverAddress: data.recipient_address || null,
-                receiverCountry: data.destination || 'N/A',
-                weight: data.weight || 0,
-                senderCountry: data.origin || 'N/A',
+                receiverPhone: typeof data.recipient_phone === 'string' ? data.recipient_phone : null,
+                receiverEmail: typeof data.recipient_email === 'string' ? data.recipient_email : null,
+                receiverAddress: typeof data.recipient_address === 'string' ? data.recipient_address : null,
+                receiverCountry: timelineStr(data.destination) || 'N/A',
+                weight: typeof data.weight === 'number' ? data.weight : (typeof data.weight === 'string' ? parseFloat(data.weight) : 0),
+                senderCountry: timelineStr(data.origin) || 'N/A',
                 timeline: timeline,
                 events: [],
-                createdAt: data.created_at,
-                scheduledTransitTime: data.scheduled_transit_time,
-                outfordeliveryTime: data.outfordelivery_time,
-                expectedDeliveryTime: data.expected_delivery_time,
-                isArchived: data.status === 'delivered',
+                createdAt: timelineStr(data.created_at),
+                scheduledTransitTime: scheduledTransit,
+                outfordeliveryTime: timelineStr(data.outfordelivery_time),
+                expectedDeliveryTime: expectedDelivery,
+                isArchived: statusStr === 'delivered',
             };
             return shipment;
         } catch (error) {
@@ -332,8 +359,6 @@ export class ShipmentService {
 
             if (!res.ok) throw new Error(`Failed to fetch shipments: ${res.status}`);
 
-            const json = flattenSqlc(await res.json());
-            
             interface ApiShipment {
                 tracking_id: string;
                 status: string;
@@ -346,25 +371,31 @@ export class ShipmentService {
                 weight: number;
                 origin: string;
                 created_at: string;
+                scheduled_transit_time?: string;
+                outfordelivery_time?: string;
+                expected_delivery_time?: string;
             }
 
+            const json = flattenSqlc(await res.json()) as { data: ApiShipment[], pagination: Pagination };
             const shipments = json.data.map((s: ApiShipment) => ({
                 id: s.tracking_id,
                 trackingNumber: s.tracking_id,
                 status: normalizeStatus(s.status) as ShipmentStatus,
                 senderName: s.sender_name,
                 receiverName: s.recipient_name,
-                receiverPhone: s.recipient_phone,
-                receiverEmail: s.recipient_email,
-                receiverAddress: s.recipient_address,
+                receiverPhone: s.recipient_phone ?? null,
+                receiverEmail: s.recipient_email ?? null,
+                receiverAddress: s.recipient_address ?? null,
                 receiverCountry: s.destination,
                 weight: s.weight,
                 senderCountry: s.origin,
                 createdAt: s.created_at,
-                scheduledTransitTime: (s as any).scheduled_transit_time,
-                outfordeliveryTime: (s as any).outfordelivery_time,
-                expectedDeliveryTime: (s as any).expected_delivery_time,
+                scheduledTransitTime: s.scheduled_transit_time,
+                outfordeliveryTime: s.outfordelivery_time,
+                expectedDeliveryTime: s.expected_delivery_time,
                 isArchived: s.status === 'delivered',
+                events: [],
+                timeline: [],
             }));
 
             return {
@@ -394,9 +425,6 @@ export class ShipmentService {
                 throw new Error(`Failed to fetch shipments: ${listRes.status}`);
             }
 
-            const json = flattenSqlc(await listRes.json());
-            const apiShipments = json.data;
-            
             interface ApiShipment {
                 tracking_id: string;
                 status: string;
@@ -409,8 +437,13 @@ export class ShipmentService {
                 weight: number;
                 origin: string;
                 created_at: string;
+                scheduled_transit_time?: string;
+                outfordelivery_time?: string;
+                expected_delivery_time?: string;
             }
 
+            const json = flattenSqlc(await listRes.json()) as { data: ApiShipment[] };
+            const apiShipments = json.data;
             const shipments = apiShipments.map((s: ApiShipment) => ({
                 id: s.tracking_id,
                 trackingNumber: s.tracking_id,
@@ -424,9 +457,9 @@ export class ShipmentService {
                 weight: s.weight,
                 senderCountry: s.origin,
                 createdAt: s.created_at,
-                scheduledTransitTime: (s as any).scheduled_transit_time,
-                outfordeliveryTime: (s as any).outfordelivery_time,
-                expectedDeliveryTime: (s as any).expected_delivery_time,
+                scheduledTransitTime: s.scheduled_transit_time,
+                outfordeliveryTime: s.outfordelivery_time,
+                expectedDeliveryTime: s.expected_delivery_time,
                 isArchived: s.status === 'delivered',
             }));
 
@@ -439,15 +472,15 @@ export class ShipmentService {
                 throw new Error(`Failed to fetch stats: ${statsRes.status}`);
             }
 
-            const apiStats = flattenSqlc(await statsRes.json());
+            const apiStats = flattenSqlc(await statsRes.json()) as Record<string, string>;
 
             const stats = {
-                total: parseInt(apiStats.total),
-                inTransit: parseInt(apiStats.intransit),
-                outForDelivery: parseInt(apiStats.outfordelivery),
-                delivered: parseInt(apiStats.delivered),
-                pending: parseInt(apiStats.pending),
-                canceled: parseInt(apiStats.canceled),
+                total: parseInt(apiStats.total || '0'),
+                inTransit: parseInt(apiStats.intransit || '0'),
+                outForDelivery: parseInt(apiStats.outfordelivery || '0'),
+                delivered: parseInt(apiStats.delivered || '0'),
+                pending: parseInt(apiStats.pending || '0'),
+                canceled: parseInt(apiStats.canceled || '0'),
             };
 
             return { success: true, data: { shipments: shipments as ShipmentData[], stats } };
@@ -483,5 +516,99 @@ export class ShipmentService {
      */
     static async pruneStale(): Promise<ServiceResult<void>> {
         return this.bulkDeleteDelivered();
+    }
+
+    /**
+     * Admin: Bulk update status via labels or selection
+     */
+    static async bulkUpdateStatus(ids: string[], status: string): Promise<ServiceResult<{ updated: number }>> {
+        try {
+            const response = await fetchWithTimeout(`/api/admin/shipments/bulk_status`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids, status: status.toLowerCase() }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: response.statusText }));
+                throw new Error(errorData.error || `Server error: ${response.status}`);
+            }
+
+            const data = await response.json();
+            return { success: true, data: { updated: data.updated } };
+        } catch (error) {
+            const apiError = handleApiError(error, 'Bulk update status');
+            return { success: false, error: apiError.userMessage };
+        }
+    }
+
+    /**
+     * Admin: Bulk delete selected shipments
+     */
+    static async bulkDeleteShipments(ids: string[]): Promise<ServiceResult<{ deleted: number }>> {
+        try {
+            const response = await fetchWithTimeout(`/api/admin/shipments/bulk_delete`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: response.statusText }));
+                throw new Error(errorData.error || `Server error: ${response.status}`);
+            }
+
+            const data = await response.json();
+            return { success: true, data: { deleted: data.deleted } };
+        } catch (error) {
+            const apiError = handleApiError(error, 'Bulk delete shipments');
+            return { success: false, error: apiError.userMessage };
+        }
+    }
+
+    /**
+     * Admin: Bulk create from CSV manifest
+     */
+    static async bulkCreateCSV(text: string): Promise<ServiceResult<{ created: number; failed: number }>> {
+        try {
+            const response = await fetchWithTimeout(`/api/admin/shipments/bulk_csv`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: response.statusText }));
+                throw new Error(errorData.error || `Server error: ${response.status}`);
+            }
+
+            const data = await response.json();
+            return { success: true, data: { created: data.created, failed: data.failed } };
+        } catch (error) {
+            const apiError = handleApiError(error, 'Bulk CSV create');
+            return { success: false, error: apiError.userMessage };
+        }
+    }
+
+    /**
+     * Admin: Fetch system telemetry handles
+     */
+    static async getTelemetry(): Promise<ServiceResult<{ stats: any[]; recent: any[] }>> {
+        try {
+            const response = await fetchWithTimeout(`/api/admin/telemetry`, {
+                next: { revalidate: 0 }
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: response.statusText }));
+                throw new Error(errorData.error || `Server error: ${response.status}`);
+            }
+
+            const data = await response.json();
+            return { success: true, data };
+        } catch (error) {
+            const apiError = handleApiError(error, 'Fetch telemetry');
+            return { success: false, error: apiError.userMessage };
+        }
     }
 }

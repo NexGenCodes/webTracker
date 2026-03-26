@@ -43,6 +43,8 @@ require (
 	github.com/go-playground/validator/v10 v10.30.1
 	github.com/gofiber/fiber/v2 v2.52.12
 	github.com/ilyakaznacheev/cleanenv v1.5.0
+	github.com/lib/pq v1.12.0
+	github.com/sqlc-dev/pqtype v0.3.0
 	github.com/stretchr/testify v1.11.1
 )
 

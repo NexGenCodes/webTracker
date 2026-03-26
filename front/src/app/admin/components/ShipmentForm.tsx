@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Package, CheckCircle, XCircle, Loader2, StickyNote, Play, AlertCircle } from 'lucide-react';
+import { Package, CheckCircle, XCircle, Loader2, StickyNote, Play, AlertCircle, UploadCloud } from 'lucide-react';
 import { parseShipmentAI } from '@/app/actions/ai';
 import { CreateShipmentDto } from '@/types/shipment';
 import { Dictionary } from '@/lib/dictionaries';
@@ -69,6 +69,40 @@ export const ShipmentForm: React.FC<ShipmentFormProps> = ({ onSubmit, loading, e
         }
     };
 
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setParseError(null);
+        try {
+            if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+                // Dynamically import pdfjs-dist to prevent SSR issues and keep main bundle small
+                const pdfjsLib = await import('pdfjs-dist');
+                pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                let text = '';
+                // Limit to first 3 pages to save memory and parsing time
+                for (let i = 1; i <= Math.min(pdf.numPages, 3); i++) {
+                    const page = await pdf.getPage(i);
+                    const content = await page.getTextContent();
+                    text += content.items.map((item: any) => item.str).join(' ') + '\n';
+                }
+                setAiText(prev => prev + (prev ? '\n\n' : '') + text);
+            } else {
+                // For TXT and CSV
+                const text = await file.text();
+                setAiText(prev => prev + (prev ? '\n\n' : '') + text);
+            }
+        } catch (err) {
+            console.error('File parsing error:', err);
+            setParseError('Failed to read file. Ensure it is a valid text, CSV, or PDF.');
+        } finally {
+            e.target.value = ''; // Reset input
+        }
+    };
+
     const onFormSubmit = async (data: ShipmentFormData) => {
         try {
             await onSubmit(data as unknown as CreateShipmentDto);
@@ -111,6 +145,19 @@ export const ShipmentForm: React.FC<ShipmentFormProps> = ({ onSubmit, loading, e
                                 placeholder="e.g. Package from Amazon US to John Doe at 123 Main St, London, UK. Phone: +44 7700 900000"
                                 className="relative w-full h-40 bg-bg/50 backdrop-blur-sm p-4 rounded-xl border border-border/50 text-sm focus:border-accent/50 outline-none resize-none transition-all font-mono leading-relaxed"
                             />
+                        </div>
+
+                        <div className="flex items-center gap-2 mb-4">
+                            <label className="cursor-pointer group flex items-center justify-center gap-2 py-2 px-4 rounded-xl border border-dashed border-accent/40 hover:border-accent hover:bg-accent/5 transition-all text-xs font-bold text-text-muted hover:text-accent w-full text-center">
+                                <UploadCloud size={16} />
+                                <span>Upload .TXT, .CSV, or .PDF (Client-Side Parsed)</span>
+                                <input 
+                                    type="file" 
+                                    accept=".txt,.csv,.pdf,application/pdf,text/plain,text/csv" 
+                                    className="hidden" 
+                                    onChange={handleFileUpload} 
+                                />
+                            </label>
                         </div>
 
                         {parseError && (
@@ -202,6 +249,12 @@ export const ShipmentForm: React.FC<ShipmentFormProps> = ({ onSubmit, loading, e
                                 <input type="number" step="0.1" {...register("weight", { valueAsNumber: true })} className="shipment-input" />
                                 {errors.weight && <p className="text-error text-[9px] font-bold uppercase ml-2">{errors.weight.message}</p>}
                             </div>
+                        </div>
+
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-text-muted ml-2">Cargo Type</label>
+                            <input {...register("cargoType")} placeholder="e.g. Documents, Electronics" className="shipment-input" />
+                            {errors.cargoType && <p className="text-error text-[9px] font-bold uppercase ml-2">{errors.cargoType.message}</p>}
                         </div>
 
                         <button
