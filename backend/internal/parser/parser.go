@@ -20,7 +20,7 @@ import (
 // AI rate limiter: 5 requests per second
 var aiRateLimiter = rate.NewLimiter(rate.Every(200*time.Millisecond), 5)
 
-var stopLabels = `(?:receiver|reciver|sender|sendr|phone|mobile|tel|num|contact|address|addr|country|nation|state|city|id|passport|email|cargo|item|content|weight|wgt|name|to|from|origin|dest|destination)`
+var stopLabels = `(?i)(?:receiver|reciver|sender|sendr|phone|mobile|tel|num|contact|address|addr|country|nation|state|city|id|passport|email|cargo|item|content|weight|wgt|name|to|from|origin|dest|destination|poids|remetente|absender|empfänger|destinataire|expéditeur)`
 var labelSep = `[\s]*[:\-]+[\s]*`
 
 type anchor struct {
@@ -44,8 +44,8 @@ type uncompiledLabelMap struct {
 
 func GetLabelMappings() []uncompiledLabelMap {
 	return []uncompiledLabelMap{
-		{"ReceiverName", `(?i)\b(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|consignment|consignee|destinatario|destinatário|dirección|empfänger|namen?)[s']*\b[\s\-:]+name\b[\s\-:]*`, 2},
-		{"ReceiverName", `(?i)\b(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|consignment|consignee|destinatario|destinatário|empfänger)\b[\s\-:]*`, 2},
+		{"ReceiverName", `(?i)\b(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|consignee|destinatario|destinatário|dirección|empfänger|destinataire|namen?)[s']*\b[\s\-:]+name\b[\s\-:]*`, 2},
+		{"ReceiverName", `(?i)\b(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|consignee|destinatario|destinatário|empfänger|destinataire)\b[\s\-:]*`, 2},
 		{"ReceiverName", `(?i)\bname\b[\s\-:]*`, 1},
 		{"ReceiverPhone", `(?i)\b(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee|destinatario|destinatário|empfänger)[s']*\b[\s\-:]+\b(?:phone|mobile|tel|num|contact|telephone|mobil|number|ph|cell|whatsapp|telefone|teléfono|telephon|handy|nr)\b[\s\-:]*`, 2},
 		{"ReceiverPhone", `(?i)\b(?:phone|mobile|tel|num|contact|telephone|mobil|number|ph|cell|whatsapp|telefone|teléfono|telephon|handy|nr)\b[\s\-:]*`, 1},
@@ -60,8 +60,8 @@ func GetLabelMappings() []uncompiledLabelMap {
 		{"SenderName", `(?i)\b(?:sender|sendr|origin|from|shippr|shipper|sent by|remetente|remitente|absender)[s']*\b[\s\-:]+name\b[\s\-:]*`, 2},
 		{"SenderName", `(?i)\b(?:sender|sendr|origin|from|shippr|shipper|sent by|remetente|remitente|absender)\b[\s\-:]*`, 2},
 		{"SenderCountry", `(?i)\b(?:sender|sendr|origin|from|shippr|shipper|sent by)[s']*\b[\s\-:]+\b(?:country|nation|state|city|pais|land|dest|destination)\b[\s\-:]*`, 2},
-		{"CargoType", `(?i)\b(?:item|content|cargo|description|type|package|commodity|conteúdo|contenido|inhalt|ware)\b[\s\-:]*`, 1},
-		{"Weight", `(?i)\b(?:weight|wgt|mass|gross\s*weight|peso|gewicht)\b[\s\-:]*`, 1},
+		{"CargoType", `(?i)\b(?:item|content|cargo|description|type|package|commodity|conteúdo|contenido|inhalt|ware|consignment)\b[\s\-:]*`, 1},
+		{"Weight", `(?i)\b(?:weight|wgt|mass|gross\s*weight|peso|gewicht|poids)\b[\s\-:]*`, 1},
 		{"scheduled_transit_time", `(?i)\b(?:departure|transit\s*time|depart|sent\s*date|start\s*date|transit|partida|salida|abfahrt)\b[\s\-:]*`, 2},
 		{"expected_delivery_time", `(?i)\b(?:arrival|delivery\s*time|arrive|expect|delivery\s*date|delivered\s*on|delivery|chegada|entrega|ankunft|zustellung)\b[\s\-:]*`, 2},
 	}
@@ -117,8 +117,10 @@ func ParseRegex(text string) models.Manifest {
 	m.CargoType = results["CargoType"]
 
 	if weightStr, ok := results["Weight"]; ok {
+		cleanWeight := strings.ReplaceAll(weightStr, ",", ".")
+		cleanWeight = strings.ReplaceAll(cleanWeight, " ", "")
 		re := regexp.MustCompile(`([\d.]+)`)
-		if match := re.FindString(weightStr); match != "" {
+		if match := re.FindString(cleanWeight); match != "" {
 			fmt.Sscanf(match, "%f", &m.Weight)
 		}
 	}
@@ -135,9 +137,11 @@ func ParseRegex(text string) models.Manifest {
 		m.ReceiverEmail = extractEntity(text, `([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})`)
 	}
 	if m.Weight == 0 {
-		weightStr := extractEntity(text, `(?i)(?:weight|wgt|mass|gross\s*weight)[\s\-:]*([\d.]+)\s*(?:kg|kgs|kilos|kg's)?`)
+		weightStr := extractEntity(text, `(?i)(?:weight|wgt|mass|gross\s*weight|peso|poids)[^0-9]*?([\d., ]+)\s*(?:kg|kgs|kilos|kg's)?`)
 		if weightStr != "" {
-			fmt.Sscanf(weightStr, "%f", &m.Weight)
+			cleanWeight := strings.ReplaceAll(weightStr, ",", ".")
+			cleanWeight = strings.ReplaceAll(cleanWeight, " ", "")
+			fmt.Sscanf(cleanWeight, "%f", &m.Weight)
 		}
 	}
 
@@ -262,7 +266,11 @@ func chunkAndAssign(text string, anchors []anchor) map[string]string {
 		val := strings.TrimSpace(text[start:end])
 		if val != "" {
 			// Trim common delimiters that might be between fields
-			val = strings.TrimRight(val, ".,;|\n\t ")
+			if a.field != "ReceiverAddress" && a.field != "ReceiverName" {
+				val = strings.TrimRight(val, ".,;|\n\t ")
+			} else {
+				val = strings.TrimRight(val, ";|\n\t ")
+			}
 			val = strings.TrimSpace(val)
 
 			if a.field != "ReceiverAddress" && a.field != "CargoType" {
