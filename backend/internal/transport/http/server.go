@@ -7,13 +7,14 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 
+	"database/sql"
+	"strings"
+	"time"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/transport/http/handler"
 	"webtracker-bot/internal/transport/http/middleware"
 	"webtracker-bot/internal/usecase"
-	"database/sql"
-	"time"
-	"strings"
+	"webtracker-bot/internal/whatsapp"
 )
 
 type Server struct {
@@ -21,9 +22,11 @@ type Server struct {
 	cfg        *config.Config
 	shipmentUC *usecase.ShipmentUsecase
 	db         *sql.DB
+	sender     *whatsapp.Sender
+	startTime  time.Time
 }
 
-func NewServer(cfg *config.Config, shipmentUC *usecase.ShipmentUsecase, db *sql.DB) *Server {
+func NewServer(cfg *config.Config, shipmentUC *usecase.ShipmentUsecase, db *sql.DB, sender *whatsapp.Sender) *Server {
 	app := fiber.New(fiber.Config{
 		DisableStartupMessage: true,
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
@@ -62,18 +65,20 @@ func NewServer(cfg *config.Config, shipmentUC *usecase.ShipmentUsecase, db *sql.
 		cfg:        cfg,
 		shipmentUC: shipmentUC,
 		db:         db,
+		sender:     sender,
+		startTime:  time.Now(),
 	}
 }
 
 func (s *Server) SetupRoutes() {
-	shipmentHandler := handler.NewShipmentHandler(s.shipmentUC, s.cfg)
+	shipmentHandler := handler.NewShipmentHandler(s.shipmentUC, s.cfg, s.sender)
 	shipmentHandler.RegisterRoutes(s.app)
-	
+
 	// Enhanced Healthcheck
 	s.app.Get("/health", func(c *fiber.Ctx) error {
 		status := "OK"
 		dbStatus := "connected"
-		
+
 		if s.db != nil {
 			if err := s.db.Ping(); err != nil {
 				status = "Error"
@@ -89,7 +94,7 @@ func (s *Server) SetupRoutes() {
 			"timestamp": time.Now().Format(time.RFC3339),
 			"services": fiber.Map{
 				"database": dbStatus,
-				"uptime":   time.Since(time.Now()).String(), // Placeholder for real uptime if needed
+				"uptime":   time.Since(s.startTime).Truncate(time.Second).String(),
 			},
 		})
 	})

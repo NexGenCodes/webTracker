@@ -12,7 +12,6 @@ interface SuccessDisplayProps {
     copied: boolean;
     onCopy: () => void;
     onBack: () => void;
-    onResendReceipt?: (id: string) => void;
     dict: Dictionary;
 }
 
@@ -22,7 +21,6 @@ export const SuccessDisplay: React.FC<SuccessDisplayProps> = ({
     copied,
     onCopy,
     onBack,
-    onResendReceipt,
     dict
 }) => {
     const [imageError, setImageError] = useState(false);

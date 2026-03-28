@@ -8,32 +8,36 @@ import (
 	"math"
 	"math/big"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 
 	"webtracker-bot/internal/adapter/db"
+	"webtracker-bot/internal/parser"
 	"webtracker-bot/internal/usecase"
 	"webtracker-bot/internal/utils/dbutil"
 
-	"github.com/go-playground/validator/v10"
 	"errors"
-	"strings"
-	"webtracker-bot/internal/parser"
 	"webtracker-bot/internal/config"
+	"webtracker-bot/internal/whatsapp"
+
+	"github.com/go-playground/validator/v10"
 )
 
 type ShipmentHandler struct {
 	shipmentUC *usecase.ShipmentUsecase
 	validate   *validator.Validate
 	cfg        *config.Config
+	sender     *whatsapp.Sender
 }
 
-func NewShipmentHandler(shipmentUC *usecase.ShipmentUsecase, cfg *config.Config) *ShipmentHandler {
+func NewShipmentHandler(shipmentUC *usecase.ShipmentUsecase, cfg *config.Config, sender *whatsapp.Sender) *ShipmentHandler {
 	return &ShipmentHandler{
 		shipmentUC: shipmentUC,
 		validate:   validator.New(),
 		cfg:        cfg,
+		sender:     sender,
 	}
 }
 
@@ -43,7 +47,7 @@ func (h *ShipmentHandler) RegisterRoutes(router fiber.Router) {
 
 	// Admin Routes (Next.js protects these via NextAuth before calling Go)
 	admin := router.Group("/api/admin")
-	
+
 	// Stats & Telemetry
 	admin.Get("/stats", h.GetStats)
 	admin.Get("/telemetry", h.GetTelemetry)
@@ -59,6 +63,7 @@ func (h *ShipmentHandler) RegisterRoutes(router fiber.Router) {
 	shipments.Delete("/bulk_delete", h.BulkDelete)
 	shipments.Patch("/:id", h.UpdateStatus)
 	shipments.Delete("/:id", h.Delete)
+
 }
 
 // Track - GET /api/track/:id
@@ -129,7 +134,7 @@ func (h *ShipmentHandler) Create(c *fiber.Ctx) error {
 
 	params := db.CreateShipmentParams{
 		TrackingID:           trackingID,
-		UserJid:              "admin_portal", 
+		UserJid:              "admin_portal",
 		Status:               toNullString("pending"),
 		CreatedAt:            toNullTime(now),
 		ScheduledTransitTime: toNullTime(departure),
@@ -165,10 +170,14 @@ func (h *ShipmentHandler) Create(c *fiber.Ctx) error {
 func (h *ShipmentHandler) List(c *fiber.Ctx) error {
 	page, _ := strconv.Atoi(c.Query("page", "1"))
 	limit, _ := strconv.Atoi(c.Query("limit", "10"))
-	
-	if page < 1 { page = 1 }
-	if limit < 1 || limit > 100 { limit = 10 }
-	
+
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 10
+	}
+
 	offset := (page - 1) * limit
 
 	shipments, err := h.shipmentUC.ListPaginated(c.Context(), int32(limit), int32(offset))
@@ -426,3 +435,5 @@ func (h *ShipmentHandler) BulkDelete(c *fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{"success": true, "deleted": len(req.IDs)})
 }
+
+

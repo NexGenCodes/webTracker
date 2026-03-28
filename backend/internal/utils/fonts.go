@@ -16,9 +16,11 @@ import (
 )
 
 var (
-	fontDataMu sync.Mutex
-	faceCache  = make(map[string]font.Face)
-	faceMu     sync.RWMutex
+	faceCache       = make(map[string]font.Face)
+	faceMu          sync.RWMutex
+	parsedFontCache = make(map[string]*truetype.Font)
+	parsedMu        sync.RWMutex
+	fontDataMu      sync.Mutex // For downloading fonts
 )
 
 func getFontsPath() string {
@@ -98,17 +100,26 @@ func LoadFont(dc *gg.Context, fontName string, points float64) error {
 
 	path := filepath.Join(getFontsPath(), fontName)
 
-	// We need to load it manually to cache the face
-	fontBytes, err := os.ReadFile(path)
-	if err != nil {
-		return err
+	// Phase 1: Check parsed font cache to avoid disk I/O and parsing overhead
+	parsedMu.RLock()
+	f, ok := parsedFontCache[fontName]
+	parsedMu.RUnlock()
+
+	if !ok {
+		fontBytes, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		f, err = truetype.Parse(fontBytes)
+		if err != nil {
+			return err
+		}
+		parsedMu.Lock()
+		parsedFontCache[fontName] = f
+		parsedMu.Unlock()
 	}
 
-	f, err := truetype.Parse(fontBytes)
-	if err != nil {
-		return err
-	}
-
+	// Phase 2: Create a new face from the parsed font at the requested size
 	face := truetype.NewFace(f, &truetype.Options{
 		Size: points,
 	})

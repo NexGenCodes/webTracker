@@ -89,7 +89,7 @@ backend/logs/
 coverage.out
 backend/bot
 backend/*.exe
-backend/tests/receipt_test_output.jpg
+backend/tests/test_output
 backend/internal/logger/test_logs/
 **/assets/fonts/
 

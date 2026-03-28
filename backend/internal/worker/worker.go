@@ -15,6 +15,7 @@ import (
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/parser"
+	"webtracker-bot/internal/receipt"
 	"webtracker-bot/internal/shipment"
 	"webtracker-bot/internal/usecase"
 	"webtracker-bot/internal/whatsapp"
@@ -79,6 +80,25 @@ func (w *Worker) process(job models.Job) {
 			w.generateAndSendReceipt(job, res.EditID, lang)
 		}
 		return
+	}
+
+	// X. Extract Document Text (if any)
+	if job.RawMessage != nil && job.RawMessage.Message.GetDocumentMessage() != nil {
+		doc := job.RawMessage.Message.GetDocumentMessage()
+		data, err := w.Client.Download(context.Background(), doc)
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to download document message")
+		} else {
+			mimeType := doc.GetMimetype()
+			extracted, err := parser.ExtractDocumentText(data, mimeType)
+			if err != nil {
+				logger.Error().Err(err).Msg("Failed to parse document text")
+			} else if extracted != "" {
+				// Append extracted text to any existing caption/message text
+				job.Text = strings.TrimSpace(job.Text + "\n" + extracted)
+				logger.Info().Str("mime_type", mimeType).Msg("Successfully extracted text from document manifest")
+			}
+		}
 	}
 
 	// 2. High-Performance Pre-filter
@@ -228,13 +248,14 @@ func (w *Worker) process(job models.Job) {
 }
 
 func (w *Worker) generateAndSendReceipt(job models.Job, id string, lang i18n.Language) {
-	EnqueueReceipt(ReceiptJob{
-		Job:         job,
+	receipt.Enqueue(receipt.Job{
+		Msg:         job,
 		TrackingID:  id,
 		Language:    lang,
 		CompanyName: w.CompanyName,
 		ShipmentUC:  w.ShipmentUC,
 		Sender:      w.Sender,
+		RenderMode:  "default",
 	})
 }
 

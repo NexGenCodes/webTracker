@@ -133,12 +133,3 @@ export async function pruneOldShipments() {
     await ShipmentService.pruneStale();
 }
 
-/**
- * Admin: Resend receipt via WhatsApp
- */
-export async function resendReceipt(trackingNumber: string) {
-    if (!(await isAdmin())) return { success: false, error: 'Unauthorized' };
-    
-    const result = await ShipmentService.resendReceipt(trackingNumber);
-    return result;
-}

@@ -92,7 +92,8 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 			text = v.Message.GetExtendedTextMessage().GetText()
 		}
 
-		if text == "" {
+		docMsg := v.Message.GetDocumentMessage()
+		if text == "" && docMsg == nil {
 			return
 		}
 
@@ -228,6 +229,7 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 			Text:        strings.TrimSpace(text),
 			SenderPhone: senderPhone,
 			IsAdmin:     isAdmin,
+			RawMessage:  v,
 		}
 	}
 }
