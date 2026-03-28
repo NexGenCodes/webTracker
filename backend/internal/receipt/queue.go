@@ -100,7 +100,7 @@ func processReceipt(rj Job) {
 		Destination:       dbShip.Destination.String,
 		CargoType:         dbShip.CargoType.String,
 		Weight:            dbShip.Weight.Float64,
-		Cost:              dbShip.Weight.Float64,
+		Cost:              dbShip.Cost.Float64,
 	}
 
 	if dbShip.ScheduledTransitTime.Valid {

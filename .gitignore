@@ -124,3 +124,6 @@ backend/assets/fonts/
 .env.local.backup
 *.env.local
 ! .env.example
+
+# Planning
+PLAN.md

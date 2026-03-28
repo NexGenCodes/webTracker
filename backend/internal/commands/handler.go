@@ -591,11 +591,13 @@ func (h *ReceiptHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUs
 		return Result{Message: "❌ *NOT FOUND*\nCould not find a shipment with that ID."}
 	}
 
+	jid, _ := types.ParseJID(s.UserJid)
+
 	// Trigger receipt (using the same queue)
 	receipt.Enqueue(receipt.Job{
 		Msg: models.Job{
-			ChatJID:   types.NewJID(s.UserJid, types.DefaultUserServer),
-			SenderJID: types.NewJID(s.UserJid, types.DefaultUserServer),
+			ChatJID:   jid,
+			SenderJID: jid,
 		},
 		TrackingID:  trackingID,
 		Language:    i18n.Language(lang),
