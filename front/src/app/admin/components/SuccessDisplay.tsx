@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Check, Copy, ChevronLeft, Share2, Download, RefreshCw, Eye, Image as ImageIcon, Edit3 } from 'lucide-react';
+import { Check, Copy, ChevronLeft, Download, RefreshCw, Eye, Image as ImageIcon, Edit3 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import html2canvas from 'html2canvas';
 
@@ -59,7 +59,7 @@ export const SuccessDisplay: React.FC<SuccessDisplayProps> = ({
             link.href = canvas.toDataURL('image/png');
             link.click();
             toast.success("Receipt downloaded!");
-        } catch (err) {
+        } catch {
             toast.error("Export failed");
         } finally {
             setIsExporting(false);
