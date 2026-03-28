@@ -12,16 +12,12 @@ import (
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/i18n"
 	"webtracker-bot/internal/logger"
-	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/notif"
 	"webtracker-bot/internal/parser"
 	"webtracker-bot/internal/shipment"
 	"webtracker-bot/internal/usecase"
 	"webtracker-bot/internal/utils"
-	"webtracker-bot/internal/receipt"
 	"webtracker-bot/internal/whatsapp"
-
-	"go.mau.fi/whatsmeow/types"
 )
 
 func i18nLang(s string) i18n.Language {
@@ -33,6 +29,7 @@ type Result struct {
 	Message  string
 	Language string
 	EditID   string
+	Image    []byte // Binary payload for direct responses
 	Error    error
 }
 
@@ -171,16 +168,7 @@ func (h *StatsHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsec
 		return Result{Message: i18n.T(i18nLang(lang), "ERR_INCORRECT_USAGE")}
 	}
 
-	tz := h.AdminTimezone
-	if tz == "" {
-		tz = "Africa/Lagos"
-	}
-	loc, _ := time.LoadLocation(tz)
-	// Calculate since midnight of the configured timezone
-	since := time.Now().In(loc)
-	since = time.Date(since.Year(), since.Month(), since.Day(), 0, 0, 0, 0, loc)
-
-	pending, transit, err := shipUC.CountDailyStats(ctx, since.UTC())
+	stats, err := shipUC.CountByStatus(ctx)
 	if err != nil {
 		return Result{Message: i18n.T(i18nLang(lang), "ERR_SYSTEM_ERROR"), Error: err}
 	}
@@ -189,9 +177,15 @@ func (h *StatsHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsec
 	if company == "" {
 		company = "LOGISTICS"
 	}
+	
 	msg := i18n.T(i18nLang(lang), "MSG_STATS_HEADER", company) + "\n\n━━━━━━━━━━━━━━━━━━━━━━━\n" +
-		fmt.Sprintf("📦 PENDING:    *%d*\n🚚 IN TRANSIT: *%d*\n📊 TOTAL:      *%d*\n", pending, transit, pending+transit) +
-		"━━━━━━━━━━━━━━━━━━━━━━━\n\n_Total operations recorded today._"
+		fmt.Sprintf("📦 PENDING:    *%d*\n", stats.Pending) +
+		fmt.Sprintf("🚚 IN TRANSIT: *%d*\n", stats.Intransit) +
+		fmt.Sprintf("🏠 AT DEST:    *%d*\n", stats.Outfordelivery) +
+		fmt.Sprintf("🏁 DELIVERED:  *%d*\n", stats.Delivered) +
+		fmt.Sprintf("📊 TOTAL:      *%d*\n", stats.Total) +
+		"━━━━━━━━━━━━━━━━━━━━━━━\n\n_Real-time operational dashboard._"
+		
 	return Result{Message: msg}
 }
 
@@ -202,26 +196,36 @@ type InfoHandler struct {
 }
 
 func (h *InfoHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, args []string, lang string, isAdmin bool) Result {
+	var trackingID string
+	jid := utils.GetJID(ctx)
+
 	if len(args) < 1 {
-		company := strings.ToUpper(h.CompanyName)
-		if company == "" {
-			company = "COMMAND"
-		}
-		msg := fmt.Sprintf("🚀 *%s COMMAND CENTER*\n\n", company) +
-			"━━━━━━━━━━━━━━━━━━━━━━━\n"
+		// Attempt contextual lookup
+		var err error
+		trackingID, err = shipUC.GetLastForUser(ctx, jid)
+		if err != nil || trackingID == "" {
+			company := strings.ToUpper(h.CompanyName)
+			if company == "" {
+				company = "COMMAND"
+			}
+			msg := fmt.Sprintf("🚀 *%s COMMAND CENTER*\n\n", company) +
+				"━━━━━━━━━━━━━━━━━━━━━━━\n"
 
-		if isAdmin {
-			msg += "1️⃣ `!stats` - Daily Operations Summary\n"
-		}
+			if isAdmin {
+				msg += "1️⃣ `!stats` - Daily Operations Summary\n"
+			}
 
-		msg += "2️⃣ `!info [TrackingID]` - Shipment Information Tracker\n" +
-			"━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
-			"*PRO TIP:*\n" +
-			fmt.Sprintf("_Use `!info %s-123456789` for full details._", h.CompanyPrefix)
-		return Result{Message: msg}
+			msg += "2️⃣ `!info [TrackingID]` - Shipment Information Tracker\n" +
+				"━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
+				"*PRO TIP:*\n" +
+				fmt.Sprintf("_Use `!info %s-123456789` for full details._", h.CompanyPrefix)
+			return Result{Message: msg}
+		}
+	} else {
+		trackingID = strings.ToUpper(args[0])
 	}
 
-	dbShip, err := shipUC.Track(ctx, args[0])
+	dbShip, err := shipUC.Track(ctx, trackingID)
 	if err != nil {
 		return Result{Message: i18n.T(i18nLang(lang), "ERR_DB_ERROR"), Error: err}
 	}
@@ -521,11 +525,19 @@ func (h *EditHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUseca
 type DeleteHandler struct{}
 
 func (h *DeleteHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, args []string, lang string, isAdmin bool) Result {
+	var trackingID string
+	jid := utils.GetJID(ctx)
+
 	if len(args) < 1 {
-		return Result{Message: "🗑️ *DELETE SHIPMENT*\n\nUsage: `!delete [TrackingID]`"}
+		var err error
+		trackingID, err = shipUC.GetLastForUser(ctx, jid)
+		if err != nil || trackingID == "" {
+			return Result{Message: "🗑️ *DELETE SHIPMENT*\n\nUsage: `!delete [TrackingID]`"}
+		}
+	} else {
+		trackingID = strings.ToUpper(args[0])
 	}
 
-	trackingID := args[0]
 	err := shipUC.Delete(ctx, trackingID)
 	if err != nil {
 		return Result{Message: fmt.Sprintf("❌ *DELETE FAILED*\n_%v_", err)}
@@ -579,33 +591,66 @@ func (h *ReceiptHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUs
 	if !isAdmin {
 		return Result{Message: "🔒 *ACCESS DENIED*\nOnly admins can regenerate receipts."}
 	}
+
+	var trackingID string
+	jid := utils.GetJID(ctx)
+
 	if len(args) < 1 {
-		return Result{Message: "🧾 *RECEIPT REGENERATION*\n\nUsage: `!receipt [TrackingID]`"}
+		var err error
+		trackingID, err = shipUC.GetLastForUser(ctx, jid)
+		if err != nil || trackingID == "" {
+			return Result{Message: "🧾 *RECEIPT REGENERATION*\n\nUsage: `!receipt [TrackingID]`"}
+		}
+	} else {
+		trackingID = strings.ToUpper(args[0])
 	}
 
-	trackingID := strings.ToUpper(args[0])
-
 	// Fetch shipment to get JID
-	s, err := shipUC.Track(ctx, trackingID)
-	if err != nil || s == nil {
+	dbShip, err := shipUC.Track(ctx, trackingID)
+	if err != nil || dbShip == nil {
 		return Result{Message: "❌ *NOT FOUND*\nCould not find a shipment with that ID."}
 	}
 
-	jid, _ := types.ParseJID(s.UserJid)
+	// Map to Domain Model for Rendering
+	s := shipment.Shipment{
+		TrackingID:        dbShip.TrackingID,
+		UserJID:           dbShip.UserJid,
+		Status:            dbShip.Status.String,
+		CreatedAt:         dbShip.CreatedAt.Time,
+		SenderTimezone:    dbShip.SenderTimezone.String,
+		RecipientTimezone: dbShip.RecipientTimezone.String,
+		SenderName:        dbShip.SenderName.String,
+		SenderPhone:       dbShip.SenderPhone.String,
+		Origin:            dbShip.Origin.String,
+		RecipientName:     dbShip.RecipientName.String,
+		RecipientPhone:    dbShip.RecipientPhone.String,
+		RecipientID:       dbShip.RecipientID.String,
+		RecipientEmail:    dbShip.RecipientEmail.String,
+		RecipientAddress:  dbShip.RecipientAddress.String,
+		Destination:       dbShip.Destination.String,
+		CargoType:         dbShip.CargoType.String,
+		Weight:            dbShip.Weight.Float64,
+		Cost:              dbShip.Cost.Float64,
+	}
 
-	// Trigger receipt (using the same queue)
-	receipt.Enqueue(receipt.Job{
-		Msg: models.Job{
-			ChatJID:   jid,
-			SenderJID: jid,
-		},
-		TrackingID:  trackingID,
-		Language:    i18n.Language(lang),
-		CompanyName: h.Sender.CompanyName,
-		ShipmentUC:  shipUC,
-		Sender:      h.Sender,
-		RenderMode:  "default",
-	})
+	if dbShip.ScheduledTransitTime.Valid {
+		s.ScheduledTransitTime = &dbShip.ScheduledTransitTime.Time
+	}
+	if dbShip.OutfordeliveryTime.Valid {
+		s.OutForDeliveryTime = &dbShip.OutfordeliveryTime.Time
+	}
+	if dbShip.ExpectedDeliveryTime.Valid {
+		s.ExpectedDeliveryTime = &dbShip.ExpectedDeliveryTime.Time
+	}
 
-	return Result{Message: fmt.Sprintf("🔄 *RECEIPT ENQUEUED*\n\nGenerating and resending the waybill image for *%s*...", trackingID)}
+	// Render synchronous
+	receiptImg, err := utils.RenderReceipt(s, h.Sender.CompanyName, i18n.Language(lang))
+	if err != nil {
+		return Result{Message: "❌ *RENDER FAILED*", Error: err}
+	}
+
+	return Result{
+		Message: "", // Binary response handled by worker
+		Image:   receiptImg,
+	}
 }
