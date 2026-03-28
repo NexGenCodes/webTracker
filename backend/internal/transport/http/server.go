@@ -110,3 +110,8 @@ func (s *Server) Stop() error {
 	log.Println("Stopping HTTP REST API...")
 	return s.app.Shutdown()
 }
+
+// GetAppForTest returns the Fiber app for internal testing.
+func (s *Server) GetAppForTest() *fiber.App {
+	return s.app
+}
