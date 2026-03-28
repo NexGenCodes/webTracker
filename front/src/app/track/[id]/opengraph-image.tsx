@@ -29,8 +29,9 @@ async function fetchTrackingData(id: string) {
   }
 }
 
-export default async function Image({ params }: { params: { id: string } }) {
-  const id = params.id.toUpperCase();
+export default async function Image({ params }: { params: Promise<{ id: string }> }) {
+  const { id: rawId } = await params;
+  const id = rawId.toUpperCase();
   const data = await fetchTrackingData(id);
 
   if (!data) {

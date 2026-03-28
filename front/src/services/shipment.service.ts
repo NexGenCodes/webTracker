@@ -590,10 +590,36 @@ export class ShipmentService {
         }
     }
 
+    static async resendReceipt(trackingNumber: string): Promise<ServiceResult<{ success: boolean }>> {
+        try {
+            const baseUrl = typeof window === 'undefined' ? (process.env.BACKEND_URL || 'http://localhost:5000') : '';
+            const url = typeof window === 'undefined' ? `${baseUrl}/api/admin/shipments/${trackingNumber}/receipt` : `/api/admin/shipments/${trackingNumber}/receipt`;
+            
+            const apiKey = process.env.API_SECRET_KEY;
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (apiKey) headers['X-API-Key'] = apiKey;
+
+            const response = await fetchWithTimeout(url, {
+                method: 'POST',
+                headers,
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: response.statusText }));
+                throw new Error(errorData.error || `Server error: ${response.status}`);
+            }
+
+            return { success: true, data: { success: true } };
+        } catch (error) {
+            const apiError = handleApiError(error, `Resend receipt for ${trackingNumber}`);
+            return { success: false, error: apiError.userMessage };
+        }
+    }
+
     /**
      * Admin: Fetch system telemetry handles
      */
-    static async getTelemetry(): Promise<ServiceResult<{ stats: any[]; recent: any[] }>> {
+    static async getTelemetry(): Promise<ServiceResult<{ stats: unknown[]; recent: unknown[] }>> {
         try {
             const response = await fetchWithTimeout(`/api/admin/telemetry`, {
                 next: { revalidate: 0 }

@@ -5,9 +5,9 @@ export const runtime = 'edge';
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { trackingId: string } }
+  { params }: { params: Promise<{ trackingId: string }> }
 ) {
-  const { trackingId } = params;
+  const { trackingId } = await params;
 
   // In a real app, you'd fetch shipment data here.
   // For now, we'll parse status from query params or use defaults.

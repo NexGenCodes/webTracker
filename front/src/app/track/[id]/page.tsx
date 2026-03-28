@@ -3,13 +3,14 @@ import { getTracking } from '@/app/actions/shipment';
 import Home from '@/app/page';
 
 interface Props {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 export async function generateMetadata(
   { params }: Props
 ): Promise<Metadata> {
-  const id = params.id.toUpperCase();
+  const { id: rawId } = await params;
+  const id = rawId.toUpperCase();
   const shipment = await getTracking(id);
 
   if (!shipment) {
@@ -30,10 +31,11 @@ export async function generateMetadata(
   };
 }
 
-export default function TrackPage({ params }: Props) {
+export default async function TrackPage({ params }: Props) {
+  const { id } = await params;
   // We reuse the Home component logic which already supports ?id= query param
   // but we can also just render a specialized view if needed.
   // We pass the ID to Home to ensure it loads directly.
 
-  return <Home initialId={params.id} />;
+  return <Home initialId={id} />;
 }

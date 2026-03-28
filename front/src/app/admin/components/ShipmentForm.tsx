@@ -4,7 +4,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Package, CheckCircle, XCircle, Loader2, StickyNote, Play, AlertCircle, UploadCloud } from 'lucide-react';
 import { parseShipmentAI } from '@/app/actions/ai';
 import { CreateShipmentDto } from '@/types/shipment';
-import { Dictionary } from '@/lib/dictionaries';
 import { shipmentSchema, ShipmentFormData } from '@/lib/schemas/shipment';
 
 interface ShipmentFormProps {
@@ -76,19 +75,20 @@ export const ShipmentForm: React.FC<ShipmentFormProps> = ({ onSubmit, loading, e
         setParseError(null);
         try {
             if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
-                // Dynamically import pdfjs-dist to prevent SSR issues and keep main bundle small
-                const pdfjsLib = await import('pdfjs-dist');
-                pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
-
-                const arrayBuffer = await file.arrayBuffer();
-                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-                let text = '';
-                // Limit to first 3 pages to save memory and parsing time
-                for (let i = 1; i <= Math.min(pdf.numPages, 3); i++) {
-                    const page = await pdf.getPage(i);
-                    const content = await page.getTextContent();
-                    text += content.items.map((item: any) => item.str).join(' ') + '\n';
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                const response = await fetch('/api/admin/shipments/parse-pdf', {
+                    method: 'POST',
+                    body: formData,
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Server-side PDF parsing failed');
                 }
+                
+                const { text } = await response.json();
                 setAiText(prev => prev + (prev ? '\n\n' : '') + text);
             } else {
                 // For TXT and CSV
