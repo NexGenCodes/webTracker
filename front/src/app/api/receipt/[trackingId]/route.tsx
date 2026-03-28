@@ -70,7 +70,7 @@ export async function GET(
   }
 
   // Priority: backend data → query param override → fallback
-  const status  = searchParams.get('status')   || str(shipment?.status ?? shipment?.Status, 'PENDING');
+
   const origin  = searchParams.get('origin')   || str(shipment?.origin ?? shipment?.Origin, 'TBD');
   const dest    = searchParams.get('dest')     || str(shipment?.destination ?? shipment?.Destination, 'TBD');
   const sender  = searchParams.get('sender')   || str(shipment?.sender_name ?? shipment?.SenderName, '---');

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trash2, XCircle, Share2, Send } from 'lucide-react';
+import { Trash2, XCircle, Share2 } from 'lucide-react';
 
 import { ShipmentData, Dictionary } from '@/types/shipment';
 
