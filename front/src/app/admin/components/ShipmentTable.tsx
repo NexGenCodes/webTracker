@@ -10,7 +10,6 @@ interface ShipmentTableProps {
     onMarkDelivered: (trackingNumber: string) => void;
     onCancel: (trackingNumber: string) => void;
     onDelete: (trackingNumber: string) => void;
-    onResendReceipt?: (id: string) => void;
 }
 
 export const ShipmentTable: React.FC<ShipmentTableProps> = ({
@@ -19,8 +18,7 @@ export const ShipmentTable: React.FC<ShipmentTableProps> = ({
     dict,
     onMarkDelivered,
     onCancel,
-    onDelete,
-    onResendReceipt
+    onDelete
 }) => {
     return (
         <div className="glass-panel overflow-hidden">
@@ -86,16 +84,7 @@ export const ShipmentTable: React.FC<ShipmentTableProps> = ({
                                                     </button>
                                                 </>
                                             )}
-                                            
-                                            {onResendReceipt && (
-                                                <button
-                                                    onClick={() => onResendReceipt(s.id)}
-                                                    className="px-2 sm:px-3 py-1 bg-primary/10 hover:bg-primary text-primary hover:text-surface-bg rounded-lg text-[10px] sm:text-xs font-black uppercase transition-all"
-                                                    title="Resend Receipt to WhatsApp"
-                                                >
-                                                    <Send size={14} />
-                                                </button>
-                                            )}
+
                                             
                                             <button
                                                 onClick={() => {

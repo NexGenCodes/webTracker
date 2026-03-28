@@ -1,4 +1,4 @@
-package worker
+package receipt
 
 import (
 	"context"
@@ -12,42 +12,41 @@ import (
 	"webtracker-bot/internal/whatsapp"
 )
 
-type ReceiptJob struct {
-	Job         models.Job
+// Job represents a receipt rendering job.
+type Job struct {
+	Msg         models.Job
 	TrackingID  string
 	Language    i18n.Language
 	CompanyName string
 	ShipmentUC  *usecase.ShipmentUsecase
 	Sender      *whatsapp.Sender
+	RenderMode  string // "legacy" or "default"
 }
 
 var (
-	receiptQueue chan ReceiptJob
-	once         sync.Once
+	queue chan Job
+	once  sync.Once
 )
 
-const (
-	QueueSize = 100
-)
+const QueueSize = 100
 
-// InitReceiptProcessor initializes the singleton queue and starts the worker.
-func InitReceiptProcessor(companyName string, shipUC *usecase.ShipmentUsecase, sender *whatsapp.Sender) {
+// InitProcessor initializes the singleton queue and starts the worker goroutines.
+func InitProcessor(companyName string, shipUC *usecase.ShipmentUsecase, sender *whatsapp.Sender) {
 	once.Do(func() {
-		receiptQueue = make(chan ReceiptJob, QueueSize)
-		// Increased concurrency to 2 for better performance with Swap support
+		queue = make(chan Job, QueueSize)
 		go startWorker(companyName, shipUC, sender)
 		go startWorker(companyName, shipUC, sender)
 	})
 }
 
-// EnqueueReceipt adds a receipt rendering job to the queue.
-func EnqueueReceipt(job ReceiptJob) {
-	if receiptQueue == nil {
+// Enqueue adds a receipt rendering job to the queue.
+func Enqueue(job Job) {
+	if queue == nil {
 		logger.Error().Msg("Receipt processor not initialized")
 		return
 	}
 	select {
-	case receiptQueue <- job:
+	case queue <- job:
 		logger.Debug().Str("tracking_id", job.TrackingID).Msg("Receipt enqueued")
 	default:
 		logger.Warn().Str("tracking_id", job.TrackingID).Msg("Receipt queue full, dropping job")
@@ -55,13 +54,13 @@ func EnqueueReceipt(job ReceiptJob) {
 }
 
 func startWorker(companyName string, shipUC *usecase.ShipmentUsecase, sender *whatsapp.Sender) {
-	logger.Info().Msg("Singleton Receipt Processor started (Concurrency: 1)")
-	for rJob := range receiptQueue {
+	logger.Info().Msg("Singleton Receipt Processor started (Optimized mode)")
+	for rJob := range queue {
 		processReceipt(rJob)
 	}
 }
 
-func processReceipt(rj ReceiptJob) {
+func processReceipt(rj Job) {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Error().Msgf("Receipt processor panicked: %v", r)
@@ -84,24 +83,24 @@ func processReceipt(rj ReceiptJob) {
 
 	// 2. Map to Domain Model for Rendering
 	s := &shipment.Shipment{
-		TrackingID:       dbShip.TrackingID,
-		UserJID:          dbShip.UserJid,
-		Status:           dbShip.Status.String,
-		CreatedAt:        dbShip.CreatedAt.Time,
-		SenderTimezone:   dbShip.SenderTimezone.String,
+		TrackingID:        dbShip.TrackingID,
+		UserJID:           dbShip.UserJid,
+		Status:            dbShip.Status.String,
+		CreatedAt:         dbShip.CreatedAt.Time,
+		SenderTimezone:    dbShip.SenderTimezone.String,
 		RecipientTimezone: dbShip.RecipientTimezone.String,
-		SenderName:       dbShip.SenderName.String,
-		SenderPhone:      dbShip.SenderPhone.String,
-		Origin:           dbShip.Origin.String,
-		RecipientName:    dbShip.RecipientName.String,
-		RecipientPhone:   dbShip.RecipientPhone.String,
-		RecipientID:      dbShip.RecipientID.String,
-		RecipientEmail:   dbShip.RecipientEmail.String,
-		RecipientAddress: dbShip.RecipientAddress.String,
-		Destination:      dbShip.Destination.String,
-		CargoType:        dbShip.CargoType.String,
-		Weight:           dbShip.Weight.Float64,
-		Cost:             dbShip.Weight.Float64, // Mapping weight to cost for now as placeholder if needed, usually it's just for display
+		SenderName:        dbShip.SenderName.String,
+		SenderPhone:       dbShip.SenderPhone.String,
+		Origin:            dbShip.Origin.String,
+		RecipientName:     dbShip.RecipientName.String,
+		RecipientPhone:    dbShip.RecipientPhone.String,
+		RecipientID:       dbShip.RecipientID.String,
+		RecipientEmail:    dbShip.RecipientEmail.String,
+		RecipientAddress:  dbShip.RecipientAddress.String,
+		Destination:       dbShip.Destination.String,
+		CargoType:         dbShip.CargoType.String,
+		Weight:            dbShip.Weight.Float64,
+		Cost:              dbShip.Weight.Float64,
 	}
 
 	if dbShip.ScheduledTransitTime.Valid {
@@ -122,7 +121,7 @@ func processReceipt(rj ReceiptJob) {
 	}
 
 	// 4. Send
-	err = rj.Sender.SendImage(rj.Job.ChatJID, rj.Job.SenderJID, receiptImg, "", rj.Job.MessageID, rj.Job.Text)
+	err = rj.Sender.SendImage(rj.Msg.ChatJID, rj.Msg.SenderJID, receiptImg, "", rj.Msg.MessageID, rj.Msg.Text)
 	if err != nil {
 		logger.Warn().Err(err).Str("tracking_id", rj.TrackingID).Msg("Failed to deliver receipt image")
 	}

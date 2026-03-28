@@ -2,6 +2,7 @@ package models
 
 import (
 	"go.mau.fi/whatsmeow/types"
+	"go.mau.fi/whatsmeow/types/events"
 )
 
 type Manifest struct {
@@ -68,6 +69,7 @@ type Job struct {
 	SenderPhone string
 	Language    string
 	IsAdmin     bool
+	RawMessage  *events.Message
 }
 
 func StrPtr(s string) *string {

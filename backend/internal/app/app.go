@@ -17,6 +17,7 @@ import (
 	"webtracker-bot/internal/scheduler"
 	"webtracker-bot/internal/shipment"
 	"webtracker-bot/internal/utils"
+	"webtracker-bot/internal/receipt"
 	"webtracker-bot/internal/whatsapp"
 	"webtracker-bot/internal/worker"
 	"database/sql"
@@ -73,18 +74,19 @@ func (a *App) Init() error {
 	}
 	a.WA = wa
 
-	worker.InitReceiptProcessor(a.Cfg.CompanyName, a.ShipmentUC, whatsapp.NewSender(a.WA, a.Cfg.CompanyName))
+	receipt.InitProcessor(a.Cfg.CompanyName, a.ShipmentUC, whatsapp.NewSender(a.WA, a.Cfg.CompanyName))
 
 	a.WA.AddEventHandler(a.handleWAEvent)
 
-	if err := utils.InitReceiptRenderer(); err != nil {
+	if err := utils.InitReceiptRenderer(a.Cfg.UseOptimizedReceipt); err != nil {
 		logger.Error().Err(err).Msg("Failed to initialize receipt renderer (Font download failed?). Receipts may look generic.")
 	} else {
 		logger.Info().Msg("Receipt renderer initialized (Fonts loaded)")
 	}
 
 	// Init Fiber HTTP REST API Server
-	a.HttpServer = transport_http.NewServer(a.Cfg, a.ShipmentUC, a.SqlPool)
+	sender := whatsapp.NewSender(a.WA, a.Cfg.CompanyName)
+	a.HttpServer = transport_http.NewServer(a.Cfg, a.ShipmentUC, a.SqlPool, sender)
 
 	return nil
 }

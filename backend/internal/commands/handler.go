@@ -3,7 +3,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"regexp"
 	"runtime"
 	"strings"
@@ -19,9 +18,9 @@ import (
 	"webtracker-bot/internal/shipment"
 	"webtracker-bot/internal/usecase"
 	"webtracker-bot/internal/utils"
+	"webtracker-bot/internal/receipt"
 	"webtracker-bot/internal/whatsapp"
 
-	waProto "go.mau.fi/whatsmeow/binary/proto"
 	"go.mau.fi/whatsmeow/types"
 )
 
@@ -31,12 +30,10 @@ func i18nLang(s string) i18n.Language {
 
 // Result represents the outcome of a command execution.
 type Result struct {
-	Message     string
-	Language    string
-	EditID      string
-	List        *waProto.ListMessage
-	Buttons     *waProto.ButtonsMessage
-	Error       error
+	Message  string
+	Language string
+	EditID   string
+	Error    error
 }
 
 type Handler interface {
@@ -78,8 +75,8 @@ func (d *Dispatcher) registerDefaults() {
 	d.handlers["lang"] = &LangHandler{}
 	d.handlers["edit"] = &EditHandler{}
 	d.handlers["delete"] = &DeleteHandler{}
-	d.handlers["broadcast"] = &BroadcastHandler{}
 	d.handlers["status"] = &StatusHandler{}
+	d.handlers["receipt"] = &ReceiptHandler{}
 }
 
 func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) {
@@ -123,15 +120,15 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) 
 			h.AdminTimezone = d.AdminTimezone
 			h.Sender = d.sender
 			h.Cfg = d.cfg
-		case *BroadcastHandler:
-			h.Sender = d.sender
 		case *StatusHandler:
 			h.BotPhone = d.BotPhone
+		case *ReceiptHandler:
+			h.Sender = d.sender
 		}
 
 		lang, _ := d.configUC.GetUserLanguage(ctx, jid)
 
-		isOwnerOnlyCmd := rawCmd == "broadcast" || rawCmd == "status"
+		isOwnerOnlyCmd := rawCmd == "status"
 		if isOwnerOnlyCmd {
 			if !isOwner {
 				logger.Warn().Str("cmd", rawCmd).Str("sender", senderPhone).Msg("Owner-only command blocked")
@@ -151,17 +148,6 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) 
 		res := handler.Execute(ctx, d.shipUC, d.configUC, args, lang, isAdmin)
 		if res.Language != "" {
 			d.configUC.SetUserLanguage(ctx, jid, res.Language)
-		}
-
-		// Handle Interactive Content
-		targetJID, _ := types.ParseJID(jid)
-		if res.List != nil {
-			d.sender.SendList(targetJID, *res.List.Title, *res.List.Description, *res.List.ButtonText, res.List.Sections)
-			return &res, true
-		}
-		if res.Buttons != nil {
-			d.sender.SendButtons(targetJID, *res.Buttons.ContentText, res.Buttons.Buttons)
-			return &res, true
 		}
 
 		return &res, true
@@ -291,51 +277,28 @@ func (h *HelpHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUseca
 	}
 
 	if isAdmin {
-		// Admin Help Menu as Interactive List
-		return Result{
-			List: &waProto.ListMessage{
-				Title:       models.StrPtr(fmt.Sprintf("%s ADMIN", company)),
-				Description: models.StrPtr("Select a management action below:"),
-				ButtonText:  models.StrPtr("Open Menu"),
-				Sections: []*waProto.ListMessage_Section{
-					{
-						Title: models.StrPtr("MANAGEMENT"),
-						Rows: []*waProto.ListMessage_Row{
-							{Title: models.StrPtr("Stats"), Description: models.StrPtr("Daily operations summary"), RowID: models.StrPtr("!stats")},
-							{Title: models.StrPtr("Status"), Description: models.StrPtr("System health & vitals"), RowID: models.StrPtr("!status")},
-							{Title: models.StrPtr("Broadcast"), Description: models.StrPtr("Send msg to all groups"), RowID: models.StrPtr("!broadcast")},
-						},
-					},
-					{
-						Title: models.StrPtr("SHIPMENT CONTROL"),
-						Rows: []*waProto.ListMessage_Row{
-							{Title: models.StrPtr("Edit"), Description: models.StrPtr("!edit [field] [value]"), RowID: models.StrPtr("!help_edit")},
-							{Title: models.StrPtr("Delete"), Description: models.StrPtr("Permanently remove shipment"), RowID: models.StrPtr("!help_delete")},
-							{Title: models.StrPtr("Info"), Description: models.StrPtr("Detailed tracking data"), RowID: models.StrPtr("!info")},
-						},
-					},
-					{
-						Title: models.StrPtr("SETTINGS"),
-						Rows: []*waProto.ListMessage_Row{
-							{Title: models.StrPtr("Language"), Description: models.StrPtr("Switch bot language"), RowID: models.StrPtr("!lang")},
-						},
-					},
-				},
-			},
-		}
+		// Admin Help Menu as Plain Text
+		msg := fmt.Sprintf("🛡️ *%s ADMIN COMMANDS*\n\n", company) +
+			"━━━━━━━━━━━━━━━━━━━━━━━\n" +
+			"📊 `!stats` - Today's operations\n" +
+			"🌡️ `!status` - System health & vitals\n" +
+			"✏️ `!edit [ID] [updates]` - Update shipment\n" +
+			"🗑️ `!delete [ID]` - Remove shipment\n" +
+			"📦 `!info [ID]` - Detailed waybill\n" +
+			"🌐 `!lang [en|pt|es|de]` - Switch language\n" +
+			"━━━━━━━━━━━━━━━━━━━━━━━\n" +
+			"_Use these commands strictly within the authorized groups._"
+		return Result{Message: msg}
 	}
 
-	// Customer Help Menu as Buttons
-	return Result{
-		Buttons: &waProto.ButtonsMessage{
-			ContentText: models.StrPtr(fmt.Sprintf("📖 *%s CUSTOMER SERVICE*\n\nHow can we help you today?", company)),
-			Buttons: []*waProto.ButtonsMessage_Button{
-				{ButtonID: models.StrPtr("!info"), ButtonText: &waProto.ButtonsMessage_Button_ButtonText{DisplayText: models.StrPtr("Track Shipment")}},
-				{ButtonID: models.StrPtr("!help"), ButtonText: &waProto.ButtonsMessage_Button_ButtonText{DisplayText: models.StrPtr("Instructions")}},
-				{ButtonID: models.StrPtr("!lang"), ButtonText: &waProto.ButtonsMessage_Button_ButtonText{DisplayText: models.StrPtr("Change Language")}},
-			},
-		},
-	}
+	// Customer Help Menu as Plain Text
+	msg := fmt.Sprintf("📖 *%s CUSTOMER SERVICE*\n\n", company) +
+		"How can we help you today?\n\n" +
+		"🔎 `!info [ID]` - Track your shipment\n" +
+		"📖 `!help` - View this menu\n" +
+		"🌐 `!lang [code]` - Change language\n\n" +
+		"_Please type the command manually to interact with the bot._"
+	return Result{Message: msg}
 }
 
 type LangHandler struct{}
@@ -377,7 +340,7 @@ func (h *EditHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUseca
 
 	// 1. Identify Target Shipment
 	// Pattern: 3 uppercase letters, hyphen, 4 digits
-	idPattern := regexp.MustCompile(`^[A-Z]{3}-\d{4}$`)
+	idPattern := regexp.MustCompile(`^[A-Z]{3}-\d{4,9}$`)
 	if idPattern.MatchString(args[0]) {
 		trackingID = args[0]
 		startIdx = 1
@@ -549,14 +512,8 @@ func (h *EditHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUseca
 		trackingID, strings.Join(updatedFields, "\n• "))
 
 	return Result{
-		Buttons: &waProto.ButtonsMessage{
-			ContentText: models.StrPtr(summary),
-			Buttons: []*waProto.ButtonsMessage_Button{
-				{ButtonID: models.StrPtr(fmt.Sprintf("!info %s", trackingID)), ButtonText: &waProto.ButtonsMessage_Button_ButtonText{DisplayText: models.StrPtr("View Final Receipt")}},
-				{ButtonID: models.StrPtr("!help"), ButtonText: &waProto.ButtonsMessage_Button_ButtonText{DisplayText: models.StrPtr("Back to Menu")}},
-			},
-		},
-		EditID: trackingID,
+		Message: summary,
+		EditID:  trackingID,
 	}
 }
 
@@ -575,53 +532,6 @@ func (h *DeleteHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUse
 	}
 
 	return Result{Message: fmt.Sprintf("🗑️ *SHIPMENT DELETED*\n\nThe shipment *%s* has been permanently removed.", trackingID)}
-}
-
-// BroadcastHandler handles !broadcast [message]
-type BroadcastHandler struct {
-	Sender *whatsapp.Sender
-}
-
-func (h *BroadcastHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, args []string, lang string, isAdmin bool) Result {
-	if len(args) < 1 {
-		return Result{Message: "📣 *GLOBAL BROADCAST*\n\nUsage: `!broadcast [your message]`\n\n_This sends a message to ALL authorized groups._"}
-	}
-
-	msg := strings.Join(args, " ")
-	company := h.Sender.CompanyName
-	if company == "" {
-		company = "LOGISTICS"
-	}
-	broadcastMsg := fmt.Sprintf("📢 *OFFICIAL UPDATE FROM %s*\n\n", strings.ToUpper(company)) + msg
-
-	// Fetch authorized groups from DB
-	groups, err := configUC.GetAuthorizedGroups(ctx)
-	if err != nil {
-		return Result{Message: i18n.T(i18nLang(lang), "ERR_DB_ERROR")}
-	}
-
-	if len(groups) == 0 {
-		return Result{Message: "ℹ️ *NO TARGETS*\n\nThere are no authorized groups to broadcast to."}
-	}
-
-	// Perform broadcast in background to avoid blocking worker
-	go func() {
-		successCount := 0
-		for _, groupID := range groups {
-			groupJID, err := types.ParseJID(groupID)
-			if err != nil {
-				continue
-			}
-			// Add extra jitter between groups for safety
-			time.Sleep(time.Duration(200+rand.Intn(300)) * time.Millisecond)
-
-			h.Sender.Send(groupJID, broadcastMsg)
-			successCount++
-		}
-		logger.Info().Int("success_count", successCount).Msg("Background broadcast complete")
-	}()
-
-	return Result{Message: fmt.Sprintf("📣 *BROADCAST INITIATED*\n\nSending to *%d* authorized groups in the background.\n\n_Progress will be logged to system vitals._", len(groups))}
 }
 
 // StatusHandler handles !status
@@ -658,4 +568,42 @@ func (h *StatusHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUse
 		"_System is running within safe 1GB RAM margins._"
 
 	return Result{Message: msg}
+}
+
+// ReceiptHandler handles !receipt [ID]
+type ReceiptHandler struct {
+	Sender *whatsapp.Sender
+}
+
+func (h *ReceiptHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, args []string, lang string, isAdmin bool) Result {
+	if !isAdmin {
+		return Result{Message: "🔒 *ACCESS DENIED*\nOnly admins can regenerate receipts."}
+	}
+	if len(args) < 1 {
+		return Result{Message: "🧾 *RECEIPT REGENERATION*\n\nUsage: `!receipt [TrackingID]`"}
+	}
+
+	trackingID := strings.ToUpper(args[0])
+
+	// Fetch shipment to get JID
+	s, err := shipUC.Track(ctx, trackingID)
+	if err != nil || s == nil {
+		return Result{Message: "❌ *NOT FOUND*\nCould not find a shipment with that ID."}
+	}
+
+	// Trigger receipt (using the same queue)
+	receipt.Enqueue(receipt.Job{
+		Msg: models.Job{
+			ChatJID:   types.NewJID(s.UserJid, types.DefaultUserServer),
+			SenderJID: types.NewJID(s.UserJid, types.DefaultUserServer),
+		},
+		TrackingID:  trackingID,
+		Language:    i18n.Language(lang),
+		CompanyName: h.Sender.CompanyName,
+		ShipmentUC:  shipUC,
+		Sender:      h.Sender,
+		RenderMode:  "default",
+	})
+
+	return Result{Message: fmt.Sprintf("🔄 *RECEIPT ENQUEUED*\n\nGenerating and resending the waybill image for *%s*...", trackingID)}
 }
