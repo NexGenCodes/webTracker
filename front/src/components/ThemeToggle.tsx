@@ -6,7 +6,6 @@ const ThemeToggleComponent = memo(() => {
     const { theme, setTheme } = useTheme();
     const [mounted, setMounted] = useState(false);
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(() => setMounted(true), []);
 
     if (!mounted) return <div className="p-2 w-10 h-10" />;

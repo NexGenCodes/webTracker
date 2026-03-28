@@ -2,13 +2,16 @@
 
 # dependencies
 node_modules/
-/.pnp
+.pnp
 .pnp.*
-.yarn/*
+.yarn/
 !.yarn/patches
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
+.turbo/
+.vercel
+.sentryclirc
 
 # testing
 /coverage
@@ -86,7 +89,7 @@ backend/logs/
 coverage.out
 backend/bot
 backend/*.exe
-backend/internal/utils/receipt_test_output.jpg
+backend/tests/receipt_test_output.jpg
 backend/internal/logger/test_logs/
 **/assets/fonts/
 
@@ -107,17 +110,17 @@ front/.next
 # --- Unified Backend Ignores ---
 backend/bot
 backend/webtracker.exe
-backend/*.db
-backend/*.db-journal
-backend/*.db-wal
-backend/session.db*
-backend/logs/
-backend/*.log
-backend/ssh.pem
+backend/tmp_bot.exe
+backend/*.db*
+backend/*.log*
 backend/*.pem
-backend/receipt_test_output.jpg
-backend/waybill_test_output.jpg
+backend/ssh.pem
+backend/*_test_output.jpg
 backend/test_output.txt
 backend/internal/logger/test_logs/
-backend/tests/receipt_test_output.jpg
-**/assets/fonts/
+backend/assets/fonts/
+
+# --- Environment Context ---
+.env.local.backup
+*.env.local
+! .env.example

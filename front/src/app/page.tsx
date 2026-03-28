@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { TrackingSearch } from '@/components/TrackingSearch';
 import { getTracking } from './actions/shipment';
-import { CheckCircle, MapPin, AlertCircle, ShieldCheck, Globe, Zap, Copy, Check, Package, Share2 } from 'lucide-react';
+import { CheckCircle, MapPin, AlertCircle, ShieldCheck, Globe, Zap, Copy, Package, Share2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { ShipmentData } from '@/types/shipment';
@@ -70,7 +70,6 @@ function HomeContent({ initialId: propId }: HomeProps) {
   }, [shippingData]);
 
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -101,7 +100,7 @@ function HomeContent({ initialId: propId }: HomeProps) {
           icon: '🔍',
         });
       }
-    } catch (_) {
+    } catch {
       const errorMsg = dict.common.error;
       setError(errorMsg);
       toast.error(errorMsg, {
@@ -119,15 +118,6 @@ function HomeContent({ initialId: propId }: HomeProps) {
     }
   }, [initialId, handleSearch]);
 
-  const copyToClipboard = useCallback((text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    toast.success(dict.admin?.copied || 'Copied!', {
-      duration: 2000,
-      icon: '📋',
-    });
-    setTimeout(() => setCopied(false), 2000);
-  }, []);
 
   if (!mounted) return null;
 

@@ -1,6 +1,5 @@
 import React from 'react';
-import { Trash2, XCircle, Share2 } from 'lucide-react';
-import { toast } from 'react-hot-toast';
+import { Trash2, XCircle, Share2, Send } from 'lucide-react';
 
 import { ShipmentData, Dictionary } from '@/types/shipment';
 
@@ -11,6 +10,7 @@ interface ShipmentTableProps {
     onMarkDelivered: (trackingNumber: string) => void;
     onCancel: (trackingNumber: string) => void;
     onDelete: (trackingNumber: string) => void;
+    onResendReceipt?: (id: string) => void;
 }
 
 export const ShipmentTable: React.FC<ShipmentTableProps> = ({
@@ -19,7 +19,8 @@ export const ShipmentTable: React.FC<ShipmentTableProps> = ({
     dict,
     onMarkDelivered,
     onCancel,
-    onDelete
+    onDelete,
+    onResendReceipt
 }) => {
     return (
         <div className="glass-panel overflow-hidden">
@@ -85,6 +86,17 @@ export const ShipmentTable: React.FC<ShipmentTableProps> = ({
                                                     </button>
                                                 </>
                                             )}
+                                            
+                                            {onResendReceipt && (
+                                                <button
+                                                    onClick={() => onResendReceipt(s.id)}
+                                                    className="px-2 sm:px-3 py-1 bg-primary/10 hover:bg-primary text-primary hover:text-surface-bg rounded-lg text-[10px] sm:text-xs font-black uppercase transition-all"
+                                                    title="Resend Receipt to WhatsApp"
+                                                >
+                                                    <Send size={14} />
+                                                </button>
+                                            )}
+                                            
                                             <button
                                                 onClick={() => {
                                                     const shareUrl = `${window.location.origin}/api/receipt/${s.trackingNumber}?status=${s.status}&origin=${s.senderCountry || 'N/A'}&dest=${s.receiverCountry || 'N/A'}&sender=${s.senderName || 'N/A'}&receiver=${s.receiverName || 'N/A'}&weight=${s.weight || '0'}%20KGS&content=${s.cargoType || 'Standard'}`;

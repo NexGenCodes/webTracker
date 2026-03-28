@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import { createShipment, getAdminDashboardData, deleteShipment, bulkDeleteDelivered, markAsDelivered, cancelShipment, getAdminShipments } from '../actions/shipment';
+import { createShipment, getAdminDashboardData, deleteShipment, bulkDeleteDelivered, markAsDelivered, cancelShipment, getAdminShipments, resendReceipt } from '../actions/shipment';
 import { CreateShipmentDto, ShipmentData, DashboardStats, Pagination } from '@/types/shipment';
 import { LayoutDashboard, List, Package, PlusCircle, Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -195,6 +195,27 @@ export default function AdminPage() {
         ), { duration: 5000 });
     };
 
+    const handleResendReceipt = async (trackingNumber: string) => {
+        toast((t) => (
+            <div className="flex flex-col gap-4">
+                <p className="font-bold text-sm">Resend receipt for {trackingNumber} to WhatsApp?</p>
+                <div className="flex gap-2">
+                    <button onClick={() => toast.dismiss(t.id)} className="px-3 py-1.5 bg-surface-muted rounded-lg text-xs font-bold">Cancel</button>
+                    <button onClick={async () => {
+                        toast.dismiss(t.id);
+                        const toastId = toast.loading('Resending receipt...');
+                        const result = await resendReceipt(trackingNumber);
+                        if (result.success) {
+                            toast.success('Receipt successfully sent to WhatsApp!', { id: toastId });
+                        } else {
+                            toast.error(result.error || 'Failed to resend receipt', { id: toastId });
+                        }
+                    }} className="px-3 py-1.5 bg-primary text-surface-bg rounded-lg text-xs font-bold">Yes, Resend</button>
+                </div>
+            </div>
+        ), { duration: 5000 });
+    };
+
     useEffect(() => {
         if (status === "unauthenticated") {
             signIn();
@@ -224,6 +245,7 @@ export default function AdminPage() {
                 copied={copied}
                 onCopy={handleCopy}
                 onBack={handleBack}
+                onResendReceipt={handleResendReceipt}
                 dict={dict}
             />
         );
@@ -307,6 +329,7 @@ export default function AdminPage() {
                             onMarkDelivered={handleMarkDelivered}
                             onCancel={handleCancel}
                             onDelete={handleDelete}
+                            onResendReceipt={handleResendReceipt}
                         />
 
                         {pagination && pagination.totalPages > 1 && (

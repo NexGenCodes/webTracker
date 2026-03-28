@@ -21,18 +21,18 @@ export async function parseShipmentAI(text: string): Promise<ParseResult> {
             return { success: false, error: result.error || 'Failed to parse text.' };
         }
 
-        const d: any = result.data;
+        const d = result.data as Record<string, unknown>;
         
         // Map the Go PascalCase struct strings back to standard frontend camelCase
         const mappedData = {
-            receiverName: d.ReceiverName || d.receiverName || '',
-            receiverAddress: d.ReceiverAddress || d.receiverAddress || '',
-            receiverCountry: d.ReceiverCountry || d.receiverCountry || '',
-            receiverPhone: d.ReceiverPhone || d.receiverPhone || '',
-            receiverEmail: d.ReceiverEmail || d.receiverEmail || '',
-            senderName: d.SenderName || d.senderName || '',
-            senderCountry: d.SenderCountry || d.senderCountry || '',
-            cargoType: d.CargoType || d.cargoType || 'consignment box',
+            receiverName: String(d.ReceiverName || d.receiverName || ''),
+            receiverAddress: String(d.ReceiverAddress || d.receiverAddress || ''),
+            receiverCountry: String(d.ReceiverCountry || d.receiverCountry || ''),
+            receiverPhone: String(d.ReceiverPhone || d.receiverPhone || ''),
+            receiverEmail: String(d.ReceiverEmail || d.receiverEmail || ''),
+            senderName: String(d.SenderName || d.senderName || ''),
+            senderCountry: String(d.SenderCountry || d.senderCountry || ''),
+            cargoType: String(d.CargoType || d.cargoType || 'consignment box'),
             weight: typeof d.Weight === 'number' ? d.Weight : 15.0
         };
 
