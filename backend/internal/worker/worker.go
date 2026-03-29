@@ -70,9 +70,16 @@ func (w *Worker) process(job models.Job) {
 	ctx := context.WithValue(context.Background(), "jid", job.SenderJID.String())
 	ctx = context.WithValue(ctx, "sender_phone", job.SenderPhone)
 	ctx = context.WithValue(ctx, "is_admin", job.IsAdmin)
+	ctx = context.WithValue(ctx, "chat_jid", job.ChatJID.String())
+	ctx = context.WithValue(ctx, "message_id", job.MessageID)
+	ctx = context.WithValue(ctx, "text", job.Text)
 
 	if res, ok := w.Cmd.Dispatch(ctx, job.Text); ok {
-		w.Sender.Reply(job.ChatJID, job.SenderJID, res.Message, job.MessageID, job.Text)
+		if len(res.Image) > 0 {
+			w.Sender.SendImage(job.ChatJID, job.SenderJID, res.Image, res.Message, job.MessageID, job.Text)
+		} else if res.Message != "" {
+			w.Sender.Reply(job.ChatJID, job.SenderJID, res.Message, job.MessageID, job.Text)
+		}
 
 		// If it was an edit, we need to regenerate the receipt
 		if res.EditID != "" {
