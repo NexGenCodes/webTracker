@@ -6,7 +6,7 @@ import (
 	"webtracker-bot/internal/logger"
 )
 
-// GetJID safely extracts the JID from context
+// GetJID safely extracts the sender's JID from context
 func GetJID(ctx context.Context) string {
 	val := ctx.Value("jid")
 	if val == nil {
@@ -16,6 +16,47 @@ func GetJID(ctx context.Context) string {
 	s, ok := val.(string)
 	if !ok {
 		logger.Error().Msgf("Context 'jid' is not a string: %T", val)
+		return ""
+	}
+	return s
+}
+
+// GetChatJID safely extracts the chat JID from context
+func GetChatJID(ctx context.Context) string {
+	val := ctx.Value("chat_jid")
+	if val == nil {
+		logger.Warn().Msg("Context missing 'chat_jid'")
+		return ""
+	}
+	s, ok := val.(string)
+	if !ok {
+		logger.Error().Msgf("Context 'chat_jid' is not a string: %T", val)
+		return ""
+	}
+	return s
+}
+
+// GetMessageID safely extracts the message ID from context
+func GetMessageID(ctx context.Context) string {
+	val := ctx.Value("message_id")
+	if val == nil {
+		return ""
+	}
+	s, ok := val.(string)
+	if !ok {
+		return ""
+	}
+	return s
+}
+
+// GetText safely extracts the original message text from context
+func GetText(ctx context.Context) string {
+	val := ctx.Value("text")
+	if val == nil {
+		return ""
+	}
+	s, ok := val.(string)
+	if !ok {
 		return ""
 	}
 	return s
