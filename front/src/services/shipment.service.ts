@@ -240,12 +240,18 @@ export class ShipmentService {
                     status: 'In Transit',
                     timestamp: scheduledTransit,
                     description: 'Package has left the origin facility and is on its way',
-                    is_completed: scheduledTransit ? now > new Date(scheduledTransit) : false || ['intransit', 'outfordelivery', 'delivered'].includes(statusStr)
+                    is_completed: ['intransit', 'outfordelivery', 'delivered'].includes(statusStr)
+                },
+                {
+                    status: 'Out for Delivery',
+                    timestamp: timelineStr(data.outfordelivery_time),
+                    description: 'Package is with our local agent for final delivery',
+                    is_completed: ['outfordelivery', 'delivered'].includes(statusStr)
                 },
                 {
                     status: 'Delivered',
                     timestamp: expectedDelivery,
-                    description: 'Package has arrived at the destination',
+                    description: 'Package has been successfully delivered',
                     is_completed: statusStr === 'delivered'
                 }
             ];

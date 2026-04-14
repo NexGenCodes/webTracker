@@ -54,22 +54,6 @@ var CountryTimezoneMap = map[string]string{
 	"turkey":         "Europe/Istanbul",
 }
 
-// TransitDurationMap defines baseline international transit durations.
-var TransitDurationMap = map[string]int{
-	"pakistan":       20,
-	"uae":            22,
-	"turkey":         24,
-	"united kingdom": 28,
-	"uk":             28,
-	"germany":        28,
-	"nigeria":        30,
-	"ghana":          32,
-	"china":          26,
-	"usa":            34,
-	"united states":  34,
-	"colombia":       36,
-}
-
 // ResolveTimezone attempts to find a valid timezone for a country name with fuzzy matching
 func (c *Calculator) ResolveTimezone(country string) string {
 	country = strings.ToLower(strings.TrimSpace(country))
@@ -119,75 +103,27 @@ func (c *Calculator) CalculateDeparture(now time.Time, adminTZ string) time.Time
 	return transit.UTC()
 }
 
-var CountryRegionMap = map[string]string{
-	"nigeria":        "africa",
-	"ghana":          "africa",
-	"benin":          "africa",
-	"togo":           "africa",
-	"usa":            "north_america",
-	"united states":  "north_america",
-	"canada":         "north_america",
-	"uk":             "europe",
-	"united kingdom": "europe",
-	"germany":        "europe",
-	"spain":          "europe",
-	"turkey":         "europe",
-	"uae":            "middle_east",
-	"dubai":          "middle_east",
-	"pakistan":       "middle_east",
-	"china":          "asia",
-	"india":          "asia",
-	"colombia":       "south_america",
-	"argentina":      "south_america",
-	"chile":          "south_america",
-	"peru":           "south_america",
-	"venezuela":      "south_america",
-	"mexico":         "north_america",
-}
-
-// CalculateArrival (Algorithm B) determines the final delivery window relative to Departure.
+// CalculateArrival determines the final delivery window.
+// Rule: Arrival is always the day following the Departure Date.
 func (c *Calculator) CalculateArrival(departure time.Time, senderCountry, receiverCountry string) (time.Time, time.Time) {
-	sender := strings.ToLower(strings.TrimSpace(senderCountry))
-	dest := strings.ToLower(strings.TrimSpace(receiverCountry))
-	
-	// Base baseline
-	baseDuration := 26
-	if d, ok := TransitDurationMap[dest]; ok {
-		baseDuration = d
-	}
-
-	// Proximity Multiplier
-	multiplier := 1.0
-	senderRegion := CountryRegionMap[sender]
-	destRegion := CountryRegionMap[dest]
-
-	if senderRegion != "" && destRegion != "" {
-		if senderRegion == destRegion {
-			multiplier = 0.6 // Same region (e.g. West Africa)
-		} else if (senderRegion == "europe" && destRegion == "middle_east") || (senderRegion == "middle_east" && destRegion == "europe") {
-			multiplier = 0.8 // Close regions
-		} else if (senderRegion == "africa" && (destRegion == "north_america" || destRegion == "asia")) {
-			multiplier = 1.3 // Long haul
-		}
-	}
-
-	finalDuration := float64(baseDuration) * multiplier
-	jitter := rand.Intn(4)
-	arrival := departure.Add(time.Duration(int(finalDuration)+jitter) * time.Hour)
-
+	// Resolve destination timezone
 	recipientTZ := c.ResolveTimezone(receiverCountry)
 	loc, err := time.LoadLocation(recipientTZ)
 	if err != nil {
 		loc = time.UTC
 	}
 
-	localArrival := arrival.In(loc)
-	if localArrival.Hour() < 9 {
-		arrival = time.Date(localArrival.Year(), localArrival.Month(), localArrival.Day(), 9, 0, 0, 0, loc).UTC()
-	} else if localArrival.Hour() >= 16 {
-		arrival = time.Date(localArrival.Year(), localArrival.Month(), localArrival.Day(), 16, 0, 0, 0, loc).UTC()
-	}
+	// 1. Set baseline arrival to the day after departure
+	arrivalDate := departure.In(loc).Add(24 * time.Hour)
 
+	// 2. Set arrival time to a random window between 9:00 AM and 4:00 PM local time
+	hour := 9 + rand.Intn(7) // 9, 10, 11, 12, 13, 14, 15
+	minute := rand.Intn(60)
+	arrival := time.Date(arrivalDate.Year(), arrivalDate.Month(), arrivalDate.Day(), hour, minute, 0, 0, loc).UTC()
+
+	// 3. Out for delivery is always 3-6 hours before final arrival
 	outfordelivery := arrival.Add(-time.Duration(3+rand.Intn(3)) * time.Hour)
+
 	return arrival, outfordelivery
 }
+
