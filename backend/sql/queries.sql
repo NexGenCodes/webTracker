@@ -81,11 +81,7 @@ SELECT tracking_id FROM Shipment WHERE user_jid = $1 ORDER BY created_at DESC LI
 -- name: FindSimilarShipment :one
 SELECT tracking_id FROM Shipment 
 WHERE user_jid = $1 
-AND (
-    (recipient_phone = $2 AND $2 != '') OR 
-    (recipient_email = $3 AND $3 != '') OR 
-    (recipient_id = $4 AND $4 != '')
-)
+AND recipient_phone = $2 AND $2 != ''
 ORDER BY created_at DESC LIMIT 1;
 
 -- name: CountCreatedSince :one

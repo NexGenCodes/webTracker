@@ -187,12 +187,10 @@ func (u *ShipmentUsecase) CreateWithPrefix(ctx context.Context, s *db.Shipment, 
 }
 
 // FindSimilar checks if a shipment already exists with matching recipient details.
-func (u *ShipmentUsecase) FindSimilar(ctx context.Context, userJID, phone, email, recipientID string) (string, error) {
+func (u *ShipmentUsecase) FindSimilar(ctx context.Context, userJID, phone string) (string, error) {
 	id, err := u.repo.FindSimilarShipment(ctx, db.FindSimilarShipmentParams{
 		UserJid:        userJID,
 		RecipientPhone: toNullString(phone),
-		RecipientEmail: toNullString(email),
-		RecipientID:    toNullString(recipientID),
 	})
 	if err == sql.ErrNoRows {
 		return "", nil
