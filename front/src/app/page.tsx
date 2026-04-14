@@ -193,13 +193,13 @@ function HomeContent({ initialId: propId }: HomeProps) {
                 </div>
                 <div className="flex-1">
                   <h3 className="text-xl md:text-2xl font-black text-accent mb-2 uppercase tracking-tight">
-                    📦 Package Arrived!
+                    🚚 Out for Delivery
                   </h3>
                   <p className="text-text-muted font-bold mb-3">
-                    Our local agent will contact you shortly.
+                    Our local agent is en route to your destination.
                   </p>
                   <div className="flex items-center gap-2 text-sm font-black text-accent/80">
-                    <span>Expected delivery: Tomorrow, 8:00 AM - 10:00 AM</span>
+                    <span>Expected delivery: {shippingData.expectedDeliveryTime ? new Date(shippingData.expectedDeliveryTime).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : 'Soon'}</span>
                   </div>
                 </div>
               </div>
