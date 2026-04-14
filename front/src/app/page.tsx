@@ -135,7 +135,7 @@ function HomeContent({ initialId: propId }: HomeProps) {
         <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-primary/5 blur-[100px] rounded-full" />
       </div>
 
-      <div className="w-full max-w-7xl flex flex-col flex-1 px-6 pt-32 md:pt-40 relative z-10">
+      <div className="w-full max-w-7xl flex flex-col flex-1 px-3 md:px-6 pt-32 md:pt-40 relative z-10">
 
 
         {/* Hero Section */}
@@ -187,7 +187,7 @@ function HomeContent({ initialId: propId }: HomeProps) {
         {/* Search Results */}
         {shippingData && (
           <div className="mb-24 animate-scale-in">
-            <div className="glass-panel p-5 md:p-14 shadow-3xl border-border/50 overflow-hidden relative">
+            <div className="glass-panel p-2 md:p-14 shadow-3xl border-border/50 overflow-hidden relative">
               <div className="absolute top-0 right-0 w-96 h-96 bg-accent/5 rounded-full -mr-48 -mt-48 blur-3xl pointer-events-none" />
 
               {/* Status Header - Horizontal on mobile */}
@@ -274,7 +274,7 @@ function HomeContent({ initialId: propId }: HomeProps) {
               ) : (
                 <>
                   {/* Map Info Bar - 3 Columns on Mobile */}
-                  <div className="grid grid-cols-3 gap-2 md:gap-4 mb-6 w-full max-w-6xl mx-auto animate-fade-in px-2 md:px-0">
+                  <div className="grid grid-cols-3 gap-2 md:gap-4 mb-6 w-full max-w-6xl mx-auto animate-fade-in md:px-0">
                     <div className="glass-panel p-2 md:p-4 flex flex-col md:flex-row items-center md:items-center gap-1.5 md:gap-4 bg-surface/50 text-center md:text-left">
                       <div className="w-7 h-7 md:w-10 md:h-10 rounded-lg md:rounded-xl bg-text-muted/10 flex items-center justify-center shrink-0">
                         <MapPin size={14} className="text-text-muted md:w-5 md:h-5" />

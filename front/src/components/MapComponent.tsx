@@ -36,18 +36,43 @@ function MapUpdater({ origin, destination }: { origin: [number, number]; destina
 }
 
 export default function MapComponent({ origin, destination, progress = 0, shipment, dict }: MapProps) {
-  // Interpolate current location based on progress (0-100)
-  const currentLat = origin[0] + (destination[0] - origin[0]) * (progress / 100);
-  const currentLng = origin[1] + (destination[1] - origin[1]) * (progress / 100);
-  const currentLocation: [number, number] | null = progress > 0 && progress < 100
-    ? [currentLat, currentLng]
-    : null;
+  // Quadratic Bezier Curve calculation for flight path
+  const getCurvePoint = (t: number, p0: [number, number], p1: [number, number], p2: [number, number]): [number, number] => {
+    const lat = Math.pow(1 - t, 2) * p0[0] + 2 * (1 - t) * t * p1[0] + Math.pow(t, 2) * p2[0];
+    const lng = Math.pow(1 - t, 2) * p0[1] + 2 * (1 - t) * t * p1[1] + Math.pow(t, 2) * p2[1];
+    return [lat, lng];
+  };
 
-  // Calculate the geographic heading to properly pivot the plane marker toward destination
-  const deltaLat = destination[0] - origin[0];
-  const deltaLng = destination[1] - origin[1];
-  const mathAngle = Math.atan2(deltaLat, deltaLng) * (180 / Math.PI);
-  const planeRotation = 45 - mathAngle; // Convert from purely geographic to CSS (0deg = plane's native NorthEast pointing)
+  // Determine control point for the arch
+  const midX = (origin[0] + destination[0]) / 2;
+  const midY = (origin[1] + destination[1]) / 2;
+  const dx = destination[0] - origin[0];
+  const dy = destination[1] - origin[1];
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  
+  // Offset control point perpendicularly to the line
+  const offsetScale = 0.15; // Lower for subtle arch
+  const p1: [number, number] = [midX - dy * offsetScale, midY + dx * offsetScale];
+
+  // Generate curve points for Polyline
+  const curvePoints: [number, number][] = [];
+  const steps = 50;
+  for (let i = 0; i <= steps; i++) {
+    curvePoints.push(getCurvePoint(i / steps, origin, p1, destination));
+  }
+
+  // Interpolate current location along the CURVE based on progress
+  const t = progress / 100;
+  const currentPos = getCurvePoint(t, origin, p1, destination);
+  const nextPos = getCurvePoint(Math.min(t + 0.01, 1), origin, p1, destination);
+
+  // Plane visibility: Always visible once started, or if arrived
+  const currentLocation: [number, number] | null = progress >= 0 ? currentPos : null;
+
+  // Plane rotation: Follow the LOCAL tangent of the curve
+  const angleRad = Math.atan2(nextPos[0] - currentPos[0], nextPos[1] - currentPos[1]);
+  const mathAngle = angleRad * (180 / Math.PI);
+  const planeRotation = 45 - mathAngle;
   return (
     <div className="w-full h-[600px] md:h-[750px] rounded-[2rem] overflow-hidden glass-panel border border-border/50 relative z-10 shadow-2xl">
       <MapContainer
@@ -93,7 +118,7 @@ export default function MapComponent({ origin, destination, progress = 0, shipme
         )}
 
         <Polyline
-          positions={[origin, destination]}
+          positions={curvePoints}
           color="var(--color-accent)"
           weight={4}
           dashArray="10, 15"
