@@ -203,7 +203,7 @@ function HomeContent({ initialId: propId }: HomeProps) {
                   <div className="flex-1">
                     <span className="text-accent text-[10px] md:text-[11px] font-black uppercase tracking-[0.3em] md:tracking-[0.4em] mb-1 md:mb-2 block">{dict.shipment.status}</span>
                     <h2 className="text-xl md:text-3xl lg:text-4xl font-black text-text-main tracking-tighter uppercase leading-none">
-                      {shippingData.isArchived ? dict.shipment.finalized : (dict.admin?.[shippingData.status.toLowerCase() as keyof typeof dict.admin] || shippingData.status.replace(/_/g, ' '))}
+                      {shippingData.isArchived ? dict.shipment.finalized : (dict.statuses?.[shippingData.status] || shippingData.status.replace(/_/g, ' '))}
                     </h2>
                   </div>
                 </div>
@@ -273,7 +273,45 @@ function HomeContent({ initialId: propId }: HomeProps) {
                 </div>
               ) : (
                 <>
-                  <div className="mt-4 mb-16 relative z-10 animate-fade-in delay-300 w-full max-w-6xl mx-auto shadow-2xl rounded-[2rem] overflow-hidden">
+                  {/* Map Info Bar */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 w-full max-w-6xl mx-auto animate-fade-in">
+                    <div className="glass-panel p-4 flex items-center gap-4 bg-surface/50">
+                      <div className="w-10 h-10 rounded-xl bg-text-muted/10 flex items-center justify-center shrink-0">
+                        <MapPin size={20} className="text-text-muted" />
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-text-muted block mb-0.5">{dict.shipment.from || 'Origin'}</span>
+                        <span className="text-sm font-black text-text-main">{shippingData.senderCountry}</span>
+                      </div>
+                    </div>
+
+                    <div className="glass-panel p-4 flex items-center gap-4 bg-accent/5 border-accent/20">
+                      <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
+                        <MapPin size={20} className="text-accent" />
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-accent block mb-0.5">{dict.shipment.destination || 'Destination'}</span>
+                        <span className="text-sm font-black text-text-main">{shippingData.receiverCountry}</span>
+                      </div>
+                    </div>
+
+                    <div className="glass-panel p-4 flex items-center justify-between gap-4 bg-surface/50">
+                      <div className="flex items-center gap-4">
+                        <div className="relative flex h-3 w-3">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-3 w-3 bg-accent shadow-[0_0_8px_rgba(var(--color-accent-rgb),1)]"></span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-black uppercase tracking-widest text-accent block mb-0.5">{dict.shipment.live || 'Live'} Status</span>
+                          <span className="text-sm font-black text-text-main uppercase tracking-tight">
+                            {dict.statuses?.[shippingData.status] || shippingData.status.replace(/_/g, ' ')}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mb-16 relative z-10 animate-fade-in delay-300 w-full max-w-6xl mx-auto shadow-2xl rounded-[2rem] overflow-hidden">
                     <DynamicMap 
                       origin={originCoords} 
                       destination={destCoords} 

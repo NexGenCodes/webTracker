@@ -13,7 +13,7 @@ export function LayoutHeader() {
 
     if (isAdmin) {
         return (
-            <header className="fixed top-0 left-0 right-0 z-50 bg-bg/80 backdrop-blur-xl border-b border-border py-4">
+            <header className="fixed top-0 left-0 right-0 z-[1000] bg-bg/80 backdrop-blur-xl border-b border-border py-4">
                 <div className="container-wide flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <Logo />
                     <div className="flex items-center gap-4">
