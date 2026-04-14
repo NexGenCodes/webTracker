@@ -62,17 +62,28 @@ export default function MapComponent({ origin, destination, progress = 0, shipme
   }
 
   // Interpolate current location along the CURVE based on progress
-  const t = progress / 100;
+  const t = Math.max(0, Math.min(1, progress / 100)); // Clamp between 0 and 1
   const currentPos = getCurvePoint(t, origin, p1, destination);
-  const nextPos = getCurvePoint(Math.min(t + 0.01, 1), origin, p1, destination);
+  
+  // Calculate orientation based on a small delta
+  // If at the very end, look backwards to maintain arrival heading
+  const delta = 0.01;
+  const refPos = t < 0.99 
+    ? getCurvePoint(t + delta, origin, p1, destination)
+    : currentPos;
+  const prevPos = t >= 0.99
+    ? getCurvePoint(t - delta, origin, p1, destination)
+    : currentPos;
+
+  const angleRad = t < 0.99
+    ? Math.atan2(refPos[0] - currentPos[0], refPos[1] - currentPos[1])
+    : Math.atan2(currentPos[0] - prevPos[0], currentPos[1] - prevPos[1]);
+
+  const mathAngle = angleRad * (180 / Math.PI);
+  const planeRotation = 45 - mathAngle;
 
   // Plane visibility: Always visible once started, or if arrived
   const currentLocation: [number, number] | null = progress >= 0 ? currentPos : null;
-
-  // Plane rotation: Follow the LOCAL tangent of the curve
-  const angleRad = Math.atan2(nextPos[0] - currentPos[0], nextPos[1] - currentPos[1]);
-  const mathAngle = angleRad * (180 / Math.PI);
-  const planeRotation = 45 - mathAngle;
   return (
     <div className="w-full h-[600px] md:h-[750px] rounded-[2rem] overflow-hidden glass-panel border border-border/50 relative z-10 shadow-2xl">
       <MapContainer

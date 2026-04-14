@@ -191,7 +191,7 @@ function HomeContent({ initialId: propId }: HomeProps) {
               <div className="absolute top-0 right-0 w-96 h-96 bg-accent/5 rounded-full -mr-48 -mt-48 blur-3xl pointer-events-none" />
 
               {/* Status Header - Horizontal on mobile */}
-              <div className="flex flex-row justify-between items-center mb-6 md:mb-16 pb-6 md:pb-12 border-b border-border relative z-10 gap-x-2">
+              <div className="flex flex-row justify-between items-center mb-4 md:mb-16 pb-3 md:pb-12 border-b border-border relative z-10 gap-x-2">
                 <div className="flex items-center gap-2 md:gap-6">
                   <div className="relative">
                     <div className="absolute inset-0 bg-accent blur-3xl opacity-20 animate-pulse" />
@@ -209,9 +209,9 @@ function HomeContent({ initialId: propId }: HomeProps) {
                 </div>
 
                 <div className="flex flex-col items-end md:items-end w-auto">
-                  <span className="text-text-muted text-[8px] md:text-[11px] font-black uppercase tracking-[0.2em] md:tracking-[0.4em] mb-1 md:mb-3">{dict.shipment.trackingId}</span>
-                  <div className="flex items-center gap-1.5 md:gap-4 bg-surface-muted px-2 md:px-6 py-1.5 md:py-4 rounded-xl md:rounded-3xl border border-border group/copy transition-all hover:border-accent/30 shadow-inner w-auto max-w-[140px] md:max-w-none">
-                    <span className="font-mono text-[10px] md:text-lg lg:text-2xl font-black tracking-normal md:tracking-widest text-text-main group-hover:text-accent transition-colors truncate">{shippingData.trackingNumber}</span>
+                  <span className="text-text-muted text-[7px] md:text-[11px] font-black uppercase tracking-[0.2em] md:tracking-[0.4em] mb-0.5 md:mb-3">{dict.shipment.trackingId}</span>
+                  <div className="flex items-center gap-1 md:gap-4 bg-surface-muted px-1.5 md:px-6 py-1 md:py-4 rounded-lg md:rounded-3xl border border-border group/copy transition-all hover:border-accent/30 shadow-inner w-auto max-w-[120px] md:max-w-none">
+                    <span className="font-mono text-[9px] md:text-lg lg:text-2xl font-black tracking-tighter md:tracking-widest text-text-main group-hover:text-accent transition-colors truncate">{shippingData.trackingNumber}</span>
                     <div className="flex items-center gap-1 ml-auto">
                       <button
                         onClick={() => {
@@ -274,37 +274,37 @@ function HomeContent({ initialId: propId }: HomeProps) {
               ) : (
                 <>
                   {/* Map Info Bar - 3 Columns on Mobile */}
-                  <div className="grid grid-cols-3 gap-2 md:gap-4 mb-6 w-full max-w-6xl mx-auto animate-fade-in md:px-0">
-                    <div className="glass-panel p-2 md:p-4 flex flex-col md:flex-row items-center md:items-center gap-1.5 md:gap-4 bg-surface/50 text-center md:text-left">
-                      <div className="w-7 h-7 md:w-10 md:h-10 rounded-lg md:rounded-xl bg-text-muted/10 flex items-center justify-center shrink-0">
-                        <MapPin size={14} className="text-text-muted md:w-5 md:h-5" />
+                  <div className="grid grid-cols-3 gap-1.5 md:gap-4 mb-4 md:mb-6 w-full max-w-6xl mx-auto animate-fade-in md:px-0">
+                    <div className="glass-panel p-1.5 md:p-4 flex flex-col md:flex-row items-center md:items-center gap-1 md:gap-4 bg-surface/50 text-center md:text-left">
+                      <div className="w-6 h-6 md:w-10 md:h-10 rounded-md md:rounded-xl bg-text-muted/10 flex items-center justify-center shrink-0">
+                        <MapPin size={12} className="text-text-muted md:w-5 md:h-5" />
                       </div>
                       <div className="min-w-0">
-                        <span className="text-[7px] md:text-[10px] font-black uppercase tracking-[0.1em] md:tracking-widest text-text-muted block mb-0.5 truncate">{dict.shipment.from || 'Origin'}</span>
-                        <span className="text-[9px] md:text-sm font-black text-text-main truncate block">{shippingData.senderCountry}</span>
+                        <span className="text-[6px] md:text-[10px] font-black uppercase tracking-tight md:tracking-widest text-text-muted block mb-0.5 truncate">{dict.shipment.from || 'Origin'}</span>
+                        <span className="text-[8px] md:text-sm font-black text-text-main truncate block">{shippingData.senderCountry}</span>
                       </div>
                     </div>
 
-                    <div className="glass-panel p-2 md:p-4 flex flex-col md:flex-row items-center md:items-center gap-1.5 md:gap-4 bg-accent/5 border-accent/20 text-center md:text-left">
-                      <div className="w-7 h-7 md:w-10 md:h-10 rounded-lg md:rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
-                        <MapPin size={14} className="text-accent md:w-5 md:h-5" />
+                    <div className="glass-panel p-1.5 md:p-4 flex flex-col md:flex-row items-center md:items-center gap-1 md:gap-4 bg-accent/5 border-accent/20 text-center md:text-left">
+                      <div className="w-6 h-6 md:w-10 md:h-10 rounded-md md:rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
+                        <MapPin size={12} className="text-accent md:w-5 md:h-5" />
                       </div>
                       <div className="min-w-0">
-                        <span className="text-[7px] md:text-[10px] font-black uppercase tracking-[0.1em] md:tracking-widest text-accent block mb-0.5 truncate">{dict.shipment.destination || 'Destination'}</span>
-                        <span className="text-[9px] md:text-sm font-black text-text-main truncate block">{shippingData.receiverCountry}</span>
+                        <span className="text-[6px] md:text-[10px] font-black uppercase tracking-tight md:tracking-widest text-accent block mb-0.5 truncate">{dict.shipment.destination || 'Destination'}</span>
+                        <span className="text-[8px] md:text-sm font-black text-text-main truncate block">{shippingData.receiverCountry}</span>
                       </div>
                     </div>
 
-                    <div className="glass-panel p-2 md:p-4 flex flex-col md:flex-row items-center md:items-center gap-1.5 md:gap-4 bg-surface/50 text-center md:text-left">
-                      <div className="w-7 h-7 md:w-10 md:h-10 rounded-lg md:rounded-xl bg-surface/10 flex items-center justify-center shrink-0">
-                        <div className="relative flex h-2 w-2 md:h-3 md:w-3">
+                    <div className="glass-panel p-1.5 md:p-4 flex flex-col md:flex-row items-center md:items-center gap-1 md:gap-4 bg-surface/50 text-center md:text-left">
+                      <div className="w-6 h-6 md:w-10 md:h-10 rounded-md md:rounded-xl bg-surface/10 flex items-center justify-center shrink-0">
+                        <div className="relative flex h-1.5 w-1.5 md:h-3 md:w-3">
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2 w-2 md:h-3 md:w-3 bg-accent shadow-[0_0_8px_rgba(var(--color-accent-rgb),1)]"></span>
+                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 md:h-3 md:w-3 bg-accent"></span>
                         </div>
                       </div>
                       <div className="min-w-0">
-                        <span className="text-[7px] md:text-[10px] font-black uppercase tracking-[0.1em] md:tracking-widest text-accent block mb-0.5 truncate">{dict.shipment.live || 'Live'} </span>
-                        <span className="text-[9px] md:text-sm font-black text-text-main uppercase tracking-tighter truncate block">
+                        <span className="text-[6px] md:text-[10px] font-black uppercase tracking-tight md:tracking-widest text-accent block mb-0.5 truncate">{dict.shipment.live || 'Live'} </span>
+                        <span className="text-[8px] md:text-sm font-black text-text-main uppercase tracking-tighter truncate block">
                           {dict.statuses?.[shippingData.status] || shippingData.status.replace(/_/g, ' ')}
                         </span>
                       </div>
@@ -336,9 +336,9 @@ function HomeContent({ initialId: propId }: HomeProps) {
                             { label: dict.shipment.origin, value: shippingData.senderCountry },
                             { label: "Weight", value: `${shippingData.weight || 15} KGS` },
                           ].map((detail, idx) => (
-                            <div key={idx} className="flex justify-between items-center py-4 md:py-6 border-b border-border last:border-0 group/item">
-                              <span className="text-text-muted font-black text-[8px] md:text-sm uppercase tracking-widest">{detail.label}</span>
-                              <span className={cn("font-black text-text-main text-xs md:text-xl group-hover:text-accent transition-colors", detail.italic && "italic")}>{detail.value}</span>
+                            <div key={idx} className="flex justify-between items-center py-2 md:py-6 border-b border-border last:border-0 group/item">
+                              <span className="text-text-muted font-black text-[7px] md:text-sm uppercase tracking-widest">{detail.label}</span>
+                              <span className={cn("font-black text-text-main text-[10px] md:text-xl group-hover:text-accent transition-colors", detail.italic && "italic")}>{detail.value}</span>
                             </div>
                           ))}
                         </div>
@@ -351,7 +351,7 @@ function HomeContent({ initialId: propId }: HomeProps) {
                         {dict.shipment.latestUpdates}
                         <span className="h-px flex-1 bg-accent/20" />
                       </h4>
-                      <div className="space-y-8 md:space-y-12 relative border-l-2 border-border ml-2 md:ml-3 pl-6 md:pl-10 py-2">
+                      <div className="space-y-4 md:space-y-12 relative border-l-2 border-border ml-2 md:ml-3 pl-6 md:pl-10 py-2">
                         {shippingData.timeline ? (
                           shippingData.timeline.map((event, i) => (
                             <motion.div
