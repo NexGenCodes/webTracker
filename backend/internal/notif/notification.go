@@ -19,7 +19,7 @@ func SendPairingCodeEmail(cfg *config.Config, code string) {
 
 	companyName := strings.ToUpper(cfg.CompanyName)
 	if companyName == "" {
-		companyName = "AirWayBill"
+		companyName = "AIRWAYBILL"
 	}
 
 	subject := fmt.Sprintf("[%s] WhatsApp Pairing Code", companyName)
@@ -95,7 +95,7 @@ func SendDeliveryEmail(cfg *config.Config, s *shipment.Shipment) {
 
 	companyName := strings.ToUpper(cfg.CompanyName)
 	if companyName == "" {
-		companyName = "AirWayBill"
+		companyName = "AIRWAYBILL"
 	}
 
 	subject := fmt.Sprintf("[%s] Package Arrival Notification - %s", companyName, s.TrackingID)

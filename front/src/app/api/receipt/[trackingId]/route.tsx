@@ -119,7 +119,7 @@ export async function GET(
         {/* Header Section */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', marginBottom: '20px' }}>
           <h1 style={{ color: '#8b0000', fontSize: '64px', margin: '0 0 10px 0', textTransform: 'uppercase', fontWeight: 900, fontStyle: 'italic' }}>
-            Airway Bill
+            {process.env.NEXT_PUBLIC_COMPANY_NAME || 'Airwaybill'}
           </h1>
           <div style={{ width: '600px', height: '32px', backgroundColor: '#8b0000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <span style={{ color: 'white', fontSize: '12px', fontWeight: 800, letterSpacing: '0.4em' }}>
