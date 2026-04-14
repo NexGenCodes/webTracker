@@ -2,7 +2,7 @@
 // BRANDING CONSTANTS (Plug and Play)
 // ============================================
 // Change APP_NAME to rebrand the entire application
-export const APP_NAME = process.env.NEXT_PUBLIC_COMPANY_NAME || "Airway Bill";
+export const APP_NAME = process.env.NEXT_PUBLIC_COMPANY_NAME || "Airwaybill";
 
 /**
  * Auto-generate tracking prefix from company name

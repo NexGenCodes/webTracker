@@ -1,4 +1,5 @@
 import React from 'react';
+import { APP_NAME } from '@/lib/constants';
 
 export interface ReceiptData {
     trackingId: string;
@@ -84,7 +85,7 @@ export const ReceiptPreview = React.forwardRef<HTMLDivElement, ReceiptPreviewPro
                 {/* Header Section (yH = 160.0 in Go) */}
                 <div className="flex flex-col items-center w-full mb-10 pt-10">
                     <h1 className="text-[90px] m-0 text-[#8b0000] uppercase font-black tracking-tight leading-none italic">
-                        Airway Bill
+                        {APP_NAME}
                     </h1>
                     <div className="w-[800px] h-[45px] bg-[#8b0000] flex items-center justify-center mt-6 mb-4 shadow-sm">
                         <span className="text-white text-[20px] font-black tracking-[0.4em] uppercase">

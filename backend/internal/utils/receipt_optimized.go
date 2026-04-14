@@ -77,18 +77,21 @@ func loadStaticTemplate(companyName string, lang i18n.Language) *image.RGBA {
 	tmplPath := filepath.Join(GetAssetsPath(), "img", tmplFilename)
 	versionPath := tmplPath + ".version"
 
+	// Version includes company name so changing it invalidates the cached template
+	versionKey := TemplateVersion + ":" + strings.ToUpper(companyName)
+
 	needsRefresh := false
-	if vData, err := os.ReadFile(versionPath); err != nil || string(vData) != TemplateVersion {
+	if vData, err := os.ReadFile(versionPath); err != nil || string(vData) != versionKey {
 		needsRefresh = true
 	}
 
 	if _, err := os.Stat(tmplPath); os.IsNotExist(err) || needsRefresh {
-		logger.Info().Str("lang", string(lang)).Msg("Regenerating language-specific template...")
+		logger.Info().Str("lang", string(lang)).Str("company", companyName).Msg("Regenerating language-specific template...")
 		if err := generateStaticTemplate(tmplPath, companyName, lang); err != nil {
 			logger.Error().Err(err).Msg("Failed to generate static template")
 			return nil
 		}
-		_ = os.WriteFile(versionPath, []byte(TemplateVersion), 0644)
+		_ = os.WriteFile(versionPath, []byte(versionKey), 0644)
 	}
 
 	img, err := gg.LoadImage(tmplPath)

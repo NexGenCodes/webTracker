@@ -1,4 +1,5 @@
 import React from 'react';
+import { APP_NAME } from '@/lib/constants';
 import { CreateShipmentDto } from '@/types/shipment';
 
 interface PdfReceiptLayoutProps {
@@ -42,7 +43,7 @@ export const PdfReceiptLayout = React.forwardRef<HTMLDivElement, PdfReceiptLayou
                 {/* Header */}
                 <div className="flex flex-col items-center w-full mb-6">
                     <h1 className="text-[50px] m-0 text-[#8b0000] uppercase font-black tracking-tight leading-none">
-                        Airway Bill
+                        {APP_NAME}
                     </h1>
                     <div className="w-[60%] h-[24px] bg-[#8b0000] flex items-center justify-center mt-2 mb-2">
                         <span className="text-white text-[11px] font-extrabold tracking-[0.2em] uppercase">
