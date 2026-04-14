@@ -78,6 +78,29 @@ function HomeContent({ initialId: propId }: HomeProps) {
 
   const initialId = propId || searchParams.get('id');
 
+  useEffect(() => {
+    // Dynamic Viewport logic to simulate "Desktop Mode" on mobile when tracking results are active
+    if (typeof window !== 'undefined') {
+      const viewport = document.querySelector('meta[name="viewport"]');
+      if (viewport) {
+        if (shippingData) {
+          // Force 1280px width allows md: and lg: styles to trigger on mobile
+          // initial-scale=0.3 fits the 1280px width onto the mobile screen
+          viewport.setAttribute('content', 'width=1280, initial-scale=0.3, user-scalable=yes');
+        } else {
+          // Normal responsive behavior for the landing/search hero
+          viewport.setAttribute('content', 'width=device-width, initial-scale=1, user-scalable=yes');
+        }
+      }
+    }
+    
+    // Cleanup on unmount
+    return () => {
+      const viewport = document.querySelector('meta[name="viewport"]');
+      if (viewport) viewport.setAttribute('content', 'width=device-width, initial-scale=1, user-scalable=yes');
+    };
+  }, [shippingData]);
+
   const handleSearch = useCallback(async (trackingNumber: string) => {
     const id = trackingNumber.trim().toUpperCase();
     if (!id) return;
