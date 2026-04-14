@@ -85,8 +85,8 @@ function HomeContent({ initialId: propId }: HomeProps) {
       if (viewport) {
         if (shippingData) {
           // Force 1280px width allows md: and lg: styles to trigger on mobile
-          // initial-scale=0.3 fits the 1280px width onto the mobile screen
-          viewport.setAttribute('content', 'width=1280, initial-scale=0.3, user-scalable=yes');
+          // Removing hardcoded initial-scale allows the browser to "shrink to fit" perfectly
+          viewport.setAttribute('content', 'width=1280, user-scalable=yes');
         } else {
           // Normal responsive behavior for the landing/search hero
           viewport.setAttribute('content', 'width=device-width, initial-scale=1, user-scalable=yes');
