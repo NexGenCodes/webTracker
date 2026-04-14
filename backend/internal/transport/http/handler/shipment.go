@@ -21,6 +21,7 @@ import (
 	"errors"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/whatsapp"
+	"webtracker-bot/internal/notif"
 
 	"github.com/go-playground/validator/v10"
 )
@@ -84,17 +85,17 @@ func (h *ShipmentHandler) Track(c *fiber.Ctx) error {
 // CreateRequest matches Next.js CreateShipmentDto
 type CreateRequest struct {
 	SenderName      string  `json:"senderName" validate:"required"`
-	SenderPhone     string  `json:"senderPhone" validate:"required"`
+	SenderPhone     string  `json:"senderPhone"`
 	SenderCountry   string  `json:"senderCountry" validate:"required"`
 	ReceiverName    string  `json:"receiverName" validate:"required"`
 	ReceiverPhone   string  `json:"receiverPhone" validate:"required"`
 	ReceiverEmail   string  `json:"receiverEmail" validate:"required,email"`
 	ReceiverAddress string  `json:"receiverAddress" validate:"required"`
 	ReceiverCountry string  `json:"receiverCountry" validate:"required"`
-	CargoType       string  `json:"cargoType" validate:"required"`
+	CargoType       string  `json:"cargoType"`
 	Weight          float64 `json:"weight" validate:"required,gt=0"`
-	Cost            float64 `json:"cost" validate:"required,gt=0"`
-	TransitTime     int     `json:"transitTime" validate:"required,gt=0"`
+	Cost            float64 `json:"cost"`
+	TransitTime     int     `json:"transitTime"`
 }
 
 func toNullTime(t time.Time) sql.NullTime {
@@ -117,9 +118,21 @@ func (h *ShipmentHandler) Create(c *fiber.Ctx) error {
 	}
 
 	if err := h.validate.Struct(req); err != nil {
+		var errs []string
+		if validationErrors, ok := err.(validator.ValidationErrors); ok {
+			for _, e := range validationErrors {
+				errs = append(errs, fmt.Sprintf("'%s' is %s", e.Field(), e.Tag()))
+			}
+		} else {
+			errs = append(errs, err.Error())
+		}
+		
+		detailedErr := strings.Join(errs, ", ")
+		log.Printf("Create shipment validation error: %v", detailedErr)
+		
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error":   "Validation failed",
-			"details": err.Error(),
+			"error":   "Validation failed: missing or invalid field(s) - " + detailedErr,
+			"details": detailedErr,
 		})
 	}
 
@@ -225,9 +238,20 @@ func (h *ShipmentHandler) UpdateStatus(c *fiber.Ctx) error {
 		})
 	}
 
+	// Fetch to capture User JID and Email before passing to notifier
+	ship, err := h.shipmentUC.Track(c.Context(), id)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Shipment not found"})
+	}
+
 	if err := h.shipmentUC.UpdateStatus(c.Context(), id, req.Status, req.Destination); err != nil {
 		log.Printf("Update status error: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update status"})
+	}
+
+	// Send instant alert for manual admin overrides
+	if h.sender != nil && h.sender.Client != nil {
+		notif.SendStatusAlert(c.Context(), h.sender.Client, h.cfg, ship.UserJid, ship.TrackingID, req.Status, ship.RecipientEmail.String)
 	}
 
 	return c.JSON(fiber.Map{"success": true})
@@ -411,6 +435,16 @@ func (h *ShipmentHandler) BulkUpdateStatus(c *fiber.Ctx) error {
 	}
 
 	h.shipmentUC.RecordEvent(c.Context(), "admin_bulk_update", []byte(fmt.Sprintf(`{"count": %d, "status": "%s"}`, len(req.IDs), req.Status)))
+
+	// Send instant alerts for manual admin bulk overrides
+	if h.sender != nil && h.sender.Client != nil {
+		for _, id := range req.IDs {
+			// Ignore track errors in bulk sending (if one fails, don't halt everything)
+			if ship, err := h.shipmentUC.Track(c.Context(), id); err == nil {
+				notif.SendStatusAlert(c.Context(), h.sender.Client, h.cfg, ship.UserJid, ship.TrackingID, req.Status, ship.RecipientEmail.String)
+			}
+		}
+	}
 
 	return c.JSON(fiber.Map{"success": true, "updated": len(req.IDs)})
 }

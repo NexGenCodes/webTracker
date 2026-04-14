@@ -189,28 +189,17 @@ func (q *Queries) DeleteShipment(ctx context.Context, trackingID string) error {
 const findSimilarShipment = `-- name: FindSimilarShipment :one
 SELECT tracking_id FROM Shipment 
 WHERE user_jid = $1 
-AND (
-    (recipient_phone = $2 AND $2 != '') OR 
-    (recipient_email = $3 AND $3 != '') OR 
-    (recipient_id = $4 AND $4 != '')
-)
+AND recipient_phone = $2 AND $2 != ''
 ORDER BY created_at DESC LIMIT 1
 `
 
 type FindSimilarShipmentParams struct {
 	UserJid        string         `json:"user_jid"`
 	RecipientPhone sql.NullString `json:"recipient_phone"`
-	RecipientEmail sql.NullString `json:"recipient_email"`
-	RecipientID    sql.NullString `json:"recipient_id"`
 }
 
 func (q *Queries) FindSimilarShipment(ctx context.Context, arg FindSimilarShipmentParams) (string, error) {
-	row := q.db.QueryRowContext(ctx, findSimilarShipment,
-		arg.UserJid,
-		arg.RecipientPhone,
-		arg.RecipientEmail,
-		arg.RecipientID,
-	)
+	row := q.db.QueryRowContext(ctx, findSimilarShipment, arg.UserJid, arg.RecipientPhone)
 	var tracking_id string
 	err := row.Scan(&tracking_id)
 	return tracking_id, err

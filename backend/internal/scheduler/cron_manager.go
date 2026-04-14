@@ -51,9 +51,9 @@ func NewManager(cfg *config.Config, shipUC *usecase.ShipmentUsecase, configUC *u
 }
 
 func (m *CronManager) Start() {
-	// 1. The Pulse: High-frequency logic check (Every 2 minutes) for Status Transitions
+	// 1. The Pulse: High-frequency logic check (Every minute) for Status Transitions
 	// We use a cron job here as a simple ticker wrapper
-	m.addJob("The Pulse (Status Updates)", "0 */2 * * * *", m.handlePulse)
+	m.addJob("The Pulse (Status Updates)", "0 * * * * *", m.handlePulse)
 
 	// 2. Daily Stats Report (At Admin 8 AM - Configured as Cron Spec)
 	// For now, hardcode Nigeria 8am approx (07:00 UTC) or use 0 0 8 * * * if system time is local
@@ -167,8 +167,8 @@ func (m *CronManager) handleDailyStats() {
 
 // handlePruning removes old data to save space (1GB RAM/Disk constraint)
 func (m *CronManager) handlePruning() {
-	deliveredCutoff := time.Now().AddDate(0, 0, -30)
-	allCutoff := time.Now().AddDate(0, 0, -90)
+	deliveredCutoff := time.Now().AddDate(0, 0, -7)
+	allCutoff := time.Now().AddDate(0, 0, -14)
 	deleted, err := m.shipUC.RunAgedCleanup(context.Background(), deliveredCutoff, allCutoff)
 	if err != nil {
 		logger.Error().Err(err).Msg("Pruning: Failed to run aged cleanup")

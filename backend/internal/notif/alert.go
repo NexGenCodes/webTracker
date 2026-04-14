@@ -25,11 +25,18 @@ func SendStatusAlert(ctx context.Context, wa *whatsmeow.Client, cfg *config.Conf
 	}
 
 	var msg string
+	link := ""
+	if cfg != nil && cfg.TrackingBaseURL != "" {
+		link = fmt.Sprintf("\n🌐 *Track Here:* %s/%s", cfg.TrackingBaseURL, tracking)
+	}
+
 	switch status {
 	case shipment.StatusIntransit:
-		msg = fmt.Sprintf("✈️ *SHIPMENT UPDATE*\n\nTracking ID: *%s*\nStatus: *IN TRANSIT*\n\nYour shipment has securely departed the origin facility and is now en route to the destination country.", tracking)
+		msg = fmt.Sprintf("✈️ *SHIPMENT UPDATE*\n\nTracking ID: *%s*\nStatus: *IN TRANSIT*\n\nYour shipment has securely departed the origin facility and is now en route to the destination country.%s", tracking, link)
+	case "outfordelivery":
+		msg = fmt.Sprintf("🚚 *OUT FOR DELIVERY*\n\nTracking ID: *%s*\nStatus: *OUT FOR DELIVERY*\n\nYour shipment is with our local courier and will be delivered to the recipient address today. Please ensure someone is available to receive it.%s", tracking, link)
 	case shipment.StatusDelivered:
-		msg = fmt.Sprintf("🛬 *NOTICE OF ARRIVAL*\n\nTracking ID: *%s*\nStatus: *ARRIVED AT DESTINATION*\n\nYour shipment has successfully arrived in the destination country and is securely held at our facility. A regional agent will contact the recipient shortly.", tracking)
+		msg = fmt.Sprintf("🛬 *NOTICE OF ARRIVAL*\n\nTracking ID: *%s*\nStatus: *ARRIVED AT DESTINATION*\n\nYour shipment has successfully arrived in the destination country and is securely held at our facility. A regional agent will contact the recipient shortly.%s", tracking, link)
 		
 		if email != "" && cfg != nil {
 			SendDeliveryEmail(cfg, &shipment.Shipment{

@@ -108,46 +108,40 @@ func (w *Worker) process(job models.Job) {
 		}
 	}
 
-	// 2. High-Performance Pre-filter
+	// 2. Initial Checks
 	isManifest, isPartial := w.isPotentialManifest(job.Text)
-	if !isManifest {
-		if isPartial {
-			hint := "💡 *IT LOOKS LIKE SHIPMENT INFORMATION!*\n\n" +
-				"━━━━━━━━━━━━━━━━━━━━━━━\n" +
-				"To register a package, please ensure your message includes:\n" +
-				"• Sender Name\n" +
-				"• Receiver Name\n" +
-				"• Receiver Phone\n" +
-				"━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
-				"_Type `!help` for a full example._"
-			w.Sender.Reply(job.ChatJID, job.SenderJID, hint, job.MessageID, job.Text)
-		}
-		return
+	if !isManifest && !isPartial {
+		return // Completely unrelated message
 	}
 
 	// 3. Normal Parsing (Regex first)
 	m := parser.ParseRegex(job.Text)
 
-	// AI Fallback (Minimized: Only if critical fields are missing to save costs)
-	if m.ReceiverName == "" || m.ReceiverPhone == "" || m.ReceiverAddress == "" {
+	// AI Fallback (Strictly bound to save costs and API limits)
+	// ONLY use AI if the user provided a full manifest structure (isManifest == true)
+	// BUT the regex struggled to extract all the required fields.
+	// If it's just a partial message, we skip AI and immediately report the missing fields.
+	if isManifest && (m.ReceiverName == "" || m.ReceiverPhone == "" || m.ReceiverAddress == "" || m.SenderName == "" || m.ReceiverCountry == "") {
 		if aiM, err := parser.ParseAI(job.Text, w.Cfg.GeminiAPIKey); err == nil {
 			m.Merge(aiM)
 			m.IsAI = true
-			m.Validate()
 		}
 	}
 
 	// 4. Validation
-	if len(m.MissingFields) > 0 {
+	// Ensure Validate operates correctly after merge or regex
+	missing := m.Validate()
+	if len(missing) > 0 {
 		logger.GlobalVitals.IncParseFailure()
 		logger.Warn().
 			Str("jid", job.SenderJID.String()).
-			Strs("missing_fields", m.MissingFields).
+			Strs("missing_fields", missing).
 			Msg("Information incomplete after parsing")
 
+		// Specifically list the exact missing fields
 		msg := "📝 *INFORMATION INCOMPLETE*\n\n━━━━━━━━━━━━━━━━━━━━━━━\n" +
 			"The system could not parse the following required fields:\n" +
-			"• " + strings.Join(m.MissingFields, "\n• ") + "\n" +
+			"• " + strings.Join(missing, "\n• ") + "\n" +
 			"━━━━━━━━━━━━━━━━━━━━━━━\n\n_Please provide the missing data to proceed._"
 		w.Sender.Reply(job.ChatJID, job.SenderJID, msg, job.MessageID, job.Text)
 		return
@@ -188,8 +182,8 @@ func (w *Worker) process(job models.Job) {
 		newShipment.Destination = "Local Delivery"
 	}
 
-	// 5b. Deduplication Check (Strict Phone, Email, or ID Match)
-	if existingID, err := w.ShipmentUC.FindSimilar(context.Background(), job.SenderJID.String(), newShipment.RecipientPhone, newShipment.RecipientEmail, newShipment.RecipientID); err == nil && existingID != "" {
+	// 5b. Deduplication Check (Strict Phone Match)
+	if existingID, err := w.ShipmentUC.FindSimilar(context.Background(), job.SenderJID.String(), newShipment.RecipientPhone); err == nil && existingID != "" {
 		logger.Info().Str("existing_id", existingID).Msg("Duplicate shipment blocked")
 		dupMsg := fmt.Sprintf("⚠️ *SHIPMENT ALREADY EXISTS*\n\nA shipment for this recipient phone is already in the system.\n\n🆔 *%s*\n\n🔹 Use `!edit %s ...` to update.\n🔹 Use `!delete %s` to remove.", existingID, existingID, existingID)
 		w.Sender.Reply(job.ChatJID, job.SenderJID, dupMsg, job.MessageID, job.Text)
