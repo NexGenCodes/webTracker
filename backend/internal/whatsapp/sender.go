@@ -144,12 +144,12 @@ func (s *Sender) SetTyping(chat types.JID, typing bool) {
 func (s *Sender) SendList(chat types.JID, title, description, buttonText string, sections []*waProto.ListMessage_Section) {
 	content := &waProto.Message{
 		ListMessage: &waProto.ListMessage{
-			Title:          models.StrPtr(title),
-			Description:    models.StrPtr(description),
-			ButtonText:     models.StrPtr(buttonText),
-			ListType:       waProto.ListMessage_SINGLE_SELECT.Enum(),
-			Sections:       sections,
-			FooterText:     models.StrPtr(s.CompanyName + BotFooter),
+			Title:       models.StrPtr(title),
+			Description: models.StrPtr(description),
+			ButtonText:  models.StrPtr(buttonText),
+			ListType:    waProto.ListMessage_SINGLE_SELECT.Enum(),
+			Sections:    sections,
+			FooterText:  models.StrPtr(s.CompanyName + BotFooter),
 		},
 	}
 
@@ -166,10 +166,10 @@ func (s *Sender) SendList(chat types.JID, title, description, buttonText string,
 func (s *Sender) SendButtons(chat types.JID, text string, buttons []*waProto.ButtonsMessage_Button) {
 	content := &waProto.Message{
 		ButtonsMessage: &waProto.ButtonsMessage{
-			ContentText:  models.StrPtr(text),
-			FooterText:   models.StrPtr(s.CompanyName + BotFooter),
-			HeaderType:   waProto.ButtonsMessage_EMPTY.Enum(),
-			Buttons:      buttons,
+			ContentText: models.StrPtr(text),
+			FooterText:  models.StrPtr(s.CompanyName + BotFooter),
+			HeaderType:  waProto.ButtonsMessage_EMPTY.Enum(),
+			Buttons:     buttons,
 		},
 	}
 

@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"strings"
+
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -8,8 +10,9 @@ import (
 // against the provided secret. Requests without a valid key receive 401.
 func APIKeyAuth(secret string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		// Allow health checks without authentication
-		if c.Path() == "/health" {
+		// Allow health checks and public tracking without authentication
+		path := c.Path()
+		if path == "/health" || strings.HasPrefix(path, "/api/track/") {
 			return c.Next()
 		}
 

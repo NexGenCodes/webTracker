@@ -1,9 +1,9 @@
 package tests
 
 import (
+	"github.com/stretchr/testify/assert"
 	"testing"
 	"webtracker-bot/internal/parser"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestDeepParser_BrutalOCR(t *testing.T) {
@@ -23,11 +23,11 @@ Address: 123 Lagos St
 Content: Electronics
 Weight: 10.5 kg`,
 			expected: map[string]interface{}{
-				"ReceiverName": "Alice Smith",
-				"ReceiverPhone": "+2348012345678",
+				"ReceiverName":    "Alice Smith",
+				"ReceiverPhone":   "+2348012345678",
 				"ReceiverCountry": "Nigeria",
-				"SenderName": "John Doe",
-				"Weight": 10.5,
+				"SenderName":      "John Doe",
+				"Weight":          10.5,
 			},
 		},
 		{
@@ -40,10 +40,10 @@ Addr: No 5, Abuja
 Cargo: Spare Parts
 Wgt: 5.2`,
 			expected: map[string]interface{}{
-				"ReceiverName": "Bob Marley",
+				"ReceiverName":  "Bob Marley",
 				"ReceiverPhone": "(234) 901-222-3333",
-				"CargoType": "Spare Parts",
-				"Weight": 5.2,
+				"CargoType":     "Spare Parts",
+				"Weight":        5.2,
 			},
 		},
 		{
@@ -56,9 +56,9 @@ Stadt: Berlin
 Inhalt: Dokumente
 Gewicht: 0.5 kg`,
 			expected: map[string]interface{}{
-				"ReceiverName": "Dieter Bohlen",
-				"ReceiverPhone": "491701234567",
-				"SenderName": "Klaus Meier",
+				"ReceiverName":    "Dieter Bohlen",
+				"ReceiverPhone":   "491701234567",
+				"SenderName":      "Klaus Meier",
 				"ReceiverCountry": "Berlin", // Currectly city maps to country in current parser logic
 			},
 		},
@@ -71,8 +71,8 @@ Dirección: Calle Falsa 123
 País: España
 Peso: 12.0`,
 			expected: map[string]interface{}{
-				"ReceiverName": "Maria Garcia",
-				"ReceiverPhone": "34912345678",
+				"ReceiverName":    "Maria Garcia",
+				"ReceiverPhone":   "34912345678",
 				"ReceiverCountry": "España",
 			},
 		},
@@ -86,9 +86,9 @@ London, UK
 Box of Clothes
 25 KG`,
 			expected: map[string]interface{}{
-				"ReceiverName": "Samuel Jackson",
+				"ReceiverName":  "Samuel Jackson",
 				"ReceiverPhone": "+44 7700 900123",
-				"Weight": 25.0,
+				"Weight":        25.0,
 			},
 		},
 		{
@@ -98,9 +98,9 @@ PH: 123456789
 DEST: Skynet HQ
 FROM: Kyle Reese`,
 			expected: map[string]interface{}{
-				"ReceiverName": "Sarah Connor",
+				"ReceiverName":  "Sarah Connor",
 				"ReceiverPhone": "123456789",
-				"SenderName": "Kyle Reese",
+				"SenderName":    "Kyle Reese",
 			},
 		},
 		{
@@ -111,19 +111,19 @@ Agent 47
 Call him at 555-0199
 Location: Unknown`,
 			expected: map[string]interface{}{
-				"ReceiverName": "Agent 47",
+				"ReceiverName":  "Agent 47",
 				"ReceiverPhone": "555-0199",
 			},
 		},
 		{
-			name: "Empty Input",
+			name:  "Empty Input",
 			input: ``,
 			expected: map[string]interface{}{
 				"ReceiverName": "",
 			},
 		},
 		{
-			name: "Garbage Input",
+			name:  "Garbage Input",
 			input: `Random text 12345 !@#$%`,
 			expected: map[string]interface{}{
 				"ReceiverName": "Random text 12345 !@#$%",
@@ -136,8 +136,8 @@ Consignment: Iron suit
 Weight: 200.0`,
 			expected: map[string]interface{}{
 				"ReceiverName": "Tony Stark",
-				"CargoType": "Iron suit",
-				"Weight": 200.0,
+				"CargoType":    "Iron suit",
+				"Weight":       200.0,
 			},
 		},
 		{
@@ -148,8 +148,8 @@ Telefone: 5511987654321
 País: Brasil
 Conteúdo: Café`,
 			expected: map[string]interface{}{
-				"ReceiverName": "Pedro Alvares",
-				"ReceiverPhone": "5511987654321",
+				"ReceiverName":    "Pedro Alvares",
+				"ReceiverPhone":   "5511987654321",
 				"ReceiverCountry": "Brasil",
 			},
 		},
@@ -170,12 +170,12 @@ Michael Jordan
 Receiver Phone:
 +1 234 567 8901`,
 			expected: map[string]interface{}{
-				"ReceiverName": "Michael Jordan",
+				"ReceiverName":  "Michael Jordan",
 				"ReceiverPhone": "+1 234 567 8901",
 			},
 		},
 		{
-			name: "Broken Weight Formatting",
+			name:  "Broken Weight Formatting",
 			input: `Cargo weight is approximately 15 , 5 0 kg`,
 			expected: map[string]interface{}{
 				"Weight": 15.5,
@@ -187,7 +187,7 @@ Receiver Phone:
 Primary: 111-222-3333
 Secondary: 444-555-6666`,
 			expected: map[string]interface{}{
-				"ReceiverName": "Hulk",
+				"ReceiverName":  "Hulk",
 				"ReceiverPhone": "111-222-3333",
 			},
 		},
@@ -196,7 +196,7 @@ Secondary: 444-555-6666`,
 			input: `Contact: client@example.com
 Name: Peter Parker`,
 			expected: map[string]interface{}{
-				"ReceiverName": "Peter Parker",
+				"ReceiverName":  "Peter Parker",
 				"ReceiverEmail": "client@example.com",
 			},
 		},
@@ -206,21 +206,21 @@ Name: Peter Parker`,
 Name: Clark Kent`,
 			expected: map[string]interface{}{
 				"ReceiverName": "Clark Kent",
-				"ReceiverID": "ABC123456",
+				"ReceiverID":   "ABC123456",
 			},
 		},
 		{
-			name: "Address with special characters",
+			name:  "Address with special characters",
 			input: `Address: #12, 5th Floor & Block-C, O'Malley St.`,
 			expected: map[string]interface{}{
 				"ReceiverAddress": "#12, 5th Floor & Block-C, O'Malley St.",
 			},
 		},
 		{
-			name: "Leading Whitespace & Tabs",
+			name:  "Leading Whitespace & Tabs",
 			input: "\t\tReceiver Name:\tFlash\n\t\tPhone:\t999",
 			expected: map[string]interface{}{
-				"ReceiverName": "Flash",
+				"ReceiverName":  "Flash",
 				"ReceiverPhone": "999",
 			},
 		},
@@ -230,7 +230,7 @@ Name: Clark Kent`,
 Thank you for shipping with us!
 Receiver Phone: 000000`, // Should ignore phone if after footer
 			expected: map[string]interface{}{
-				"ReceiverName": "Batman",
+				"ReceiverName":  "Batman",
 				"ReceiverPhone": "",
 			},
 		},
@@ -239,7 +239,7 @@ Receiver Phone: 000000`, // Should ignore phone if after footer
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := parser.ParseRegex(tt.input)
-			
+
 			if val, ok := tt.expected["ReceiverName"]; ok {
 				assert.Equal(t, val, m.ReceiverName, "ReceiverName mismatch")
 			}

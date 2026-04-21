@@ -12,12 +12,12 @@ import (
 )
 
 // SendPairingCodeEmail sends the pairing code via a professional HTML email
-func SendPairingCodeEmail(cfg *config.Config, code string) {
+func SendPairingCodeEmail(cfg *config.Config, companyName, code string) {
 	if cfg.SMTPHost == "" || cfg.SMTPUsername == "" || cfg.NotifyEmail == "" {
 		return
 	}
 
-	companyName := strings.ToUpper(cfg.CompanyName)
+	companyName = strings.ToUpper(companyName)
 	if companyName == "" {
 		companyName = "AIRWAYBILL"
 	}
@@ -86,14 +86,92 @@ func SendPairingCodeEmail(cfg *config.Config, code string) {
 	}
 }
 
+// SendSetupLinkEmail sends a magic setup link to a company admin
+func SendSetupLinkEmail(cfg *config.Config, adminEmail, companyName, setupToken string) {
+	if cfg.SMTPHost == "" || cfg.SMTPUsername == "" || adminEmail == "" {
+		logger.Warn().Msg("SMTP not configured, cannot send setup link email")
+		return
+	}
+
+	companyName = strings.ToUpper(companyName)
+	if companyName == "" {
+		companyName = "AIRWAYBILL"
+	}
+
+	frontendURL := cfg.FrontendURL
+	if frontendURL == "" {
+		frontendURL = "http://localhost:3000"
+	}
+	setupLink := fmt.Sprintf("%s/setup/%s", frontendURL, setupToken)
+
+	subject := fmt.Sprintf("[%s] Complete Your WhatsApp Bot Setup", companyName)
+
+	body := fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px;">
+    <div style="max-width: 600px; margin: auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+        <h1 style="color: #2563eb; font-size: 24px; margin-bottom: 10px;">%s</h1>
+        <h2 style="color: #333; font-size: 18px; margin-bottom: 25px;">WhatsApp Bot Setup</h2>
+        
+        <p style="color: #555; line-height: 1.6;">Welcome! Your account has been created. Click the button below to complete your setup by linking your WhatsApp Business number.</p>
+        
+        <div style="text-align: center; margin: 35px 0;">
+            <a href="%s" style="display: inline-block; padding: 16px 40px; background: linear-gradient(135deg, #2563eb, #1e40af); color: white; text-decoration: none; border-radius: 12px; font-weight: 700; font-size: 16px; letter-spacing: 0.5px;">
+                Complete Setup →
+            </a>
+        </div>
+
+        <div style="background-color: #f8f9fa; border-left: 4px solid #2563eb; padding: 15px; margin: 25px 0;">
+            <p style="margin: 0; color: #333; font-size: 13px;"><strong>Direct Link:</strong></p>
+            <p style="margin: 5px 0 0 0; color: #2563eb; word-break: break-all; font-size: 13px;">%s</p>
+        </div>
+
+        <p style="color: #dc3545; font-size: 14px; font-weight: bold; text-align: center;">🔒 This link is unique to your company. Do not share it.</p>
+
+        <p style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px; color: #888; font-size: 12px;">
+            If you did not request this, please ignore this email.
+            <br>&copy; 2026 %s. All rights reserved.
+        </p>
+    </div>
+</body>
+</html>`, companyName, setupLink, setupLink, companyName)
+
+	msg := "From: " + companyName + " <" + cfg.NotifyEmail + ">\r\n" +
+		"To: " + adminEmail + "\r\n" +
+		"Subject: " + subject + "\r\n" +
+		"MIME-Version: 1.0\r\n" +
+		"Content-Type: text/html; charset=\"UTF-8\"\r\n" +
+		"\r\n" +
+		body
+
+	addr := fmt.Sprintf("%s:%d", cfg.SMTPHost, cfg.SMTPPort)
+	logger.Info().Str("to", adminEmail).Msg("Sending setup link email")
+
+	var err error
+	if cfg.SMTPPort == 465 {
+		err = sendSMTPS(addr, cfg.SMTPHost, cfg.SMTPUsername, cfg.SMTPPassword, adminEmail, []byte(msg))
+	} else {
+		user := strings.TrimSpace(cfg.SMTPUsername)
+		pass := strings.TrimSpace(cfg.SMTPPassword)
+		host := strings.TrimSpace(cfg.SMTPHost)
+		auth := smtp.PlainAuth("", user, pass, host)
+		err = smtp.SendMail(addr, auth, cfg.NotifyEmail, []string{adminEmail}, []byte(msg))
+	}
+
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to send setup link email")
+	} else {
+		logger.Info().Str("email", adminEmail).Msg("Setup link email delivered")
+	}
+}
 
 // SendDeliveryEmail sends a professional email when a shipment is delivered
-func SendDeliveryEmail(cfg *config.Config, s *shipment.Shipment) {
+func SendDeliveryEmail(cfg *config.Config, s *shipment.Shipment, companyName string) {
 	if cfg.SMTPHost == "" || cfg.SMTPUsername == "" || s.RecipientEmail == "" {
 		return
 	}
 
-	companyName := strings.ToUpper(cfg.CompanyName)
+	companyName = strings.ToUpper(companyName)
 	if companyName == "" {
 		companyName = "AIRWAYBILL"
 	}

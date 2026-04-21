@@ -32,13 +32,12 @@ func TestAPI_Deep(t *testing.T) {
 	app := server.GetAppForTest() // I need to add this helper to server.go or use field if public
 
 	t.Run("GetShipment_Found", func(t *testing.T) {
-		repo.On("GetShipment", mock.Anything, "AWB-123").Return(db.Shipment{
+		repo.On("GetShipment", mock.Anything, mock.AnythingOfType("db.GetShipmentParams")).Return(db.Shipment{
 			TrackingID: "AWB-123",
 			Status:     sql.NullString{String: "pending", Valid: true},
 		}, nil).Once()
 
-		req := httptest.NewRequest("GET", "/api/shipments/AWB-123", nil)
-		req.Header.Set("X-API-Key", "test-secret")
+		req := httptest.NewRequest("GET", "/api/track/AWB-123?company_id="+testCompanyID.String(), nil)
 
 		resp, _ := app.Test(req)
 		assert.Equal(t, 200, resp.StatusCode)
@@ -50,10 +49,9 @@ func TestAPI_Deep(t *testing.T) {
 	})
 
 	t.Run("GetShipment_NotFound", func(t *testing.T) {
-		repo.On("GetShipment", mock.Anything, "MISSING").Return(db.Shipment{}, sql.ErrNoRows).Once()
+		repo.On("GetShipment", mock.Anything, mock.AnythingOfType("db.GetShipmentParams")).Return(db.Shipment{}, sql.ErrNoRows).Once()
 
-		req := httptest.NewRequest("GET", "/api/shipments/MISSING", nil)
-		req.Header.Set("X-API-Key", "test-secret")
+		req := httptest.NewRequest("GET", "/api/track/MISSING?company_id="+testCompanyID.String(), nil)
 
 		resp, _ := app.Test(req)
 		assert.Equal(t, 404, resp.StatusCode)

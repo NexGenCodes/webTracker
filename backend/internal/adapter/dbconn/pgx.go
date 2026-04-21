@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"webtracker-bot/internal/logger"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"webtracker-bot/internal/logger"
 )
 
 // Connect database connection string
@@ -17,10 +17,11 @@ func Connect(dsn string) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to open pgx connection: %w", err)
 	}
 
-	// Minimal pool sizes (serverless or VPS safe)
-	db.SetMaxOpenConns(5)
-	db.SetMaxIdleConns(2)
-	db.SetConnMaxLifetime(1 * time.Hour)
+	// SaaS-ready pool sizes (scales to 50+ companies)
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(10)
+	db.SetConnMaxLifetime(30 * time.Minute)
+	db.SetConnMaxIdleTime(5 * time.Minute)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

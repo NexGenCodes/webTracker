@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/i18n"
 	"webtracker-bot/internal/logger"
@@ -34,7 +35,7 @@ type Result struct {
 }
 
 type Handler interface {
-	Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, args []string, lang string, isAdmin bool) Result
+	Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, companyID uuid.UUID, args []string, lang string, isAdmin bool) Result
 }
 
 type Dispatcher struct {
@@ -45,11 +46,12 @@ type Dispatcher struct {
 	handlers      map[string]Handler
 	AwbCmd        string
 	CompanyName   string
+	Tier          string
 	BotPhone      string
 	AdminTimezone string
 }
 
-func NewDispatcher(cfg *config.Config, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, sender *whatsapp.Sender, awbCmd string, companyName string, botPhone string, adminTimezone string) *Dispatcher {
+func NewDispatcher(cfg *config.Config, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, sender *whatsapp.Sender, awbCmd string, companyName string, botPhone string, adminTimezone string, tier string) *Dispatcher {
 	d := &Dispatcher{
 		cfg:           cfg,
 		shipUC:        shipUC,
@@ -58,6 +60,7 @@ func NewDispatcher(cfg *config.Config, shipUC *usecase.ShipmentUsecase, configUC
 		handlers:      make(map[string]Handler),
 		AwbCmd:        awbCmd,
 		CompanyName:   companyName,
+		Tier:          tier,
 		BotPhone:      botPhone,
 		AdminTimezone: adminTimezone,
 	}
@@ -76,7 +79,7 @@ func (d *Dispatcher) registerDefaults() {
 	d.handlers["receipt"] = &ReceiptHandler{}
 }
 
-func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) {
+func (d *Dispatcher) Dispatch(ctx context.Context, companyID uuid.UUID, text string) (*Result, bool) {
 	if !presentsAsCommand(text) {
 		return nil, false
 	}
@@ -96,7 +99,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) 
 		isOwner := senderPhone == d.BotPhone
 
 		if !isOwner {
-			allowed, retryIn := utils.Allow(senderPhone)
+			allowed, retryIn := utils.Allow(senderPhone, d.Tier)
 			if !allowed {
 				return &Result{Message: fmt.Sprintf("⏳ *RATE LIMIT REACHED*\n\n_Please wait %d seconds before sending another command._", int(retryIn.Seconds()))}, true
 			}
@@ -113,6 +116,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) 
 			h.CompanyName = d.CompanyName
 			h.CompanyPrefix = d.AwbCmd
 		case *EditHandler:
+			h.CompanyName = d.CompanyName
 			h.CompanyPrefix = d.AwbCmd
 			h.AdminTimezone = d.AdminTimezone
 			h.Sender = d.sender
@@ -123,7 +127,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) 
 			h.Sender = d.sender
 		}
 
-		lang, _ := d.configUC.GetUserLanguage(ctx, jid)
+		lang, _ := d.configUC.GetUserLanguage(ctx, companyID, jid)
 
 		isOwnerOnlyCmd := rawCmd == "status"
 		if isOwnerOnlyCmd {
@@ -142,9 +146,9 @@ func (d *Dispatcher) Dispatch(ctx context.Context, text string) (*Result, bool) 
 			}
 		}
 
-		res := handler.Execute(ctx, d.shipUC, d.configUC, args, lang, isAdmin)
+		res := handler.Execute(ctx, d.shipUC, d.configUC, companyID, args, lang, isAdmin)
 		if res.Language != "" {
-			d.configUC.SetUserLanguage(ctx, jid, res.Language)
+			d.configUC.SetUserLanguage(ctx, companyID, jid, res.Language)
 		}
 
 		return &res, true
@@ -163,12 +167,12 @@ type StatsHandler struct {
 	AdminTimezone string
 }
 
-func (h *StatsHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, args []string, lang string, isAdmin bool) Result {
+func (h *StatsHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, companyID uuid.UUID, args []string, lang string, isAdmin bool) Result {
 	if len(args) > 0 {
 		return Result{Message: i18n.T(i18nLang(lang), "ERR_INCORRECT_USAGE")}
 	}
 
-	stats, err := shipUC.CountByStatus(ctx)
+	stats, err := shipUC.CountByStatus(ctx, companyID)
 	if err != nil {
 		return Result{Message: i18n.T(i18nLang(lang), "ERR_SYSTEM_ERROR"), Error: err}
 	}
@@ -177,7 +181,7 @@ func (h *StatsHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsec
 	if company == "" {
 		company = "LOGISTICS"
 	}
-	
+
 	msg := i18n.T(i18nLang(lang), "MSG_STATS_HEADER", company) + "\n\n━━━━━━━━━━━━━━━━━━━━━━━\n" +
 		fmt.Sprintf("📦 PENDING:    *%d*\n", stats.Pending) +
 		fmt.Sprintf("🚚 IN TRANSIT: *%d*\n", stats.Intransit) +
@@ -185,7 +189,7 @@ func (h *StatsHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsec
 		fmt.Sprintf("🏁 DELIVERED:  *%d*\n", stats.Delivered) +
 		fmt.Sprintf("📊 TOTAL:      *%d*\n", stats.Total) +
 		"━━━━━━━━━━━━━━━━━━━━━━━\n\n_Real-time operational dashboard._"
-		
+
 	return Result{Message: msg}
 }
 
@@ -195,14 +199,14 @@ type InfoHandler struct {
 	CompanyPrefix string
 }
 
-func (h *InfoHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, args []string, lang string, isAdmin bool) Result {
+func (h *InfoHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, companyID uuid.UUID, args []string, lang string, isAdmin bool) Result {
 	var trackingID string
 	jid := utils.GetJID(ctx)
 
 	if len(args) < 1 {
 		// Attempt contextual lookup
 		var err error
-		trackingID, err = shipUC.GetLastForUser(ctx, jid)
+		trackingID, err = shipUC.GetLastForUser(ctx, companyID, jid)
 		if err != nil || trackingID == "" {
 			company := strings.ToUpper(h.CompanyName)
 			if company == "" {
@@ -225,7 +229,7 @@ func (h *InfoHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUseca
 		trackingID = strings.ToUpper(args[0])
 	}
 
-	dbShip, err := shipUC.Track(ctx, trackingID)
+	dbShip, err := shipUC.Track(ctx, companyID, trackingID)
 	if err != nil {
 		return Result{Message: i18n.T(i18nLang(lang), "ERR_DB_ERROR"), Error: err}
 	}
@@ -274,7 +278,7 @@ type HelpHandler struct {
 	CompanyPrefix string
 }
 
-func (h *HelpHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, args []string, lang string, isAdmin bool) Result {
+func (h *HelpHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, companyID uuid.UUID, args []string, lang string, isAdmin bool) Result {
 	company := strings.ToUpper(h.CompanyName)
 	if company == "" {
 		company = "LOGISTICS"
@@ -307,7 +311,7 @@ func (h *HelpHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUseca
 
 type LangHandler struct{}
 
-func (h *LangHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, args []string, lang string, isAdmin bool) Result {
+func (h *LangHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, companyID uuid.UUID, args []string, lang string, isAdmin bool) Result {
 	if len(args) < 1 {
 		return Result{Message: "🌐 *LANGUAGE MENU*\n\nUsage: `!lang [en|pt|es|de]`\n\nExample: `!lang pt` para Português"}
 	}
@@ -327,13 +331,14 @@ func (h *LangHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUseca
 
 // EditHandler handles !edit [trackingID] [field] [value] or !edit [field] [value]
 type EditHandler struct {
+	CompanyName   string
 	CompanyPrefix string
 	AdminTimezone string
 	Sender        *whatsapp.Sender
 	Cfg           *config.Config
 }
 
-func (h *EditHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, args []string, lang string, isAdmin bool) Result {
+func (h *EditHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, companyID uuid.UUID, args []string, lang string, isAdmin bool) Result {
 	if len(args) < 1 {
 		return Result{Message: "✏️ *EDIT SHIPMENT*\n\nUsage: `!edit [TrackingID] [Updates...]` or `!edit [Updates...]` (targets last shipment)\n\n*Example:* `!edit LGS-1234 name: John, departure: tomorrow`"}
 	}
@@ -351,7 +356,7 @@ func (h *EditHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUseca
 	} else {
 		// Contextual Lookup: Fetch last shipment for this user
 		var err error
-		trackingID, err = shipUC.GetLastForUser(ctx, jid)
+		trackingID, err = shipUC.GetLastForUser(ctx, companyID, jid)
 		if err != nil || trackingID == "" {
 			return Result{Message: i18n.T(i18nLang(lang), "ERR_CONTEXT_ERROR")}
 		}
@@ -456,7 +461,7 @@ func (h *EditHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUseca
 			}
 		}
 
-		err := shipUC.UpdateField(ctx, trackingID, field, value)
+		err := shipUC.UpdateField(ctx, companyID, trackingID, field, value)
 		if err == nil {
 			updatedFields = append(updatedFields, strings.ToUpper(strings.ReplaceAll(field, "_", " ")))
 		}
@@ -464,13 +469,13 @@ func (h *EditHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUseca
 
 	// 4. Automatic Arrival Sync (Algorithm B)
 	if departureUpdated && !arrivalExplicitlyUpdated {
-		dbShip, _ := shipUC.Track(ctx, trackingID)
+		dbShip, _ := shipUC.Track(ctx, companyID, trackingID)
 		if dbShip != nil {
 			// Recalculate Arrival based on new Departure
 			arrival, outForDelivery := shipUC.Service.CalculateArrival(newDeparture, dbShip.Origin.String, dbShip.Destination.String)
 
-			_ = shipUC.UpdateField(ctx, trackingID, "expected_delivery_time", arrival.Format("2006-01-02 15:04:05"))
-			_ = shipUC.UpdateField(ctx, trackingID, "outfordelivery_time", outForDelivery.Format("2006-01-02 15:04:05"))
+			_ = shipUC.UpdateField(ctx, companyID, trackingID, "expected_delivery_time", arrival.Format("2006-01-02 15:04:05"))
+			_ = shipUC.UpdateField(ctx, companyID, trackingID, "outfordelivery_time", outForDelivery.Format("2006-01-02 15:04:05"))
 
 			updatedFields = append(updatedFields, "EXPECTED DELIVERY TIME (AUTO-SYNC)", "OUTFORDELIVERY TIME (AUTO-SYNC)")
 		}
@@ -481,11 +486,7 @@ func (h *EditHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUseca
 	}
 
 	// 4. Persistence & Schedule Sync
-	// The DB trigger fn_shipment_auto_schedule() auto-recalculates
-	// scheduled_transit_time, outfordelivery_time, expected_delivery_time
-	// when origin or destination changes on UPDATE.
-
-	dbShip, _ := shipUC.Track(ctx, trackingID)
+	dbShip, _ := shipUC.Track(ctx, companyID, trackingID)
 	if dbShip != nil {
 		// Resolve status
 		s := shipment.Shipment{
@@ -503,11 +504,11 @@ func (h *EditHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUseca
 
 		newStatus := s.ResolveStatus(time.Now().UTC())
 		if newStatus != dbShip.Status.String {
-			_ = shipUC.UpdateField(ctx, trackingID, "status", newStatus)
+			_ = shipUC.UpdateField(ctx, companyID, trackingID, "status", newStatus)
 
 			// If it transitions, optionally trigger the notification explicitly!
 			if h.Sender != nil && h.Sender.Client != nil {
-				notif.SendStatusAlert(ctx, h.Sender.Client, h.Cfg, dbShip.UserJid, trackingID, newStatus, dbShip.RecipientEmail.String)
+				notif.SendStatusAlert(ctx, h.Sender.Client, h.Cfg, h.CompanyName, dbShip.UserJid, trackingID, newStatus, dbShip.RecipientEmail.String)
 			}
 		}
 	}
@@ -524,13 +525,13 @@ func (h *EditHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUseca
 // DeleteHandler handles !delete [trackingID]
 type DeleteHandler struct{}
 
-func (h *DeleteHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, args []string, lang string, isAdmin bool) Result {
+func (h *DeleteHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, companyID uuid.UUID, args []string, lang string, isAdmin bool) Result {
 	var trackingID string
 	jid := utils.GetJID(ctx)
 
 	if len(args) < 1 {
 		var err error
-		trackingID, err = shipUC.GetLastForUser(ctx, jid)
+		trackingID, err = shipUC.GetLastForUser(ctx, companyID, jid)
 		if err != nil || trackingID == "" {
 			return Result{Message: "🗑️ *DELETE SHIPMENT*\n\nUsage: `!delete [TrackingID]`"}
 		}
@@ -538,7 +539,7 @@ func (h *DeleteHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUse
 		trackingID = strings.ToUpper(args[0])
 	}
 
-	err := shipUC.Delete(ctx, trackingID)
+	err := shipUC.Delete(ctx, companyID, trackingID)
 	if err != nil {
 		return Result{Message: fmt.Sprintf("❌ *DELETE FAILED*\n_%v_", err)}
 	}
@@ -551,7 +552,7 @@ type StatusHandler struct {
 	BotPhone string
 }
 
-func (h *StatusHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, args []string, lang string, isAdmin bool) Result {
+func (h *StatusHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, companyID uuid.UUID, args []string, lang string, isAdmin bool) Result {
 	// Performance Telemetry
 	uptime := time.Since(logger.GlobalVitals.StartTime)
 	jobs := atomic.LoadInt64(&logger.GlobalVitals.JobsProcessed)
@@ -569,7 +570,7 @@ func (h *StatusHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUse
 		logger.Error().Err(err).Msg("Database ping failed in !status")
 	}
 
-	groupsCount, _ := configUC.CountAuthorizedGroups(ctx)
+	groupsCount, _ := configUC.CountAuthorizedGroups(ctx, companyID)
 
 	msg := i18n.T(i18nLang(lang), "MSG_STATUS_DASHBOARD") + "\n\n" +
 		fmt.Sprintf("📊 UPTIME:    *%s*\n", uptime.Truncate(time.Second)) +
@@ -587,7 +588,7 @@ type ReceiptHandler struct {
 	Sender *whatsapp.Sender
 }
 
-func (h *ReceiptHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, args []string, lang string, isAdmin bool) Result {
+func (h *ReceiptHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, companyID uuid.UUID, args []string, lang string, isAdmin bool) Result {
 	if !isAdmin {
 		return Result{Message: "🔒 *ACCESS DENIED*\nOnly admins can regenerate receipts."}
 	}
@@ -597,7 +598,7 @@ func (h *ReceiptHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUs
 
 	if len(args) < 1 {
 		var err error
-		trackingID, err = shipUC.GetLastForUser(ctx, jid)
+		trackingID, err = shipUC.GetLastForUser(ctx, companyID, jid)
 		if err != nil || trackingID == "" {
 			return Result{Message: "🧾 *RECEIPT REGENERATION*\n\nUsage: `!receipt [TrackingID]`"}
 		}
@@ -606,7 +607,7 @@ func (h *ReceiptHandler) Execute(ctx context.Context, shipUC *usecase.ShipmentUs
 	}
 
 	// Fetch shipment to get JID
-	dbShip, err := shipUC.Track(ctx, trackingID)
+	dbShip, err := shipUC.Track(ctx, companyID, trackingID)
 	if err != nil || dbShip == nil {
 		return Result{Message: "❌ *NOT FOUND*\nCould not find a shipment with that ID."}
 	}

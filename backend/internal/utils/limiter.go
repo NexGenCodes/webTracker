@@ -12,14 +12,23 @@ type UserLimit struct {
 }
 
 var (
-	userLimits  sync.Map // Map[string]*UserLimit
-	maxRequests = 5      // 5 requests
-	window      = 60 * time.Second
+	userLimits sync.Map // Map[string]*UserLimit
+	window     = 60 * time.Second
 )
 
-// Allow checks if a user is permitted to perform an action.
+// Allow checks if a user is permitted to perform an action based on the company's subscription tier.
 // It is high-performance and uses zero database calls.
-func Allow(userID string) (bool, time.Duration) {
+func Allow(userID, tier string) (bool, time.Duration) {
+	var maxReqs int
+	switch tier {
+	case "enterprise":
+		return true, 0 // Unlimited
+	case "professional":
+		maxReqs = 20
+	default:
+		maxReqs = 5 // starter
+	}
+
 	now := time.Now()
 	val, ok := userLimits.Load(userID)
 	if !ok {
@@ -38,7 +47,7 @@ func Allow(userID string) (bool, time.Duration) {
 		return true, 0
 	}
 
-	if limit.Count >= maxRequests {
+	if limit.Count >= maxReqs {
 		retryIn := window - now.Sub(limit.LastAccess)
 		return false, retryIn
 	}

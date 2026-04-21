@@ -7,38 +7,49 @@ package db
 import (
 	"context"
 	"database/sql"
+
+	"github.com/google/uuid"
 )
 
 type Querier interface {
 	BulkUpdateStatus(ctx context.Context, arg BulkUpdateStatusParams) error
-	CountAuthorizedGroups(ctx context.Context) (int64, error)
-	CountCreatedSince(ctx context.Context, createdAt sql.NullTime) (int64, error)
-	CountDeliveredSince(ctx context.Context, updatedAt sql.NullTime) (int64, error)
-	CountShipments(ctx context.Context) (int64, error)
-	CountShipmentsByStatus(ctx context.Context) (CountShipmentsByStatusRow, error)
+	CountAuthorizedGroups(ctx context.Context, companyID uuid.UUID) (int64, error)
+	CountCreatedSince(ctx context.Context, arg CountCreatedSinceParams) (int64, error)
+	CountDeliveredSince(ctx context.Context, arg CountDeliveredSinceParams) (int64, error)
+	CountShipments(ctx context.Context, companyID uuid.NullUUID) (int64, error)
+	CountShipmentsByStatus(ctx context.Context, companyID uuid.NullUUID) (CountShipmentsByStatusRow, error)
+	CreateCompany(ctx context.Context, arg CreateCompanyParams) (Company, error)
 	CreateShipment(ctx context.Context, arg CreateShipmentParams) error
-	DeleteDeliveredShipments(ctx context.Context) error
-	DeleteShipment(ctx context.Context, trackingID string) error
+	DeleteDeliveredShipments(ctx context.Context, companyID uuid.NullUUID) error
+	DeleteShipment(ctx context.Context, arg DeleteShipmentParams) error
 	FindSimilarShipment(ctx context.Context, arg FindSimilarShipmentParams) (string, error)
-	GetAuthorizedGroups(ctx context.Context) ([]string, error)
-	GetGroupAuthority(ctx context.Context, jid string) (GetGroupAuthorityRow, error)
-	GetLastShipmentIDForUser(ctx context.Context, userJid string) (string, error)
-	GetRecentEvents(ctx context.Context, limit int32) ([]Telemetry, error)
-	GetShipment(ctx context.Context, trackingID string) (Shipment, error)
-	GetSystemConfig(ctx context.Context, key string) (string, error)
-	GetTelemetryStats(ctx context.Context, createdAt sql.NullTime) ([]GetTelemetryStatsRow, error)
-	GetUserLanguage(ctx context.Context, jid string) (string, error)
-	HasAuthorizedGroups(ctx context.Context) (int64, error)
-	ListAllShipments(ctx context.Context) ([]Shipment, error)
+	GetAllActiveCompanies(ctx context.Context) ([]Company, error)
+	GetAllCompanies(ctx context.Context) ([]uuid.UUID, error)
+	GetAuthorizedGroups(ctx context.Context, companyID uuid.UUID) ([]string, error)
+	GetCompanyByID(ctx context.Context, id uuid.UUID) (Company, error)
+	GetCompanyBySetupToken(ctx context.Context, setupToken sql.NullString) (Company, error)
+	GetGroupAuthority(ctx context.Context, arg GetGroupAuthorityParams) (GetGroupAuthorityRow, error)
+	GetLastShipmentIDForUser(ctx context.Context, arg GetLastShipmentIDForUserParams) (string, error)
+	GetRecentEvents(ctx context.Context, arg GetRecentEventsParams) ([]Telemetry, error)
+	GetShipment(ctx context.Context, arg GetShipmentParams) (Shipment, error)
+	GetSystemConfig(ctx context.Context, arg GetSystemConfigParams) (string, error)
+	GetTelemetryStats(ctx context.Context, arg GetTelemetryStatsParams) ([]GetTelemetryStatsRow, error)
+	GetUserLanguage(ctx context.Context, arg GetUserLanguageParams) (string, error)
+	HasAuthorizedGroups(ctx context.Context, companyID uuid.UUID) (int64, error)
+	ListAllShipments(ctx context.Context, companyID uuid.NullUUID) ([]Shipment, error)
 	ListShipments(ctx context.Context, arg ListShipmentsParams) ([]Shipment, error)
 	RecordEvent(ctx context.Context, arg RecordEventParams) error
+	RegenerateSetupToken(ctx context.Context, arg RegenerateSetupTokenParams) error
 	RunAgedCleanup(ctx context.Context, arg RunAgedCleanupParams) error
 	SetGroupAuthority(ctx context.Context, arg SetGroupAuthorityParams) error
 	SetSystemConfig(ctx context.Context, arg SetSystemConfigParams) error
 	SetUserLanguage(ctx context.Context, arg SetUserLanguageParams) error
-	TransitionStatusToDelivered(ctx context.Context, expectedDeliveryTime sql.NullTime) ([]TransitionStatusToDeliveredRow, error)
-	TransitionStatusToIntransit(ctx context.Context, scheduledTransitTime sql.NullTime) ([]TransitionStatusToIntransitRow, error)
-	TransitionStatusToOutForDelivery(ctx context.Context, outfordeliveryTime sql.NullTime) ([]TransitionStatusToOutForDeliveryRow, error)
+	TransitionStatusToDelivered(ctx context.Context, arg TransitionStatusToDeliveredParams) ([]TransitionStatusToDeliveredRow, error)
+	TransitionStatusToIntransit(ctx context.Context, arg TransitionStatusToIntransitParams) ([]TransitionStatusToIntransitRow, error)
+	TransitionStatusToOutForDelivery(ctx context.Context, arg TransitionStatusToOutForDeliveryParams) ([]TransitionStatusToOutForDeliveryRow, error)
+	UpdateCompanyAuthStatus(ctx context.Context, arg UpdateCompanyAuthStatusParams) error
+	UpdateCompanySettings(ctx context.Context, arg UpdateCompanySettingsParams) error
+	UpdateCompanySubscriptionStatus(ctx context.Context, arg UpdateCompanySubscriptionStatusParams) error
 	UpdateShipmentFieldCargoType(ctx context.Context, arg UpdateShipmentFieldCargoTypeParams) error
 	UpdateShipmentFieldDestination(ctx context.Context, arg UpdateShipmentFieldDestinationParams) error
 	UpdateShipmentFieldExpectedDeliveryTime(ctx context.Context, arg UpdateShipmentFieldExpectedDeliveryTimeParams) error

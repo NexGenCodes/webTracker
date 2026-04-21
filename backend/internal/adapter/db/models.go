@@ -7,10 +7,29 @@ package db
 import (
 	"database/sql"
 
+	"github.com/google/uuid"
 	"github.com/sqlc-dev/pqtype"
 )
 
+type Company struct {
+	ID                 uuid.UUID      `json:"id"`
+	Name               string         `json:"name"`
+	AdminEmail         string         `json:"admin_email"`
+	AdminPasswordHash  sql.NullString `json:"admin_password_hash"`
+	WhatsappPhone      sql.NullString `json:"whatsapp_phone"`
+	LogoUrl            sql.NullString `json:"logo_url"`
+	BrandColor         sql.NullString `json:"brand_color"`
+	AuthStatus         sql.NullString `json:"auth_status"`
+	SubscriptionStatus sql.NullString `json:"subscription_status"`
+	SubscriptionExpiry sql.NullTime   `json:"subscription_expiry"`
+	PlanType           sql.NullString `json:"plan_type"`
+	SetupToken         sql.NullString `json:"setup_token"`
+	CreatedAt          sql.NullTime   `json:"created_at"`
+	UpdatedAt          sql.NullTime   `json:"updated_at"`
+}
+
 type Groupauthority struct {
+	CompanyID    uuid.UUID    `json:"company_id"`
 	Jid          string       `json:"jid"`
 	IsAuthorized bool         `json:"is_authorized"`
 	UpdatedAt    sql.NullTime `json:"updated_at"`
@@ -18,6 +37,7 @@ type Groupauthority struct {
 
 type Shipment struct {
 	TrackingID           string          `json:"tracking_id"`
+	CompanyID            uuid.NullUUID   `json:"company_id"`
 	UserJid              string          `json:"user_jid"`
 	Status               sql.NullString  `json:"status"`
 	CreatedAt            sql.NullTime    `json:"created_at"`
@@ -42,6 +62,7 @@ type Shipment struct {
 }
 
 type Systemconfig struct {
+	CompanyID uuid.UUID    `json:"company_id"`
 	Key       string       `json:"key"`
 	Value     string       `json:"value"`
 	UpdatedAt sql.NullTime `json:"updated_at"`
@@ -49,12 +70,14 @@ type Systemconfig struct {
 
 type Telemetry struct {
 	ID        int32                 `json:"id"`
+	CompanyID uuid.NullUUID         `json:"company_id"`
 	EventType string                `json:"event_type"`
 	Metadata  pqtype.NullRawMessage `json:"metadata"`
 	CreatedAt sql.NullTime          `json:"created_at"`
 }
 
 type Userpreference struct {
+	CompanyID uuid.UUID    `json:"company_id"`
 	Jid       string       `json:"jid"`
 	Language  string       `json:"language"`
 	UpdatedAt sql.NullTime `json:"updated_at"`
