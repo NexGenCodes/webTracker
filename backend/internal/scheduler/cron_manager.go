@@ -120,7 +120,7 @@ func (m *CronManager) handlePulse() {
 			logger.Error().Err(err).Msg("Pulse: Failed to process status transitions")
 			break
 		}
-		
+
 		if len(transitions) == 0 {
 			break
 		}
