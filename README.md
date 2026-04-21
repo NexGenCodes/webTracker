@@ -488,7 +488,7 @@ This project is proprietary software. All rights reserved.
 
 ## 📞 Support
 
-For support, email `support@yourlogistics.com` or join our WhatsApp group.
+For support, email `emmanuelforchinagorom@gmail.com` or join our WhatsApp group.
 
 ---
 
