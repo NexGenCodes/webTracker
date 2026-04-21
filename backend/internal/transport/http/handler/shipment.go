@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 
 	"webtracker-bot/internal/adapter/db"
 	"webtracker-bot/internal/parser"
@@ -20,8 +21,8 @@ import (
 
 	"errors"
 	"webtracker-bot/internal/config"
-	"webtracker-bot/internal/whatsapp"
 	"webtracker-bot/internal/notif"
+	"webtracker-bot/internal/whatsapp"
 
 	"github.com/go-playground/validator/v10"
 )
@@ -30,16 +31,29 @@ type ShipmentHandler struct {
 	shipmentUC *usecase.ShipmentUsecase
 	validate   *validator.Validate
 	cfg        *config.Config
-	sender     *whatsapp.Sender
+	bots       whatsapp.BotProvider
 }
 
-func NewShipmentHandler(shipmentUC *usecase.ShipmentUsecase, cfg *config.Config, sender *whatsapp.Sender) *ShipmentHandler {
+// NewShipmentHandler injects the Usecase
+func NewShipmentHandler(shipmentUC *usecase.ShipmentUsecase, cfg *config.Config, bots whatsapp.BotProvider) *ShipmentHandler {
 	return &ShipmentHandler{
 		shipmentUC: shipmentUC,
 		validate:   validator.New(),
 		cfg:        cfg,
-		sender:     sender,
+		bots:       bots,
 	}
+}
+
+func getCompanyID(c *fiber.Ctx) uuid.UUID {
+	idStr := c.Get("X-Company-ID")
+	if idStr == "" {
+		idStr = c.Query("company_id")
+	}
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return uuid.Nil
+	}
+	return id
 }
 
 func (h *ShipmentHandler) RegisterRoutes(router fiber.Router) {
@@ -70,7 +84,12 @@ func (h *ShipmentHandler) RegisterRoutes(router fiber.Router) {
 // Track - GET /api/track/:id
 func (h *ShipmentHandler) Track(c *fiber.Ctx) error {
 	id := c.Params("id")
-	shipment, err := h.shipmentUC.Track(c.Context(), id)
+	companyID := getCompanyID(c)
+	if companyID == uuid.Nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing or invalid company_id"})
+	}
+
+	shipment, err := h.shipmentUC.Track(c.Context(), companyID, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) || strings.Contains(err.Error(), "no rows in result set") {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Shipment not found"})
@@ -112,6 +131,11 @@ func toNullFloat64(f float64) sql.NullFloat64 {
 
 // Create - POST /api/admin/shipments
 func (h *ShipmentHandler) Create(c *fiber.Ctx) error {
+	companyID := getCompanyID(c)
+	if companyID == uuid.Nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing or invalid company_id"})
+	}
+
 	var req CreateRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid payload"})
@@ -126,10 +150,10 @@ func (h *ShipmentHandler) Create(c *fiber.Ctx) error {
 		} else {
 			errs = append(errs, err.Error())
 		}
-		
+
 		detailedErr := strings.Join(errs, ", ")
 		log.Printf("Create shipment validation error: %v", detailedErr)
-		
+
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error":   "Validation failed: missing or invalid field(s) - " + detailedErr,
 			"details": detailedErr,
@@ -169,18 +193,23 @@ func (h *ShipmentHandler) Create(c *fiber.Ctx) error {
 		UpdatedAt:            toNullTime(now),
 	}
 
-	if err := h.shipmentUC.Create(c.Context(), params); err != nil {
+	if err := h.shipmentUC.Create(c.Context(), companyID, params); err != nil {
 		log.Printf("Create shipment error: %v", err)
-		h.shipmentUC.RecordEvent(c.Context(), "admin_create_fail", []byte(fmt.Sprintf(`{"error": "%s"}`, err.Error())))
+		h.shipmentUC.RecordEvent(c.Context(), companyID, "admin_create_fail", []byte(fmt.Sprintf(`{"error": "%s"}`, err.Error())))
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create shipment"})
 	}
 
-	h.shipmentUC.RecordEvent(c.Context(), "admin_create_success", []byte(fmt.Sprintf(`{"id": "%s"}`, trackingID)))
+	h.shipmentUC.RecordEvent(c.Context(), companyID, "admin_create_success", []byte(fmt.Sprintf(`{"id": "%s"}`, trackingID)))
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"tracking_id": trackingID})
 }
 
 // List - GET /api/admin/shipments
 func (h *ShipmentHandler) List(c *fiber.Ctx) error {
+	companyID := getCompanyID(c)
+	if companyID == uuid.Nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing or invalid company_id"})
+	}
+
 	page, _ := strconv.Atoi(c.Query("page", "1"))
 	limit, _ := strconv.Atoi(c.Query("limit", "10"))
 
@@ -193,14 +222,14 @@ func (h *ShipmentHandler) List(c *fiber.Ctx) error {
 
 	offset := (page - 1) * limit
 
-	shipments, err := h.shipmentUC.ListPaginated(c.Context(), int32(limit), int32(offset))
+	shipments, err := h.shipmentUC.ListPaginated(c.Context(), companyID, int32(limit), int32(offset))
 	if err != nil {
 		log.Printf("List error: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	// Get real total count for pagination
-	total, countErr := h.shipmentUC.CountAll(c.Context())
+	total, countErr := h.shipmentUC.CountAll(c.Context(), companyID)
 	if countErr != nil {
 		log.Printf("Count error: %v", countErr)
 		total = 0
@@ -225,6 +254,11 @@ type UpdateStatusRequest struct {
 
 // UpdateStatus - PATCH /api/admin/shipments/:id
 func (h *ShipmentHandler) UpdateStatus(c *fiber.Ctx) error {
+	companyID := getCompanyID(c)
+	if companyID == uuid.Nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing or invalid company_id"})
+	}
+
 	id := c.Params("id")
 	var req UpdateStatusRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -239,19 +273,21 @@ func (h *ShipmentHandler) UpdateStatus(c *fiber.Ctx) error {
 	}
 
 	// Fetch to capture User JID and Email before passing to notifier
-	ship, err := h.shipmentUC.Track(c.Context(), id)
+	ship, err := h.shipmentUC.Track(c.Context(), companyID, id)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Shipment not found"})
 	}
 
-	if err := h.shipmentUC.UpdateStatus(c.Context(), id, req.Status, req.Destination); err != nil {
+	if err := h.shipmentUC.UpdateStatus(c.Context(), companyID, id, req.Status, req.Destination); err != nil {
 		log.Printf("Update status error: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update status"})
 	}
 
 	// Send instant alert for manual admin overrides
-	if h.sender != nil && h.sender.Client != nil {
-		notif.SendStatusAlert(c.Context(), h.sender.Client, h.cfg, ship.UserJid, ship.TrackingID, req.Status, ship.RecipientEmail.String)
+	if h.bots != nil {
+		if bot, err := h.bots.GetBot(companyID); err == nil {
+			notif.SendStatusAlert(c.Context(), bot.WA, h.cfg, bot.CompanyName, ship.UserJid, ship.TrackingID, req.Status, ship.RecipientEmail.String)
+		}
 	}
 
 	return c.JSON(fiber.Map{"success": true})
@@ -259,8 +295,13 @@ func (h *ShipmentHandler) UpdateStatus(c *fiber.Ctx) error {
 
 // Delete - DELETE /api/admin/shipments/:id
 func (h *ShipmentHandler) Delete(c *fiber.Ctx) error {
+	companyID := getCompanyID(c)
+	if companyID == uuid.Nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing or invalid company_id"})
+	}
+
 	id := c.Params("id")
-	if err := h.shipmentUC.Delete(c.Context(), id); err != nil {
+	if err := h.shipmentUC.Delete(c.Context(), companyID, id); err != nil {
 		log.Printf("Delete error: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete shipment"})
 	}
@@ -269,7 +310,12 @@ func (h *ShipmentHandler) Delete(c *fiber.Ctx) error {
 
 // DeleteDelivered - DELETE /api/admin/shipments/cleanup
 func (h *ShipmentHandler) DeleteDelivered(c *fiber.Ctx) error {
-	if err := h.shipmentUC.DeleteDelivered(c.Context()); err != nil {
+	companyID := getCompanyID(c)
+	if companyID == uuid.Nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing or invalid company_id"})
+	}
+
+	if err := h.shipmentUC.DeleteDelivered(c.Context(), companyID); err != nil {
 		log.Printf("Cleanup error: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to cleanup"})
 	}
@@ -278,7 +324,12 @@ func (h *ShipmentHandler) DeleteDelivered(c *fiber.Ctx) error {
 
 // GetStats - GET /api/admin/stats
 func (h *ShipmentHandler) GetStats(c *fiber.Ctx) error {
-	stats, err := h.shipmentUC.CountByStatus(c.Context())
+	companyID := getCompanyID(c)
+	if companyID == uuid.Nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing or invalid company_id"})
+	}
+
+	stats, err := h.shipmentUC.CountByStatus(c.Context(), companyID)
 	if err != nil {
 		log.Printf("Stats error: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch stats"})
@@ -300,6 +351,11 @@ type ParseRequest struct {
 
 // ParseText - POST /api/admin/shipments/parse
 func (h *ShipmentHandler) ParseText(c *fiber.Ctx) error {
+	companyID := getCompanyID(c)
+	if companyID == uuid.Nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing or invalid company_id"})
+	}
+
 	var req ParseRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid payload"})
@@ -321,13 +377,13 @@ func (h *ShipmentHandler) ParseText(c *fiber.Ctx) error {
 			m.Merge(aiM)
 			m.IsAI = true
 			m.Validate()
-			h.shipmentUC.RecordEvent(c.Context(), "admin_parse_ai", []byte(fmt.Sprintf(`{"text_len": %d}`, len(req.Text))))
+			h.shipmentUC.RecordEvent(c.Context(), companyID, "admin_parse_ai", []byte(fmt.Sprintf(`{"text_len": %d}`, len(req.Text))))
 		} else {
 			log.Printf("AI Parse error: %v", err)
-			h.shipmentUC.RecordEvent(c.Context(), "admin_parse_fail", []byte(fmt.Sprintf(`{"error": "%s"}`, err.Error())))
+			h.shipmentUC.RecordEvent(c.Context(), companyID, "admin_parse_fail", []byte(fmt.Sprintf(`{"error": "%s"}`, err.Error())))
 		}
 	} else {
-		h.shipmentUC.RecordEvent(c.Context(), "admin_parse_regex", []byte(fmt.Sprintf(`{"text_len": %d}`, len(req.Text))))
+		h.shipmentUC.RecordEvent(c.Context(), companyID, "admin_parse_regex", []byte(fmt.Sprintf(`{"text_len": %d}`, len(req.Text))))
 	}
 
 	return c.JSON(m)
@@ -335,6 +391,11 @@ func (h *ShipmentHandler) ParseText(c *fiber.Ctx) error {
 
 // BulkCreateCSV - POST /api/admin/shipments/bulk_csv
 func (h *ShipmentHandler) BulkCreateCSV(c *fiber.Ctx) error {
+	companyID := getCompanyID(c)
+	if companyID == uuid.Nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing or invalid company_id"})
+	}
+
 	var req ParseRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid payload"})
@@ -360,7 +421,7 @@ func (h *ShipmentHandler) BulkCreateCSV(c *fiber.Ctx) error {
 		departure := h.shipmentUC.Service.CalculateDeparture(now, "Africa/Lagos")
 		arrival, outForDelivery := h.shipmentUC.Service.CalculateArrival(departure, m.SenderCountry, m.ReceiverCountry)
 
-		if err := h.shipmentUC.Create(c.Context(), db.CreateShipmentParams{
+		if err := h.shipmentUC.Create(c.Context(), companyID, db.CreateShipmentParams{
 			TrackingID:           trackingID,
 			UserJid:              "admin_portal",
 			Status:               toNullString("pending"),
@@ -388,7 +449,7 @@ func (h *ShipmentHandler) BulkCreateCSV(c *fiber.Ctx) error {
 		}
 	}
 
-	h.shipmentUC.RecordEvent(c.Context(), "admin_bulk_csv", []byte(fmt.Sprintf(`{"created": %d, "failed": %d}`, len(createdIds), failed)))
+	h.shipmentUC.RecordEvent(c.Context(), companyID, "admin_bulk_csv", []byte(fmt.Sprintf(`{"created": %d, "failed": %d}`, len(createdIds), failed)))
 
 	return c.JSON(fiber.Map{
 		"success": true,
@@ -400,12 +461,17 @@ func (h *ShipmentHandler) BulkCreateCSV(c *fiber.Ctx) error {
 
 // GetTelemetry - GET /api/admin/telemetry
 func (h *ShipmentHandler) GetTelemetry(c *fiber.Ctx) error {
-	stats, err := h.shipmentUC.GetTelemetryStats(c.Context(), time.Now().Add(-24*7*time.Hour))
+	companyID := getCompanyID(c)
+	if companyID == uuid.Nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing or invalid company_id"})
+	}
+
+	stats, err := h.shipmentUC.GetTelemetryStats(c.Context(), companyID, time.Now().Add(-24*7*time.Hour))
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	recent, _ := h.shipmentUC.GetRecentEvents(c.Context(), 50)
+	recent, _ := h.shipmentUC.GetRecentEvents(c.Context(), companyID, 50)
 
 	return c.JSON(fiber.Map{
 		"stats":  stats,
@@ -421,6 +487,11 @@ type BulkUpdateStatusRequest struct {
 
 // BulkUpdateStatus - PATCH /api/admin/shipments/bulk_status
 func (h *ShipmentHandler) BulkUpdateStatus(c *fiber.Ctx) error {
+	companyID := getCompanyID(c)
+	if companyID == uuid.Nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing or invalid company_id"})
+	}
+
 	var req BulkUpdateStatusRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid payload"})
@@ -430,18 +501,20 @@ func (h *ShipmentHandler) BulkUpdateStatus(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	if err := h.shipmentUC.BulkUpdateStatus(c.Context(), req.IDs, req.Status); err != nil {
+	if err := h.shipmentUC.BulkUpdateStatus(c.Context(), companyID, req.IDs, req.Status); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	h.shipmentUC.RecordEvent(c.Context(), "admin_bulk_update", []byte(fmt.Sprintf(`{"count": %d, "status": "%s"}`, len(req.IDs), req.Status)))
+	h.shipmentUC.RecordEvent(c.Context(), companyID, "admin_bulk_update", []byte(fmt.Sprintf(`{"count": %d, "status": "%s"}`, len(req.IDs), req.Status)))
 
 	// Send instant alerts for manual admin bulk overrides
-	if h.sender != nil && h.sender.Client != nil {
-		for _, id := range req.IDs {
-			// Ignore track errors in bulk sending (if one fails, don't halt everything)
-			if ship, err := h.shipmentUC.Track(c.Context(), id); err == nil {
-				notif.SendStatusAlert(c.Context(), h.sender.Client, h.cfg, ship.UserJid, ship.TrackingID, req.Status, ship.RecipientEmail.String)
+	if h.bots != nil {
+		if bot, err := h.bots.GetBot(companyID); err == nil {
+			for _, id := range req.IDs {
+				// Ignore track errors in bulk sending (if one fails, don't halt everything)
+				if ship, err := h.shipmentUC.Track(c.Context(), companyID, id); err == nil {
+					notif.SendStatusAlert(c.Context(), bot.WA, h.cfg, bot.CompanyName, ship.UserJid, ship.TrackingID, req.Status, ship.RecipientEmail.String)
+				}
 			}
 		}
 	}
@@ -456,18 +529,21 @@ type BulkDeleteRequest struct {
 
 // BulkDelete - DELETE /api/admin/shipments/bulk_delete
 func (h *ShipmentHandler) BulkDelete(c *fiber.Ctx) error {
+	companyID := getCompanyID(c)
+	if companyID == uuid.Nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing or invalid company_id"})
+	}
+
 	var req BulkDeleteRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid payload"})
 	}
 
 	for _, id := range req.IDs {
-		_ = h.shipmentUC.Delete(c.Context(), id)
+		_ = h.shipmentUC.Delete(c.Context(), companyID, id)
 	}
 
-	h.shipmentUC.RecordEvent(c.Context(), "admin_bulk_delete", []byte(fmt.Sprintf(`{"count": %d}`, len(req.IDs))))
+	h.shipmentUC.RecordEvent(c.Context(), companyID, "admin_bulk_delete", []byte(fmt.Sprintf(`{"count": %d}`, len(req.IDs))))
 
 	return c.JSON(fiber.Map{"success": true, "deleted": len(req.IDs)})
 }
-
-

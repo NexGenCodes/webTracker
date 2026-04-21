@@ -8,12 +8,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/usecase"
 
 	"go.mau.fi/whatsmeow"
+	"go.mau.fi/whatsmeow/store"
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
@@ -22,22 +24,19 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-func NewClient(dsn string) (*whatsmeow.Client, error) {
+func NewStore(dsn string) (*sqlstore.Container, error) {
 	dbLog := waLog.Stdout("Database", "DEBUG", true)
-	// PostgreSQL migration for whatsmeow sessions
 	container, err := sqlstore.New(context.Background(), "pgx", dsn, dbLog)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open session database: %w", err)
 	}
+	return container, nil
+}
 
-	device, err := container.GetFirstDevice(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("failed to get device: %w", err)
-	}
-
+func NewClientForDevice(device *store.Device) *whatsmeow.Client {
 	client := whatsmeow.NewClient(device, waLog.Stdout("whatsapp", "INFO", true))
 	logger.Info().Msg("WhatsApp client initialized and session loaded")
-	return client, nil
+	return client
 }
 
 // GetBarePhone extracts only the digits before any device/suffix markers.
@@ -73,15 +72,15 @@ func checkCacheCleanup() {
 	}
 }
 
-func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.Job, cfg *config.Config, configUC *usecase.ConfigUsecase) {
+func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.Job, cfg *config.Config, configUC *usecase.ConfigUsecase, companyID uuid.UUID) {
 	switch v := evt.(type) {
 	case *events.JoinedGroup:
 		logger.Info().Str("chat", v.JID.String()).Msg("[RBAC EVENT] Joined group, re-verifying authority")
-		verifyGroupAuthority(client, configUC, v.JID)
+		verifyGroupAuthority(client, configUC, companyID, v.JID)
 
 	case *events.GroupInfo:
 		logger.Info().Str("chat", v.JID.String()).Msg("[RBAC EVENT] Group info updated, re-verifying authority")
-		verifyGroupAuthority(client, configUC, v.JID)
+		verifyGroupAuthority(client, configUC, companyID, v.JID)
 
 	case *events.Message:
 		checkCacheCleanup()
@@ -116,7 +115,7 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 			identityCache.Unlock()
 		}
 		if botLID == "" {
-			botLID, _ = configUC.GetSystemConfig(context.Background(), "bot_lid")
+			botLID, _ = configUC.GetSystemConfig(context.Background(), companyID, "bot_lid")
 			identityCache.Lock()
 			identityCache.botLID = botLID
 			identityCache.Unlock()
@@ -131,7 +130,7 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 				identityCache.Lock()
 				identityCache.botLID = botLID
 				identityCache.Unlock()
-				_ = configUC.SetSystemConfig(context.Background(), "bot_lid", botLID)
+				_ = configUC.SetSystemConfig(context.Background(), companyID, "bot_lid", botLID)
 			}
 		}
 
@@ -144,7 +143,7 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 				isAuthorized = val.(bool)
 			} else {
 				// Not in memory? Re-verify and populate cache
-				isAuthorized = verifyGroupAuthority(client, configUC, chatJID)
+				isAuthorized = verifyGroupAuthority(client, configUC, companyID, chatJID)
 			}
 
 			// DIAGNOSTIC LOG (As requested: non-blocking, just log)
@@ -166,14 +165,14 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 							isSenderAdmin = isAdminEntry
 						} else {
 							// If not in cache, re-verify (group might have changed)
-							verifyGroupAuthority(client, configUC, chatJID)
+							verifyGroupAuthority(client, configUC, companyID, chatJID)
 							if groupAdminsNew, okNew := participantsCache.Load(chatJID.String()); okNew {
 								isSenderAdmin = groupAdminsNew.(map[string]bool)[senderBare]
 							}
 						}
 					} else {
 						// No cache? Re-verify
-						verifyGroupAuthority(client, configUC, chatJID)
+						verifyGroupAuthority(client, configUC, companyID, chatJID)
 						if groupAdminsNew, okNew := participantsCache.Load(chatJID.String()); okNew {
 							isSenderAdmin = groupAdminsNew.(map[string]bool)[senderBare]
 						}
@@ -195,7 +194,7 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 			} else if cfg.AllowPrivateChat {
 				isAuthorized = true
 			} else {
-				hasGroups, _ := configUC.HasAuthorizedGroups(context.Background())
+				hasGroups, _ := configUC.HasAuthorizedGroups(context.Background(), companyID)
 				isAuthorized = !hasGroups // Failover: Allow private if no groups exist
 			}
 
@@ -223,6 +222,7 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 		}
 
 		queue <- models.Job{
+			CompanyID:   companyID,
 			ChatJID:     v.Info.Chat,
 			SenderJID:   v.Info.Sender,
 			MessageID:   v.Info.ID,
@@ -235,7 +235,7 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 }
 
 // verifyGroupAuthority performs a real-time check. Updates both DB and in-memory cache.
-func verifyGroupAuthority(client *whatsmeow.Client, configUC *usecase.ConfigUsecase, chat types.JID) bool {
+func verifyGroupAuthority(client *whatsmeow.Client, configUC *usecase.ConfigUsecase, companyID uuid.UUID, chat types.JID) bool {
 	resp, err := client.GetGroupInfo(context.Background(), chat)
 	if err != nil {
 		logger.Error().Err(err).Str("chat", chat.String()).Msg("[RBAC EVENT] Failed to fetch group info")
@@ -270,7 +270,7 @@ func verifyGroupAuthority(client *whatsmeow.Client, configUC *usecase.ConfigUsec
 	// Update Memory AND Database
 	authCache.Store(chat.String(), isAuth)
 	participantsCache.Store(chat.String(), admins)
-	configUC.SetGroupAuthority(context.Background(), chat.String(), isAuth)
+	configUC.SetGroupAuthority(context.Background(), companyID, chat.String(), isAuth)
 
 	logger.Info().
 		Str("group", chat.String()).

@@ -126,4 +126,3 @@ func (c *Calculator) CalculateArrival(departure time.Time, senderCountry, receiv
 
 	return arrival, outfordelivery
 }
-

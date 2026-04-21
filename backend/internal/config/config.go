@@ -16,13 +16,11 @@ import (
 type Config struct {
 	DatabaseURL    string `env:"DATABASE_URL"`
 	DirectURL      string `env:"DIRECT_URL"`
-	CompanyPrefix  string `env:"COMPANY_PREFIX"`
 	GeminiAPIKey   string `env:"GEMINI_API_KEY"`
 	AdminTimezone  string `env:"ADMIN_TIMEZONE" env-default:"Africa/Lagos"`
 	HealthcheckURL string `env:"HEALTHCHECK_URL"`
 	LogPath        string `env:"LOG_PATH"`
 	LogLevel       string `env:"LOG_LEVEL" env-default:"info"`
-	CompanyName    string `env:"COMPANY_NAME" env-default:"Airwaybill"`
 	WorkerPoolSize int    `env:"WORKER_POOL_SIZE" env-default:"5"`
 	BufferSize     int    `env:"BUFFER_SIZE" env-default:"100"`
 	PairingPhone   string `env:"WHATSAPP_PAIRING_PHONE"`
@@ -50,6 +48,12 @@ type Config struct {
 
 	// API Security
 	APISecretKey string `env:"API_SECRET_KEY"`
+
+	// Paystack
+	PaystackSecretKey string `env:"PAYSTACK_SECRET_KEY"`
+
+	// Frontend URL for magic links
+	FrontendURL string `env:"FRONTEND_URL" env-default:"http://localhost:3000"`
 }
 
 func GetWorkDir() string {
@@ -133,11 +137,6 @@ func Load() *Config {
 	}
 
 	// Post-processing
-	cfg.CompanyName = strings.ReplaceAll(cfg.CompanyName, " ", "")
-	if cfg.CompanyPrefix == "" {
-		cfg.CompanyPrefix = GenerateAbbreviation(cfg.CompanyName)
-	}
-
 	// Database Selection (DirectURL preferred for migrations/SQLC types)
 	if cfg.DatabaseURL == "" {
 		cfg.DatabaseURL = cfg.DirectURL

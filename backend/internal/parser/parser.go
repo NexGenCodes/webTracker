@@ -17,8 +17,13 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// AI rate limiter: 5 requests per second
-var aiRateLimiter = rate.NewLimiter(rate.Every(200*time.Millisecond), 5)
+var (
+	// AI rate limiter: 5 requests per second
+	aiRateLimiter = rate.NewLimiter(rate.Every(200*time.Millisecond), 5)
+
+	// AI circuit breaker: 3 failures, 30s initial backoff, max 120s backoff
+	aiCircuitBreaker = NewCircuitBreaker(3, 30*time.Second, 120*time.Second)
+)
 
 var stopLabels = `(?i)(?:receiver|reciver|sender|sendr|phone|mobile|tel|num|contact|address|addr|country|nation|state|city|id|passport|email|cargo|item|content|weight|wgt|name|to|from|origin|dest|destination|poids|remetente|absender|empfänger|destinataire|expéditeur)`
 var labelSep = `[\s]*[:\-]+[\s]*`
@@ -91,7 +96,7 @@ func init() {
 // ParseRegex extracts manifest data using a segmented heuristic approach.
 func ParseRegex(text string) models.Manifest {
 	m := models.Manifest{}
-	
+
 	if loc := footerRe.FindStringIndex(text); loc != nil {
 		text = text[:loc[0]]
 	}
@@ -301,6 +306,10 @@ func CleanText(text string) string {
 }
 
 func ParseAI(text, apiKey string) (models.Manifest, error) {
+	if err := aiCircuitBreaker.Allow(); err != nil {
+		return models.Manifest{}, fmt.Errorf("AI parsing temporarily unavailable: %w", err)
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := aiRateLimiter.Wait(ctx); err != nil {
@@ -358,9 +367,11 @@ func ParseAI(text, apiKey string) (models.Manifest, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
+		aiCircuitBreaker.RecordFailure()
 		body, _ := io.ReadAll(resp.Body)
 		return models.Manifest{}, fmt.Errorf("AI API error %d: %s", resp.StatusCode, string(body))
 	}
+	aiCircuitBreaker.RecordSuccess()
 	var result struct {
 		Candidates []struct {
 			Content struct {

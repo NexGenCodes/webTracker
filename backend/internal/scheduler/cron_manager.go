@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -14,9 +13,9 @@ import (
 	"webtracker-bot/internal/usecase"
 
 	"github.com/robfig/cron/v3"
-	"go.mau.fi/whatsmeow"
 	waProto "go.mau.fi/whatsmeow/binary/proto"
 	"go.mau.fi/whatsmeow/types"
+	"webtracker-bot/internal/whatsapp"
 )
 
 type CronManager struct {
@@ -24,7 +23,7 @@ type CronManager struct {
 	cfg       *config.Config
 	shipUC    *usecase.ShipmentUsecase
 	configUC  *usecase.ConfigUsecase
-	wa        *whatsmeow.Client
+	bots      whatsapp.BotProvider
 	locks     map[string]*sync.Mutex
 	mu        sync.RWMutex
 }
@@ -34,7 +33,7 @@ var (
 	once     sync.Once
 )
 
-func NewManager(cfg *config.Config, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, wa *whatsmeow.Client) *CronManager {
+func NewManager(cfg *config.Config, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, bots whatsapp.BotProvider) *CronManager {
 	once.Do(func() {
 		// Use seconds precision for robfig/cron/v3
 		c := cron.New(cron.WithSeconds())
@@ -43,7 +42,7 @@ func NewManager(cfg *config.Config, shipUC *usecase.ShipmentUsecase, configUC *u
 			cfg:       cfg,
 			shipUC:    shipUC,
 			configUC:  configUC,
-			wa:        wa,
+			bots:      bots,
 			locks:     make(map[string]*sync.Mutex),
 		}
 	})
@@ -51,19 +50,9 @@ func NewManager(cfg *config.Config, shipUC *usecase.ShipmentUsecase, configUC *u
 }
 
 func (m *CronManager) Start() {
-	// 1. The Pulse: High-frequency logic check (Every minute) for Status Transitions
-	// We use a cron job here as a simple ticker wrapper
 	m.addJob("The Pulse (Status Updates)", "0 * * * * *", m.handlePulse)
-
-	// 2. Daily Stats Report (At Admin 8 AM - Configured as Cron Spec)
-	// For now, hardcode Nigeria 8am approx (07:00 UTC) or use 0 0 8 * * * if system time is local
-	// Using "0 0 8 * * *" assuming server TZ is set or we want 8am server time.
 	m.addJob("Daily Stats Report", "0 0 8 * * *", m.handleDailyStats)
-
-	// 3. Daily Pruning
 	m.addJob("Daily Pruning", "0 0 0 * * *", m.handlePruning)
-
-	// 4. Health Check Heartbeat
 	m.addJob("Health Check", "0 */10 * * * *", m.handleHealthCheck)
 
 	m.scheduler.Start()
@@ -91,7 +80,6 @@ func (m *CronManager) addJob(name, spec string, cmd func()) {
 }
 
 func (m *CronManager) executeJob(name string, cmd func()) {
-	// Overlap Protection
 	m.mu.RLock()
 	lock := m.locks[name]
 	m.mu.RUnlock()
@@ -107,74 +95,101 @@ func (m *CronManager) executeJob(name string, cmd func()) {
 	logger.Info().Str("job", name).Msg("Task completed")
 }
 
-// handlePulse checks for shipments ready to move to next stage (Pending -> Intransit -> Delivered)
 func (m *CronManager) handlePulse() {
 	ctx := context.Background()
 	now := time.Now().UTC()
 
-	// Process transitions in a loop to handle 'catch-up' (cascading statuses)
-	maxRounds := 3
-	for i := 0; i < maxRounds; i++ {
-		transitions, err := m.shipUC.ProcessTransitions(ctx, now)
-		if err != nil {
-			logger.Error().Err(err).Msg("Pulse: Failed to process status transitions")
-			break
-		}
+	companies, err := m.configUC.GetAllCompanies(ctx)
+	if err != nil {
+		logger.Error().Err(err).Msg("Pulse: Failed to get companies")
+		return
+	}
 
-		if len(transitions) == 0 {
-			break
-		}
+	for _, companyID := range companies {
+		maxRounds := 3
+		for i := 0; i < maxRounds; i++ {
+			transitions, err := m.shipUC.ProcessTransitions(ctx, companyID, now)
+			if err != nil {
+				logger.Error().Err(err).Msg("Pulse: Failed to process status transitions")
+				break
+			}
 
-		for _, t := range transitions {
-			logger.Info().Str("id", t.TrackingID).Str("new_status", t.NewStatus).Msg("Pulse: Shipment status updated via DB trigger")
-			notif.SendStatusAlert(ctx, m.wa, m.cfg, t.UserJID, t.TrackingID, t.NewStatus, t.RecipientEmail)
+			if len(transitions) == 0 {
+				break
+			}
+
+			for _, t := range transitions {
+				logger.Info().Str("id", t.TrackingID).Str("new_status", t.NewStatus).Msg("Pulse: Shipment status updated via DB trigger")
+
+				bot, err := m.bots.GetBot(companyID)
+				if err != nil {
+					continue
+				}
+
+				go func(t usecase.TransitionResult, b *whatsapp.BotInstance) {
+					notif.SendStatusAlert(ctx, b.WA, m.cfg, b.CompanyName, t.UserJID, t.TrackingID, t.NewStatus, t.RecipientEmail)
+				}(t, bot)
+			}
 		}
 	}
 }
 
-// handleDailyStats compiles and sends the 24h summary
 func (m *CronManager) handleDailyStats() {
 	ctx := context.Background()
-
-	// Define "Daily" as last 24h
 	since := time.Now().Add(-24 * time.Hour)
 
-	created, delivered, err := m.shipUC.CountDailyStats(ctx, since)
+	companies, err := m.configUC.GetAllCompanies(ctx)
 	if err != nil {
-		logger.Error().Err(err).Msg("Stats: Failed to count")
+		logger.Error().Err(err).Msg("Stats: Failed to get companies")
 		return
 	}
 
-	msg := fmt.Sprintf("📊 *DAILY REPORT* (Last 24h)\n\n"+
-		"📦 *New Shipments:* %d\n"+
-		"✅ *Delivered:* %d\n\n"+
-		"_System is running smoothly._", created, delivered)
+	for _, companyID := range companies {
+		created, delivered, err := m.shipUC.CountDailyStats(ctx, companyID, since)
+		if err != nil {
+			logger.Error().Err(err).Msg("Stats: Failed to count")
+			continue
+		}
 
-	// Send to Admin/Owner Phone (loaded from config)
-	target := m.cfg.BotOwnerPhone
-	// Ensure proper JID format for WhatsApp
-	if target != "" && !strings.Contains(target, "@") {
-		target = target + "@s.whatsapp.net"
-	}
-	jid, err := types.ParseJID(target)
-	if err == nil {
-		txt := msg
-		m.wa.SendMessage(context.Background(), jid, &waProto.Message{
-			Conversation: &txt,
-		})
+		msg := fmt.Sprintf("📊 *DAILY STATS*\n\n✅ Created: %d\n📦 Delivered: %d", created, delivered)
+
+		bot, err := m.bots.GetBot(companyID)
+		if err != nil {
+			continue
+		}
+
+		go func() {
+			groups, _ := m.configUC.GetAuthorizedGroups(ctx, companyID)
+			for _, g := range groups {
+				jid, _ := types.ParseJID(g)
+				msgContent := &waProto.Message{
+					Conversation: &msg,
+				}
+				bot.WA.SendMessage(ctx, jid, msgContent)
+			}
+		}()
 	}
 }
 
-// handlePruning removes old data to save space (1GB RAM/Disk constraint)
 func (m *CronManager) handlePruning() {
+	ctx := context.Background()
 	deliveredCutoff := time.Now().AddDate(0, 0, -7)
 	allCutoff := time.Now().AddDate(0, 0, -14)
-	deleted, err := m.shipUC.RunAgedCleanup(context.Background(), deliveredCutoff, allCutoff)
+
+	companies, err := m.configUC.GetAllCompanies(ctx)
 	if err != nil {
-		logger.Error().Err(err).Msg("Pruning: Failed to run aged cleanup")
+		logger.Error().Err(err).Msg("Pruning: Failed to get companies")
 		return
 	}
-	logger.Info().Int64("deleted_count", deleted).Msg("Pruning: Aged cleanup completed successfully")
+
+	for _, companyID := range companies {
+		deleted, err := m.shipUC.RunAgedCleanup(ctx, companyID, deliveredCutoff, allCutoff)
+		if err != nil {
+			logger.Error().Err(err).Msg("Pruning: Failed to run aged cleanup")
+			continue
+		}
+		logger.Info().Int64("deleted_count", deleted).Msg("Pruning: Aged cleanup completed successfully")
+	}
 }
 
 func (m *CronManager) handleHealthCheck() {

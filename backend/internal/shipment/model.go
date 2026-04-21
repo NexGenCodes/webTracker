@@ -25,7 +25,7 @@ type Shipment struct {
 	// Core Timestamps (UTC)
 	CreatedAt            time.Time  `json:"created_at"`
 	ScheduledTransitTime *time.Time `json:"scheduled_transit_time"` // When it goes intransit
-	OutForDeliveryTime   *time.Time `json:"out_for_delivery_time"`   // Added for Arrival Notification
+	OutForDeliveryTime   *time.Time `json:"out_for_delivery_time"`  // Added for Arrival Notification
 	ExpectedDeliveryTime *time.Time `json:"expected_delivery_time"` // When it gets delivered
 
 	// Timezone Metadata (Used for display logic)

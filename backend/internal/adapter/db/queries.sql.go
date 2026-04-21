@@ -9,65 +9,77 @@ import (
 	"context"
 	"database/sql"
 
+	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/sqlc-dev/pqtype"
 )
 
 const bulkUpdateStatus = `-- name: BulkUpdateStatus :exec
 UPDATE Shipment
-SET status = $2, updated_at = CURRENT_TIMESTAMP
-WHERE tracking_id = ANY($1::text[])
+SET status = $3, updated_at = CURRENT_TIMESTAMP
+WHERE company_id = $1 AND tracking_id = ANY($2::text[])
 `
 
 type BulkUpdateStatusParams struct {
-	Column1 []string       `json:"column_1"`
-	Status  sql.NullString `json:"status"`
+	CompanyID uuid.NullUUID  `json:"company_id"`
+	Column2   []string       `json:"column_2"`
+	Status    sql.NullString `json:"status"`
 }
 
 func (q *Queries) BulkUpdateStatus(ctx context.Context, arg BulkUpdateStatusParams) error {
-	_, err := q.db.ExecContext(ctx, bulkUpdateStatus, pq.Array(arg.Column1), arg.Status)
+	_, err := q.db.ExecContext(ctx, bulkUpdateStatus, arg.CompanyID, pq.Array(arg.Column2), arg.Status)
 	return err
 }
 
 const countAuthorizedGroups = `-- name: CountAuthorizedGroups :one
-SELECT COUNT(*) FROM GroupAuthority WHERE is_authorized = true
+SELECT COUNT(*) FROM GroupAuthority WHERE company_id = $1 AND is_authorized = true
 `
 
-func (q *Queries) CountAuthorizedGroups(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countAuthorizedGroups)
+func (q *Queries) CountAuthorizedGroups(ctx context.Context, companyID uuid.UUID) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countAuthorizedGroups, companyID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
 }
 
 const countCreatedSince = `-- name: CountCreatedSince :one
-SELECT COUNT(*) FROM Shipment WHERE created_at >= $1
+SELECT COUNT(*) FROM Shipment WHERE company_id = $1 AND created_at >= $2
 `
 
-func (q *Queries) CountCreatedSince(ctx context.Context, createdAt sql.NullTime) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countCreatedSince, createdAt)
+type CountCreatedSinceParams struct {
+	CompanyID uuid.NullUUID `json:"company_id"`
+	CreatedAt sql.NullTime  `json:"created_at"`
+}
+
+func (q *Queries) CountCreatedSince(ctx context.Context, arg CountCreatedSinceParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countCreatedSince, arg.CompanyID, arg.CreatedAt)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
 }
 
 const countDeliveredSince = `-- name: CountDeliveredSince :one
-SELECT COUNT(*) FROM Shipment WHERE status = 'delivered' AND updated_at >= $1
+SELECT COUNT(*) FROM Shipment WHERE company_id = $1 AND status = 'delivered' AND updated_at >= $2
 `
 
-func (q *Queries) CountDeliveredSince(ctx context.Context, updatedAt sql.NullTime) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countDeliveredSince, updatedAt)
+type CountDeliveredSinceParams struct {
+	CompanyID uuid.NullUUID `json:"company_id"`
+	UpdatedAt sql.NullTime  `json:"updated_at"`
+}
+
+func (q *Queries) CountDeliveredSince(ctx context.Context, arg CountDeliveredSinceParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countDeliveredSince, arg.CompanyID, arg.UpdatedAt)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
 }
 
 const countShipments = `-- name: CountShipments :one
-SELECT COUNT(*) FROM Shipment
+SELECT COUNT(*) FROM Shipment WHERE company_id = $1
 `
 
-func (q *Queries) CountShipments(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countShipments)
+func (q *Queries) CountShipments(ctx context.Context, companyID uuid.NullUUID) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countShipments, companyID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -81,7 +93,7 @@ SELECT
     COUNT(*) FILTER (WHERE status = 'outfordelivery') AS outfordelivery,
     COUNT(*) FILTER (WHERE status = 'delivered') AS delivered,
     COUNT(*) FILTER (WHERE status = 'canceled') AS canceled
-FROM Shipment
+FROM Shipment WHERE company_id = $1
 `
 
 type CountShipmentsByStatusRow struct {
@@ -93,8 +105,8 @@ type CountShipmentsByStatusRow struct {
 	Canceled       int64 `json:"canceled"`
 }
 
-func (q *Queries) CountShipmentsByStatus(ctx context.Context) (CountShipmentsByStatusRow, error) {
-	row := q.db.QueryRowContext(ctx, countShipmentsByStatus)
+func (q *Queries) CountShipmentsByStatus(ctx context.Context, companyID uuid.NullUUID) (CountShipmentsByStatusRow, error) {
+	row := q.db.QueryRowContext(ctx, countShipmentsByStatus, companyID)
 	var i CountShipmentsByStatusRow
 	err := row.Scan(
 		&i.Total,
@@ -107,15 +119,48 @@ func (q *Queries) CountShipmentsByStatus(ctx context.Context) (CountShipmentsByS
 	return i, err
 }
 
+const createCompany = `-- name: CreateCompany :one
+INSERT INTO companies (name, admin_email, setup_token) VALUES ($1, $2, $3) RETURNING id, name, admin_email, admin_password_hash, whatsapp_phone, logo_url, brand_color, auth_status, subscription_status, subscription_expiry, plan_type, setup_token, created_at, updated_at
+`
+
+type CreateCompanyParams struct {
+	Name       string         `json:"name"`
+	AdminEmail string         `json:"admin_email"`
+	SetupToken sql.NullString `json:"setup_token"`
+}
+
+func (q *Queries) CreateCompany(ctx context.Context, arg CreateCompanyParams) (Company, error) {
+	row := q.db.QueryRowContext(ctx, createCompany, arg.Name, arg.AdminEmail, arg.SetupToken)
+	var i Company
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.AdminEmail,
+		&i.AdminPasswordHash,
+		&i.WhatsappPhone,
+		&i.LogoUrl,
+		&i.BrandColor,
+		&i.AuthStatus,
+		&i.SubscriptionStatus,
+		&i.SubscriptionExpiry,
+		&i.PlanType,
+		&i.SetupToken,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createShipment = `-- name: CreateShipment :exec
 INSERT INTO Shipment (
-    tracking_id, user_jid, status, created_at, scheduled_transit_time, outfordelivery_time, expected_delivery_time, sender_timezone, recipient_timezone, sender_name, sender_phone, origin, recipient_name, recipient_phone, recipient_email, recipient_id, recipient_address, destination, cargo_type, weight, cost, updated_at
+    company_id, tracking_id, user_jid, status, created_at, scheduled_transit_time, outfordelivery_time, expected_delivery_time, sender_timezone, recipient_timezone, sender_name, sender_phone, origin, recipient_name, recipient_phone, recipient_email, recipient_id, recipient_address, destination, cargo_type, weight, cost, updated_at
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
 )
 `
 
 type CreateShipmentParams struct {
+	CompanyID            uuid.NullUUID   `json:"company_id"`
 	TrackingID           string          `json:"tracking_id"`
 	UserJid              string          `json:"user_jid"`
 	Status               sql.NullString  `json:"status"`
@@ -142,6 +187,7 @@ type CreateShipmentParams struct {
 
 func (q *Queries) CreateShipment(ctx context.Context, arg CreateShipmentParams) error {
 	_, err := q.db.ExecContext(ctx, createShipment,
+		arg.CompanyID,
 		arg.TrackingID,
 		arg.UserJid,
 		arg.Status,
@@ -169,48 +215,122 @@ func (q *Queries) CreateShipment(ctx context.Context, arg CreateShipmentParams) 
 }
 
 const deleteDeliveredShipments = `-- name: DeleteDeliveredShipments :exec
-DELETE FROM Shipment WHERE status = 'delivered'
+DELETE FROM Shipment WHERE company_id = $1 AND status = 'delivered'
 `
 
-func (q *Queries) DeleteDeliveredShipments(ctx context.Context) error {
-	_, err := q.db.ExecContext(ctx, deleteDeliveredShipments)
+func (q *Queries) DeleteDeliveredShipments(ctx context.Context, companyID uuid.NullUUID) error {
+	_, err := q.db.ExecContext(ctx, deleteDeliveredShipments, companyID)
 	return err
 }
 
 const deleteShipment = `-- name: DeleteShipment :exec
-DELETE FROM Shipment WHERE tracking_id = $1
+DELETE FROM Shipment WHERE company_id = $1 AND tracking_id = $2
 `
 
-func (q *Queries) DeleteShipment(ctx context.Context, trackingID string) error {
-	_, err := q.db.ExecContext(ctx, deleteShipment, trackingID)
+type DeleteShipmentParams struct {
+	CompanyID  uuid.NullUUID `json:"company_id"`
+	TrackingID string        `json:"tracking_id"`
+}
+
+func (q *Queries) DeleteShipment(ctx context.Context, arg DeleteShipmentParams) error {
+	_, err := q.db.ExecContext(ctx, deleteShipment, arg.CompanyID, arg.TrackingID)
 	return err
 }
 
 const findSimilarShipment = `-- name: FindSimilarShipment :one
 SELECT tracking_id FROM Shipment 
-WHERE user_jid = $1 
-AND recipient_phone = $2 AND $2 != ''
+WHERE company_id = $1 AND user_jid = $2 AND recipient_phone = $3 AND $3 != ''
 ORDER BY created_at DESC LIMIT 1
 `
 
 type FindSimilarShipmentParams struct {
+	CompanyID      uuid.NullUUID  `json:"company_id"`
 	UserJid        string         `json:"user_jid"`
 	RecipientPhone sql.NullString `json:"recipient_phone"`
 }
 
 func (q *Queries) FindSimilarShipment(ctx context.Context, arg FindSimilarShipmentParams) (string, error) {
-	row := q.db.QueryRowContext(ctx, findSimilarShipment, arg.UserJid, arg.RecipientPhone)
+	row := q.db.QueryRowContext(ctx, findSimilarShipment, arg.CompanyID, arg.UserJid, arg.RecipientPhone)
 	var tracking_id string
 	err := row.Scan(&tracking_id)
 	return tracking_id, err
 }
 
-const getAuthorizedGroups = `-- name: GetAuthorizedGroups :many
-SELECT jid FROM GroupAuthority WHERE is_authorized = true
+const getAllActiveCompanies = `-- name: GetAllActiveCompanies :many
+SELECT id, name, admin_email, admin_password_hash, whatsapp_phone, logo_url, brand_color, auth_status, subscription_status, subscription_expiry, plan_type, setup_token, created_at, updated_at FROM companies WHERE auth_status = 'active'
 `
 
-func (q *Queries) GetAuthorizedGroups(ctx context.Context) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, getAuthorizedGroups)
+func (q *Queries) GetAllActiveCompanies(ctx context.Context) ([]Company, error) {
+	rows, err := q.db.QueryContext(ctx, getAllActiveCompanies)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Company
+	for rows.Next() {
+		var i Company
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.AdminEmail,
+			&i.AdminPasswordHash,
+			&i.WhatsappPhone,
+			&i.LogoUrl,
+			&i.BrandColor,
+			&i.AuthStatus,
+			&i.SubscriptionStatus,
+			&i.SubscriptionExpiry,
+			&i.PlanType,
+			&i.SetupToken,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getAllCompanies = `-- name: GetAllCompanies :many
+SELECT id FROM companies
+`
+
+func (q *Queries) GetAllCompanies(ctx context.Context) ([]uuid.UUID, error) {
+	rows, err := q.db.QueryContext(ctx, getAllCompanies)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getAuthorizedGroups = `-- name: GetAuthorizedGroups :many
+SELECT jid FROM GroupAuthority WHERE company_id = $1 AND is_authorized = true
+`
+
+func (q *Queries) GetAuthorizedGroups(ctx context.Context, companyID uuid.UUID) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, getAuthorizedGroups, companyID)
 	if err != nil {
 		return nil, err
 	}
@@ -232,41 +352,109 @@ func (q *Queries) GetAuthorizedGroups(ctx context.Context) ([]string, error) {
 	return items, nil
 }
 
-const getGroupAuthority = `-- name: GetGroupAuthority :one
-SELECT is_authorized, updated_at FROM GroupAuthority WHERE jid = $1
+const getCompanyByID = `-- name: GetCompanyByID :one
+SELECT id, name, admin_email, admin_password_hash, whatsapp_phone, logo_url, brand_color, auth_status, subscription_status, subscription_expiry, plan_type, setup_token, created_at, updated_at FROM companies WHERE id = $1
 `
+
+func (q *Queries) GetCompanyByID(ctx context.Context, id uuid.UUID) (Company, error) {
+	row := q.db.QueryRowContext(ctx, getCompanyByID, id)
+	var i Company
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.AdminEmail,
+		&i.AdminPasswordHash,
+		&i.WhatsappPhone,
+		&i.LogoUrl,
+		&i.BrandColor,
+		&i.AuthStatus,
+		&i.SubscriptionStatus,
+		&i.SubscriptionExpiry,
+		&i.PlanType,
+		&i.SetupToken,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getCompanyBySetupToken = `-- name: GetCompanyBySetupToken :one
+SELECT id, name, admin_email, admin_password_hash, whatsapp_phone, logo_url, brand_color, auth_status, subscription_status, subscription_expiry, plan_type, setup_token, created_at, updated_at FROM companies WHERE setup_token = $1
+`
+
+func (q *Queries) GetCompanyBySetupToken(ctx context.Context, setupToken sql.NullString) (Company, error) {
+	row := q.db.QueryRowContext(ctx, getCompanyBySetupToken, setupToken)
+	var i Company
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.AdminEmail,
+		&i.AdminPasswordHash,
+		&i.WhatsappPhone,
+		&i.LogoUrl,
+		&i.BrandColor,
+		&i.AuthStatus,
+		&i.SubscriptionStatus,
+		&i.SubscriptionExpiry,
+		&i.PlanType,
+		&i.SetupToken,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getGroupAuthority = `-- name: GetGroupAuthority :one
+SELECT is_authorized, updated_at FROM GroupAuthority WHERE company_id = $1 AND jid = $2
+`
+
+type GetGroupAuthorityParams struct {
+	CompanyID uuid.UUID `json:"company_id"`
+	Jid       string    `json:"jid"`
+}
 
 type GetGroupAuthorityRow struct {
 	IsAuthorized bool         `json:"is_authorized"`
 	UpdatedAt    sql.NullTime `json:"updated_at"`
 }
 
-func (q *Queries) GetGroupAuthority(ctx context.Context, jid string) (GetGroupAuthorityRow, error) {
-	row := q.db.QueryRowContext(ctx, getGroupAuthority, jid)
+func (q *Queries) GetGroupAuthority(ctx context.Context, arg GetGroupAuthorityParams) (GetGroupAuthorityRow, error) {
+	row := q.db.QueryRowContext(ctx, getGroupAuthority, arg.CompanyID, arg.Jid)
 	var i GetGroupAuthorityRow
 	err := row.Scan(&i.IsAuthorized, &i.UpdatedAt)
 	return i, err
 }
 
 const getLastShipmentIDForUser = `-- name: GetLastShipmentIDForUser :one
-SELECT tracking_id FROM Shipment WHERE user_jid = $1 ORDER BY created_at DESC LIMIT 1
+SELECT tracking_id FROM Shipment WHERE company_id = $1 AND user_jid = $2 ORDER BY created_at DESC LIMIT 1
 `
 
-func (q *Queries) GetLastShipmentIDForUser(ctx context.Context, userJid string) (string, error) {
-	row := q.db.QueryRowContext(ctx, getLastShipmentIDForUser, userJid)
+type GetLastShipmentIDForUserParams struct {
+	CompanyID uuid.NullUUID `json:"company_id"`
+	UserJid   string        `json:"user_jid"`
+}
+
+func (q *Queries) GetLastShipmentIDForUser(ctx context.Context, arg GetLastShipmentIDForUserParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, getLastShipmentIDForUser, arg.CompanyID, arg.UserJid)
 	var tracking_id string
 	err := row.Scan(&tracking_id)
 	return tracking_id, err
 }
 
 const getRecentEvents = `-- name: GetRecentEvents :many
-SELECT id, event_type, metadata, created_at FROM Telemetry
+SELECT id, company_id, event_type, metadata, created_at FROM Telemetry
+WHERE company_id = $1
 ORDER BY created_at DESC
-LIMIT $1
+LIMIT $2
 `
 
-func (q *Queries) GetRecentEvents(ctx context.Context, limit int32) ([]Telemetry, error) {
-	rows, err := q.db.QueryContext(ctx, getRecentEvents, limit)
+type GetRecentEventsParams struct {
+	CompanyID uuid.NullUUID `json:"company_id"`
+	Limit     int32         `json:"limit"`
+}
+
+func (q *Queries) GetRecentEvents(ctx context.Context, arg GetRecentEventsParams) ([]Telemetry, error) {
+	rows, err := q.db.QueryContext(ctx, getRecentEvents, arg.CompanyID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -276,6 +464,7 @@ func (q *Queries) GetRecentEvents(ctx context.Context, limit int32) ([]Telemetry
 		var i Telemetry
 		if err := rows.Scan(
 			&i.ID,
+			&i.CompanyID,
 			&i.EventType,
 			&i.Metadata,
 			&i.CreatedAt,
@@ -294,14 +483,20 @@ func (q *Queries) GetRecentEvents(ctx context.Context, limit int32) ([]Telemetry
 }
 
 const getShipment = `-- name: GetShipment :one
-SELECT tracking_id, user_jid, status, created_at, scheduled_transit_time, outfordelivery_time, expected_delivery_time, sender_timezone, recipient_timezone, sender_name, sender_phone, origin, recipient_name, recipient_phone, recipient_email, recipient_id, recipient_address, destination, cargo_type, weight, cost, updated_at FROM Shipment WHERE tracking_id = $1
+SELECT tracking_id, company_id, user_jid, status, created_at, scheduled_transit_time, outfordelivery_time, expected_delivery_time, sender_timezone, recipient_timezone, sender_name, sender_phone, origin, recipient_name, recipient_phone, recipient_email, recipient_id, recipient_address, destination, cargo_type, weight, cost, updated_at FROM Shipment WHERE company_id = $1 AND tracking_id = $2
 `
 
-func (q *Queries) GetShipment(ctx context.Context, trackingID string) (Shipment, error) {
-	row := q.db.QueryRowContext(ctx, getShipment, trackingID)
+type GetShipmentParams struct {
+	CompanyID  uuid.NullUUID `json:"company_id"`
+	TrackingID string        `json:"tracking_id"`
+}
+
+func (q *Queries) GetShipment(ctx context.Context, arg GetShipmentParams) (Shipment, error) {
+	row := q.db.QueryRowContext(ctx, getShipment, arg.CompanyID, arg.TrackingID)
 	var i Shipment
 	err := row.Scan(
 		&i.TrackingID,
+		&i.CompanyID,
 		&i.UserJid,
 		&i.Status,
 		&i.CreatedAt,
@@ -328,11 +523,16 @@ func (q *Queries) GetShipment(ctx context.Context, trackingID string) (Shipment,
 }
 
 const getSystemConfig = `-- name: GetSystemConfig :one
-SELECT value FROM SystemConfig WHERE key = $1
+SELECT value FROM SystemConfig WHERE company_id = $1 AND key = $2
 `
 
-func (q *Queries) GetSystemConfig(ctx context.Context, key string) (string, error) {
-	row := q.db.QueryRowContext(ctx, getSystemConfig, key)
+type GetSystemConfigParams struct {
+	CompanyID uuid.UUID `json:"company_id"`
+	Key       string    `json:"key"`
+}
+
+func (q *Queries) GetSystemConfig(ctx context.Context, arg GetSystemConfigParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, getSystemConfig, arg.CompanyID, arg.Key)
 	var value string
 	err := row.Scan(&value)
 	return value, err
@@ -341,17 +541,22 @@ func (q *Queries) GetSystemConfig(ctx context.Context, key string) (string, erro
 const getTelemetryStats = `-- name: GetTelemetryStats :many
 SELECT event_type, COUNT(*) as count
 FROM Telemetry
-WHERE created_at >= $1
+WHERE company_id = $1 AND created_at >= $2
 GROUP BY event_type
 `
+
+type GetTelemetryStatsParams struct {
+	CompanyID uuid.NullUUID `json:"company_id"`
+	CreatedAt sql.NullTime  `json:"created_at"`
+}
 
 type GetTelemetryStatsRow struct {
 	EventType string `json:"event_type"`
 	Count     int64  `json:"count"`
 }
 
-func (q *Queries) GetTelemetryStats(ctx context.Context, createdAt sql.NullTime) ([]GetTelemetryStatsRow, error) {
-	rows, err := q.db.QueryContext(ctx, getTelemetryStats, createdAt)
+func (q *Queries) GetTelemetryStats(ctx context.Context, arg GetTelemetryStatsParams) ([]GetTelemetryStatsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTelemetryStats, arg.CompanyID, arg.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -374,33 +579,38 @@ func (q *Queries) GetTelemetryStats(ctx context.Context, createdAt sql.NullTime)
 }
 
 const getUserLanguage = `-- name: GetUserLanguage :one
-SELECT language FROM UserPreference WHERE jid = $1
+SELECT language FROM UserPreference WHERE company_id = $1 AND jid = $2
 `
 
-func (q *Queries) GetUserLanguage(ctx context.Context, jid string) (string, error) {
-	row := q.db.QueryRowContext(ctx, getUserLanguage, jid)
+type GetUserLanguageParams struct {
+	CompanyID uuid.UUID `json:"company_id"`
+	Jid       string    `json:"jid"`
+}
+
+func (q *Queries) GetUserLanguage(ctx context.Context, arg GetUserLanguageParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, getUserLanguage, arg.CompanyID, arg.Jid)
 	var language string
 	err := row.Scan(&language)
 	return language, err
 }
 
 const hasAuthorizedGroups = `-- name: HasAuthorizedGroups :one
-SELECT COUNT(*) FROM GroupAuthority WHERE is_authorized = true
+SELECT COUNT(*) FROM GroupAuthority WHERE company_id = $1 AND is_authorized = true
 `
 
-func (q *Queries) HasAuthorizedGroups(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, hasAuthorizedGroups)
+func (q *Queries) HasAuthorizedGroups(ctx context.Context, companyID uuid.UUID) (int64, error) {
+	row := q.db.QueryRowContext(ctx, hasAuthorizedGroups, companyID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
 }
 
 const listAllShipments = `-- name: ListAllShipments :many
-SELECT tracking_id, user_jid, status, created_at, scheduled_transit_time, outfordelivery_time, expected_delivery_time, sender_timezone, recipient_timezone, sender_name, sender_phone, origin, recipient_name, recipient_phone, recipient_email, recipient_id, recipient_address, destination, cargo_type, weight, cost, updated_at FROM Shipment ORDER BY created_at DESC
+SELECT tracking_id, company_id, user_jid, status, created_at, scheduled_transit_time, outfordelivery_time, expected_delivery_time, sender_timezone, recipient_timezone, sender_name, sender_phone, origin, recipient_name, recipient_phone, recipient_email, recipient_id, recipient_address, destination, cargo_type, weight, cost, updated_at FROM Shipment WHERE company_id = $1 ORDER BY created_at DESC
 `
 
-func (q *Queries) ListAllShipments(ctx context.Context) ([]Shipment, error) {
-	rows, err := q.db.QueryContext(ctx, listAllShipments)
+func (q *Queries) ListAllShipments(ctx context.Context, companyID uuid.NullUUID) ([]Shipment, error) {
+	rows, err := q.db.QueryContext(ctx, listAllShipments, companyID)
 	if err != nil {
 		return nil, err
 	}
@@ -410,6 +620,7 @@ func (q *Queries) ListAllShipments(ctx context.Context) ([]Shipment, error) {
 		var i Shipment
 		if err := rows.Scan(
 			&i.TrackingID,
+			&i.CompanyID,
 			&i.UserJid,
 			&i.Status,
 			&i.CreatedAt,
@@ -446,16 +657,17 @@ func (q *Queries) ListAllShipments(ctx context.Context) ([]Shipment, error) {
 }
 
 const listShipments = `-- name: ListShipments :many
-SELECT tracking_id, user_jid, status, created_at, scheduled_transit_time, outfordelivery_time, expected_delivery_time, sender_timezone, recipient_timezone, sender_name, sender_phone, origin, recipient_name, recipient_phone, recipient_email, recipient_id, recipient_address, destination, cargo_type, weight, cost, updated_at FROM Shipment ORDER BY created_at DESC LIMIT $1 OFFSET $2
+SELECT tracking_id, company_id, user_jid, status, created_at, scheduled_transit_time, outfordelivery_time, expected_delivery_time, sender_timezone, recipient_timezone, sender_name, sender_phone, origin, recipient_name, recipient_phone, recipient_email, recipient_id, recipient_address, destination, cargo_type, weight, cost, updated_at FROM Shipment WHERE company_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3
 `
 
 type ListShipmentsParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
+	CompanyID uuid.NullUUID `json:"company_id"`
+	Limit     int32         `json:"limit"`
+	Offset    int32         `json:"offset"`
 }
 
 func (q *Queries) ListShipments(ctx context.Context, arg ListShipmentsParams) ([]Shipment, error) {
-	rows, err := q.db.QueryContext(ctx, listShipments, arg.Limit, arg.Offset)
+	rows, err := q.db.QueryContext(ctx, listShipments, arg.CompanyID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -465,6 +677,7 @@ func (q *Queries) ListShipments(ctx context.Context, arg ListShipmentsParams) ([
 		var i Shipment
 		if err := rows.Scan(
 			&i.TrackingID,
+			&i.CompanyID,
 			&i.UserJid,
 			&i.Status,
 			&i.CreatedAt,
@@ -501,89 +714,113 @@ func (q *Queries) ListShipments(ctx context.Context, arg ListShipmentsParams) ([
 }
 
 const recordEvent = `-- name: RecordEvent :exec
-INSERT INTO Telemetry (event_type, metadata, created_at)
-VALUES ($1, $2, CURRENT_TIMESTAMP)
+INSERT INTO Telemetry (company_id, event_type, metadata, created_at)
+VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
 `
 
 type RecordEventParams struct {
+	CompanyID uuid.NullUUID         `json:"company_id"`
 	EventType string                `json:"event_type"`
 	Metadata  pqtype.NullRawMessage `json:"metadata"`
 }
 
 func (q *Queries) RecordEvent(ctx context.Context, arg RecordEventParams) error {
-	_, err := q.db.ExecContext(ctx, recordEvent, arg.EventType, arg.Metadata)
+	_, err := q.db.ExecContext(ctx, recordEvent, arg.CompanyID, arg.EventType, arg.Metadata)
+	return err
+}
+
+const regenerateSetupToken = `-- name: RegenerateSetupToken :exec
+UPDATE companies SET setup_token = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1
+`
+
+type RegenerateSetupTokenParams struct {
+	ID         uuid.UUID      `json:"id"`
+	SetupToken sql.NullString `json:"setup_token"`
+}
+
+func (q *Queries) RegenerateSetupToken(ctx context.Context, arg RegenerateSetupTokenParams) error {
+	_, err := q.db.ExecContext(ctx, regenerateSetupToken, arg.ID, arg.SetupToken)
 	return err
 }
 
 const runAgedCleanup = `-- name: RunAgedCleanup :exec
 DELETE FROM Shipment 
-WHERE (status = 'delivered' AND updated_at < $1) OR (created_at < $2)
+WHERE company_id = $1 AND ((status = 'delivered' AND updated_at < $2) OR (created_at < $3))
 `
 
 type RunAgedCleanupParams struct {
-	UpdatedAt sql.NullTime `json:"updated_at"`
-	CreatedAt sql.NullTime `json:"created_at"`
+	CompanyID uuid.NullUUID `json:"company_id"`
+	UpdatedAt sql.NullTime  `json:"updated_at"`
+	CreatedAt sql.NullTime  `json:"created_at"`
 }
 
 func (q *Queries) RunAgedCleanup(ctx context.Context, arg RunAgedCleanupParams) error {
-	_, err := q.db.ExecContext(ctx, runAgedCleanup, arg.UpdatedAt, arg.CreatedAt)
+	_, err := q.db.ExecContext(ctx, runAgedCleanup, arg.CompanyID, arg.UpdatedAt, arg.CreatedAt)
 	return err
 }
 
 const setGroupAuthority = `-- name: SetGroupAuthority :exec
-INSERT INTO GroupAuthority (jid, is_authorized, updated_at) 
-VALUES ($1, $2, CURRENT_TIMESTAMP)
-ON CONFLICT(jid) DO UPDATE SET is_authorized = EXCLUDED.is_authorized, updated_at = CURRENT_TIMESTAMP
+INSERT INTO GroupAuthority (company_id, jid, is_authorized, updated_at) 
+VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+ON CONFLICT(company_id, jid) DO UPDATE SET is_authorized = EXCLUDED.is_authorized, updated_at = CURRENT_TIMESTAMP
 `
 
 type SetGroupAuthorityParams struct {
-	Jid          string `json:"jid"`
-	IsAuthorized bool   `json:"is_authorized"`
+	CompanyID    uuid.UUID `json:"company_id"`
+	Jid          string    `json:"jid"`
+	IsAuthorized bool      `json:"is_authorized"`
 }
 
 func (q *Queries) SetGroupAuthority(ctx context.Context, arg SetGroupAuthorityParams) error {
-	_, err := q.db.ExecContext(ctx, setGroupAuthority, arg.Jid, arg.IsAuthorized)
+	_, err := q.db.ExecContext(ctx, setGroupAuthority, arg.CompanyID, arg.Jid, arg.IsAuthorized)
 	return err
 }
 
 const setSystemConfig = `-- name: SetSystemConfig :exec
-INSERT INTO SystemConfig (key, value, updated_at) 
-VALUES ($1, $2, CURRENT_TIMESTAMP)
-ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP
+INSERT INTO SystemConfig (company_id, key, value, updated_at) 
+VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+ON CONFLICT(company_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP
 `
 
 type SetSystemConfigParams struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
+	CompanyID uuid.UUID `json:"company_id"`
+	Key       string    `json:"key"`
+	Value     string    `json:"value"`
 }
 
 func (q *Queries) SetSystemConfig(ctx context.Context, arg SetSystemConfigParams) error {
-	_, err := q.db.ExecContext(ctx, setSystemConfig, arg.Key, arg.Value)
+	_, err := q.db.ExecContext(ctx, setSystemConfig, arg.CompanyID, arg.Key, arg.Value)
 	return err
 }
 
 const setUserLanguage = `-- name: SetUserLanguage :exec
-INSERT INTO UserPreference (jid, language, updated_at) 
-VALUES ($1, $2, CURRENT_TIMESTAMP)
-ON CONFLICT(jid) DO UPDATE SET language = EXCLUDED.language, updated_at = CURRENT_TIMESTAMP
+INSERT INTO UserPreference (company_id, jid, language, updated_at) 
+VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+ON CONFLICT(company_id, jid) DO UPDATE SET language = EXCLUDED.language, updated_at = CURRENT_TIMESTAMP
 `
 
 type SetUserLanguageParams struct {
-	Jid      string `json:"jid"`
-	Language string `json:"language"`
+	CompanyID uuid.UUID `json:"company_id"`
+	Jid       string    `json:"jid"`
+	Language  string    `json:"language"`
 }
 
 func (q *Queries) SetUserLanguage(ctx context.Context, arg SetUserLanguageParams) error {
-	_, err := q.db.ExecContext(ctx, setUserLanguage, arg.Jid, arg.Language)
+	_, err := q.db.ExecContext(ctx, setUserLanguage, arg.CompanyID, arg.Jid, arg.Language)
 	return err
 }
 
 const transitionStatusToDelivered = `-- name: TransitionStatusToDelivered :many
 UPDATE Shipment
 SET status = 'delivered', updated_at = CURRENT_TIMESTAMP
-WHERE status = 'outfordelivery' AND expected_delivery_time <= $1
+WHERE company_id = $1 AND status = 'outfordelivery' AND expected_delivery_time <= $2
 RETURNING tracking_id, status AS new_status, user_jid, recipient_email
 `
+
+type TransitionStatusToDeliveredParams struct {
+	CompanyID            uuid.NullUUID `json:"company_id"`
+	ExpectedDeliveryTime sql.NullTime  `json:"expected_delivery_time"`
+}
 
 type TransitionStatusToDeliveredRow struct {
 	TrackingID     string         `json:"tracking_id"`
@@ -592,8 +829,8 @@ type TransitionStatusToDeliveredRow struct {
 	RecipientEmail sql.NullString `json:"recipient_email"`
 }
 
-func (q *Queries) TransitionStatusToDelivered(ctx context.Context, expectedDeliveryTime sql.NullTime) ([]TransitionStatusToDeliveredRow, error) {
-	rows, err := q.db.QueryContext(ctx, transitionStatusToDelivered, expectedDeliveryTime)
+func (q *Queries) TransitionStatusToDelivered(ctx context.Context, arg TransitionStatusToDeliveredParams) ([]TransitionStatusToDeliveredRow, error) {
+	rows, err := q.db.QueryContext(ctx, transitionStatusToDelivered, arg.CompanyID, arg.ExpectedDeliveryTime)
 	if err != nil {
 		return nil, err
 	}
@@ -623,9 +860,14 @@ func (q *Queries) TransitionStatusToDelivered(ctx context.Context, expectedDeliv
 const transitionStatusToIntransit = `-- name: TransitionStatusToIntransit :many
 UPDATE Shipment
 SET status = 'intransit', updated_at = CURRENT_TIMESTAMP
-WHERE status = 'pending' AND scheduled_transit_time <= $1
+WHERE company_id = $1 AND status = 'pending' AND scheduled_transit_time <= $2
 RETURNING tracking_id, status AS new_status, user_jid, recipient_email
 `
+
+type TransitionStatusToIntransitParams struct {
+	CompanyID            uuid.NullUUID `json:"company_id"`
+	ScheduledTransitTime sql.NullTime  `json:"scheduled_transit_time"`
+}
 
 type TransitionStatusToIntransitRow struct {
 	TrackingID     string         `json:"tracking_id"`
@@ -634,8 +876,8 @@ type TransitionStatusToIntransitRow struct {
 	RecipientEmail sql.NullString `json:"recipient_email"`
 }
 
-func (q *Queries) TransitionStatusToIntransit(ctx context.Context, scheduledTransitTime sql.NullTime) ([]TransitionStatusToIntransitRow, error) {
-	rows, err := q.db.QueryContext(ctx, transitionStatusToIntransit, scheduledTransitTime)
+func (q *Queries) TransitionStatusToIntransit(ctx context.Context, arg TransitionStatusToIntransitParams) ([]TransitionStatusToIntransitRow, error) {
+	rows, err := q.db.QueryContext(ctx, transitionStatusToIntransit, arg.CompanyID, arg.ScheduledTransitTime)
 	if err != nil {
 		return nil, err
 	}
@@ -665,9 +907,14 @@ func (q *Queries) TransitionStatusToIntransit(ctx context.Context, scheduledTran
 const transitionStatusToOutForDelivery = `-- name: TransitionStatusToOutForDelivery :many
 UPDATE Shipment
 SET status = 'outfordelivery', updated_at = CURRENT_TIMESTAMP
-WHERE status = 'intransit' AND outfordelivery_time <= $1
+WHERE company_id = $1 AND status = 'intransit' AND outfordelivery_time <= $2
 RETURNING tracking_id, status AS new_status, user_jid, recipient_email
 `
+
+type TransitionStatusToOutForDeliveryParams struct {
+	CompanyID          uuid.NullUUID `json:"company_id"`
+	OutfordeliveryTime sql.NullTime  `json:"outfordelivery_time"`
+}
 
 type TransitionStatusToOutForDeliveryRow struct {
 	TrackingID     string         `json:"tracking_id"`
@@ -676,8 +923,8 @@ type TransitionStatusToOutForDeliveryRow struct {
 	RecipientEmail sql.NullString `json:"recipient_email"`
 }
 
-func (q *Queries) TransitionStatusToOutForDelivery(ctx context.Context, outfordeliveryTime sql.NullTime) ([]TransitionStatusToOutForDeliveryRow, error) {
-	rows, err := q.db.QueryContext(ctx, transitionStatusToOutForDelivery, outfordeliveryTime)
+func (q *Queries) TransitionStatusToOutForDelivery(ctx context.Context, arg TransitionStatusToOutForDeliveryParams) ([]TransitionStatusToOutForDeliveryRow, error) {
+	rows, err := q.db.QueryContext(ctx, transitionStatusToOutForDelivery, arg.CompanyID, arg.OutfordeliveryTime)
 	if err != nil {
 		return nil, err
 	}
@@ -704,199 +951,271 @@ func (q *Queries) TransitionStatusToOutForDelivery(ctx context.Context, outforde
 	return items, nil
 }
 
+const updateCompanyAuthStatus = `-- name: UpdateCompanyAuthStatus :exec
+UPDATE companies SET auth_status = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1
+`
+
+type UpdateCompanyAuthStatusParams struct {
+	ID         uuid.UUID      `json:"id"`
+	AuthStatus sql.NullString `json:"auth_status"`
+}
+
+func (q *Queries) UpdateCompanyAuthStatus(ctx context.Context, arg UpdateCompanyAuthStatusParams) error {
+	_, err := q.db.ExecContext(ctx, updateCompanyAuthStatus, arg.ID, arg.AuthStatus)
+	return err
+}
+
+const updateCompanySettings = `-- name: UpdateCompanySettings :exec
+UPDATE companies SET name = $2, admin_email = $3, logo_url = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $1
+`
+
+type UpdateCompanySettingsParams struct {
+	ID         uuid.UUID      `json:"id"`
+	Name       string         `json:"name"`
+	AdminEmail string         `json:"admin_email"`
+	LogoUrl    sql.NullString `json:"logo_url"`
+}
+
+func (q *Queries) UpdateCompanySettings(ctx context.Context, arg UpdateCompanySettingsParams) error {
+	_, err := q.db.ExecContext(ctx, updateCompanySettings,
+		arg.ID,
+		arg.Name,
+		arg.AdminEmail,
+		arg.LogoUrl,
+	)
+	return err
+}
+
+const updateCompanySubscriptionStatus = `-- name: UpdateCompanySubscriptionStatus :exec
+UPDATE companies 
+SET subscription_status = $2, 
+    subscription_expiry = CURRENT_TIMESTAMP + INTERVAL '30 days',
+    updated_at = CURRENT_TIMESTAMP 
+WHERE id = $1
+`
+
+type UpdateCompanySubscriptionStatusParams struct {
+	ID                 uuid.UUID      `json:"id"`
+	SubscriptionStatus sql.NullString `json:"subscription_status"`
+}
+
+func (q *Queries) UpdateCompanySubscriptionStatus(ctx context.Context, arg UpdateCompanySubscriptionStatusParams) error {
+	_, err := q.db.ExecContext(ctx, updateCompanySubscriptionStatus, arg.ID, arg.SubscriptionStatus)
+	return err
+}
+
 const updateShipmentFieldCargoType = `-- name: UpdateShipmentFieldCargoType :exec
-UPDATE Shipment SET cargo_type = $2, updated_at = CURRENT_TIMESTAMP WHERE tracking_id = $1
+UPDATE Shipment SET cargo_type = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2
 `
 
 type UpdateShipmentFieldCargoTypeParams struct {
+	CompanyID  uuid.NullUUID  `json:"company_id"`
 	TrackingID string         `json:"tracking_id"`
 	CargoType  sql.NullString `json:"cargo_type"`
 }
 
 func (q *Queries) UpdateShipmentFieldCargoType(ctx context.Context, arg UpdateShipmentFieldCargoTypeParams) error {
-	_, err := q.db.ExecContext(ctx, updateShipmentFieldCargoType, arg.TrackingID, arg.CargoType)
+	_, err := q.db.ExecContext(ctx, updateShipmentFieldCargoType, arg.CompanyID, arg.TrackingID, arg.CargoType)
 	return err
 }
 
 const updateShipmentFieldDestination = `-- name: UpdateShipmentFieldDestination :exec
-UPDATE Shipment SET destination = $2, updated_at = CURRENT_TIMESTAMP WHERE tracking_id = $1
+UPDATE Shipment SET destination = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2
 `
 
 type UpdateShipmentFieldDestinationParams struct {
+	CompanyID   uuid.NullUUID  `json:"company_id"`
 	TrackingID  string         `json:"tracking_id"`
 	Destination sql.NullString `json:"destination"`
 }
 
 func (q *Queries) UpdateShipmentFieldDestination(ctx context.Context, arg UpdateShipmentFieldDestinationParams) error {
-	_, err := q.db.ExecContext(ctx, updateShipmentFieldDestination, arg.TrackingID, arg.Destination)
+	_, err := q.db.ExecContext(ctx, updateShipmentFieldDestination, arg.CompanyID, arg.TrackingID, arg.Destination)
 	return err
 }
 
 const updateShipmentFieldExpectedDeliveryTime = `-- name: UpdateShipmentFieldExpectedDeliveryTime :exec
-UPDATE Shipment SET expected_delivery_time = $2, updated_at = CURRENT_TIMESTAMP WHERE tracking_id = $1
+UPDATE Shipment SET expected_delivery_time = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2
 `
 
 type UpdateShipmentFieldExpectedDeliveryTimeParams struct {
-	TrackingID           string       `json:"tracking_id"`
-	ExpectedDeliveryTime sql.NullTime `json:"expected_delivery_time"`
+	CompanyID            uuid.NullUUID `json:"company_id"`
+	TrackingID           string        `json:"tracking_id"`
+	ExpectedDeliveryTime sql.NullTime  `json:"expected_delivery_time"`
 }
 
 func (q *Queries) UpdateShipmentFieldExpectedDeliveryTime(ctx context.Context, arg UpdateShipmentFieldExpectedDeliveryTimeParams) error {
-	_, err := q.db.ExecContext(ctx, updateShipmentFieldExpectedDeliveryTime, arg.TrackingID, arg.ExpectedDeliveryTime)
+	_, err := q.db.ExecContext(ctx, updateShipmentFieldExpectedDeliveryTime, arg.CompanyID, arg.TrackingID, arg.ExpectedDeliveryTime)
 	return err
 }
 
 const updateShipmentFieldOrigin = `-- name: UpdateShipmentFieldOrigin :exec
-UPDATE Shipment SET origin = $2, updated_at = CURRENT_TIMESTAMP WHERE tracking_id = $1
+UPDATE Shipment SET origin = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2
 `
 
 type UpdateShipmentFieldOriginParams struct {
+	CompanyID  uuid.NullUUID  `json:"company_id"`
 	TrackingID string         `json:"tracking_id"`
 	Origin     sql.NullString `json:"origin"`
 }
 
 func (q *Queries) UpdateShipmentFieldOrigin(ctx context.Context, arg UpdateShipmentFieldOriginParams) error {
-	_, err := q.db.ExecContext(ctx, updateShipmentFieldOrigin, arg.TrackingID, arg.Origin)
+	_, err := q.db.ExecContext(ctx, updateShipmentFieldOrigin, arg.CompanyID, arg.TrackingID, arg.Origin)
 	return err
 }
 
 const updateShipmentFieldOutfordeliveryTime = `-- name: UpdateShipmentFieldOutfordeliveryTime :exec
-UPDATE Shipment SET outfordelivery_time = $2, updated_at = CURRENT_TIMESTAMP WHERE tracking_id = $1
+UPDATE Shipment SET outfordelivery_time = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2
 `
 
 type UpdateShipmentFieldOutfordeliveryTimeParams struct {
-	TrackingID         string       `json:"tracking_id"`
-	OutfordeliveryTime sql.NullTime `json:"outfordelivery_time"`
+	CompanyID          uuid.NullUUID `json:"company_id"`
+	TrackingID         string        `json:"tracking_id"`
+	OutfordeliveryTime sql.NullTime  `json:"outfordelivery_time"`
 }
 
 func (q *Queries) UpdateShipmentFieldOutfordeliveryTime(ctx context.Context, arg UpdateShipmentFieldOutfordeliveryTimeParams) error {
-	_, err := q.db.ExecContext(ctx, updateShipmentFieldOutfordeliveryTime, arg.TrackingID, arg.OutfordeliveryTime)
+	_, err := q.db.ExecContext(ctx, updateShipmentFieldOutfordeliveryTime, arg.CompanyID, arg.TrackingID, arg.OutfordeliveryTime)
 	return err
 }
 
 const updateShipmentFieldRecipientAddress = `-- name: UpdateShipmentFieldRecipientAddress :exec
-UPDATE Shipment SET recipient_address = $2, updated_at = CURRENT_TIMESTAMP WHERE tracking_id = $1
+UPDATE Shipment SET recipient_address = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2
 `
 
 type UpdateShipmentFieldRecipientAddressParams struct {
+	CompanyID        uuid.NullUUID  `json:"company_id"`
 	TrackingID       string         `json:"tracking_id"`
 	RecipientAddress sql.NullString `json:"recipient_address"`
 }
 
 func (q *Queries) UpdateShipmentFieldRecipientAddress(ctx context.Context, arg UpdateShipmentFieldRecipientAddressParams) error {
-	_, err := q.db.ExecContext(ctx, updateShipmentFieldRecipientAddress, arg.TrackingID, arg.RecipientAddress)
+	_, err := q.db.ExecContext(ctx, updateShipmentFieldRecipientAddress, arg.CompanyID, arg.TrackingID, arg.RecipientAddress)
 	return err
 }
 
 const updateShipmentFieldRecipientEmail = `-- name: UpdateShipmentFieldRecipientEmail :exec
-UPDATE Shipment SET recipient_email = $2, updated_at = CURRENT_TIMESTAMP WHERE tracking_id = $1
+UPDATE Shipment SET recipient_email = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2
 `
 
 type UpdateShipmentFieldRecipientEmailParams struct {
+	CompanyID      uuid.NullUUID  `json:"company_id"`
 	TrackingID     string         `json:"tracking_id"`
 	RecipientEmail sql.NullString `json:"recipient_email"`
 }
 
 func (q *Queries) UpdateShipmentFieldRecipientEmail(ctx context.Context, arg UpdateShipmentFieldRecipientEmailParams) error {
-	_, err := q.db.ExecContext(ctx, updateShipmentFieldRecipientEmail, arg.TrackingID, arg.RecipientEmail)
+	_, err := q.db.ExecContext(ctx, updateShipmentFieldRecipientEmail, arg.CompanyID, arg.TrackingID, arg.RecipientEmail)
 	return err
 }
 
 const updateShipmentFieldRecipientID = `-- name: UpdateShipmentFieldRecipientID :exec
-UPDATE Shipment SET recipient_id = $2, updated_at = CURRENT_TIMESTAMP WHERE tracking_id = $1
+UPDATE Shipment SET recipient_id = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2
 `
 
 type UpdateShipmentFieldRecipientIDParams struct {
+	CompanyID   uuid.NullUUID  `json:"company_id"`
 	TrackingID  string         `json:"tracking_id"`
 	RecipientID sql.NullString `json:"recipient_id"`
 }
 
 func (q *Queries) UpdateShipmentFieldRecipientID(ctx context.Context, arg UpdateShipmentFieldRecipientIDParams) error {
-	_, err := q.db.ExecContext(ctx, updateShipmentFieldRecipientID, arg.TrackingID, arg.RecipientID)
+	_, err := q.db.ExecContext(ctx, updateShipmentFieldRecipientID, arg.CompanyID, arg.TrackingID, arg.RecipientID)
 	return err
 }
 
 const updateShipmentFieldRecipientName = `-- name: UpdateShipmentFieldRecipientName :exec
-UPDATE Shipment SET recipient_name = $2, updated_at = CURRENT_TIMESTAMP WHERE tracking_id = $1
+UPDATE Shipment SET recipient_name = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2
 `
 
 type UpdateShipmentFieldRecipientNameParams struct {
+	CompanyID     uuid.NullUUID  `json:"company_id"`
 	TrackingID    string         `json:"tracking_id"`
 	RecipientName sql.NullString `json:"recipient_name"`
 }
 
 func (q *Queries) UpdateShipmentFieldRecipientName(ctx context.Context, arg UpdateShipmentFieldRecipientNameParams) error {
-	_, err := q.db.ExecContext(ctx, updateShipmentFieldRecipientName, arg.TrackingID, arg.RecipientName)
+	_, err := q.db.ExecContext(ctx, updateShipmentFieldRecipientName, arg.CompanyID, arg.TrackingID, arg.RecipientName)
 	return err
 }
 
 const updateShipmentFieldRecipientPhone = `-- name: UpdateShipmentFieldRecipientPhone :exec
-UPDATE Shipment SET recipient_phone = $2, updated_at = CURRENT_TIMESTAMP WHERE tracking_id = $1
+UPDATE Shipment SET recipient_phone = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2
 `
 
 type UpdateShipmentFieldRecipientPhoneParams struct {
+	CompanyID      uuid.NullUUID  `json:"company_id"`
 	TrackingID     string         `json:"tracking_id"`
 	RecipientPhone sql.NullString `json:"recipient_phone"`
 }
 
 func (q *Queries) UpdateShipmentFieldRecipientPhone(ctx context.Context, arg UpdateShipmentFieldRecipientPhoneParams) error {
-	_, err := q.db.ExecContext(ctx, updateShipmentFieldRecipientPhone, arg.TrackingID, arg.RecipientPhone)
+	_, err := q.db.ExecContext(ctx, updateShipmentFieldRecipientPhone, arg.CompanyID, arg.TrackingID, arg.RecipientPhone)
 	return err
 }
 
 const updateShipmentFieldScheduledTransitTime = `-- name: UpdateShipmentFieldScheduledTransitTime :exec
-UPDATE Shipment SET scheduled_transit_time = $2, updated_at = CURRENT_TIMESTAMP WHERE tracking_id = $1
+UPDATE Shipment SET scheduled_transit_time = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2
 `
 
 type UpdateShipmentFieldScheduledTransitTimeParams struct {
-	TrackingID           string       `json:"tracking_id"`
-	ScheduledTransitTime sql.NullTime `json:"scheduled_transit_time"`
+	CompanyID            uuid.NullUUID `json:"company_id"`
+	TrackingID           string        `json:"tracking_id"`
+	ScheduledTransitTime sql.NullTime  `json:"scheduled_transit_time"`
 }
 
 func (q *Queries) UpdateShipmentFieldScheduledTransitTime(ctx context.Context, arg UpdateShipmentFieldScheduledTransitTimeParams) error {
-	_, err := q.db.ExecContext(ctx, updateShipmentFieldScheduledTransitTime, arg.TrackingID, arg.ScheduledTransitTime)
+	_, err := q.db.ExecContext(ctx, updateShipmentFieldScheduledTransitTime, arg.CompanyID, arg.TrackingID, arg.ScheduledTransitTime)
 	return err
 }
 
 const updateShipmentFieldSenderName = `-- name: UpdateShipmentFieldSenderName :exec
-UPDATE Shipment SET sender_name = $2, updated_at = CURRENT_TIMESTAMP WHERE tracking_id = $1
+UPDATE Shipment SET sender_name = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2
 `
 
 type UpdateShipmentFieldSenderNameParams struct {
+	CompanyID  uuid.NullUUID  `json:"company_id"`
 	TrackingID string         `json:"tracking_id"`
 	SenderName sql.NullString `json:"sender_name"`
 }
 
 func (q *Queries) UpdateShipmentFieldSenderName(ctx context.Context, arg UpdateShipmentFieldSenderNameParams) error {
-	_, err := q.db.ExecContext(ctx, updateShipmentFieldSenderName, arg.TrackingID, arg.SenderName)
+	_, err := q.db.ExecContext(ctx, updateShipmentFieldSenderName, arg.CompanyID, arg.TrackingID, arg.SenderName)
 	return err
 }
 
 const updateShipmentFieldSenderPhone = `-- name: UpdateShipmentFieldSenderPhone :exec
-UPDATE Shipment SET sender_phone = $2, updated_at = CURRENT_TIMESTAMP WHERE tracking_id = $1
+UPDATE Shipment SET sender_phone = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2
 `
 
 type UpdateShipmentFieldSenderPhoneParams struct {
+	CompanyID   uuid.NullUUID  `json:"company_id"`
 	TrackingID  string         `json:"tracking_id"`
 	SenderPhone sql.NullString `json:"sender_phone"`
 }
 
 func (q *Queries) UpdateShipmentFieldSenderPhone(ctx context.Context, arg UpdateShipmentFieldSenderPhoneParams) error {
-	_, err := q.db.ExecContext(ctx, updateShipmentFieldSenderPhone, arg.TrackingID, arg.SenderPhone)
+	_, err := q.db.ExecContext(ctx, updateShipmentFieldSenderPhone, arg.CompanyID, arg.TrackingID, arg.SenderPhone)
 	return err
 }
 
 const updateShipmentStatus = `-- name: UpdateShipmentStatus :exec
-UPDATE Shipment SET status = $2, destination = $3, updated_at = CURRENT_TIMESTAMP WHERE tracking_id = $1
+UPDATE Shipment SET status = $3, destination = $4, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2
 `
 
 type UpdateShipmentStatusParams struct {
+	CompanyID   uuid.NullUUID  `json:"company_id"`
 	TrackingID  string         `json:"tracking_id"`
 	Status      sql.NullString `json:"status"`
 	Destination sql.NullString `json:"destination"`
 }
 
 func (q *Queries) UpdateShipmentStatus(ctx context.Context, arg UpdateShipmentStatusParams) error {
-	_, err := q.db.ExecContext(ctx, updateShipmentStatus, arg.TrackingID, arg.Status, arg.Destination)
+	_, err := q.db.ExecContext(ctx, updateShipmentStatus,
+		arg.CompanyID,
+		arg.TrackingID,
+		arg.Status,
+		arg.Destination,
+	)
 	return err
 }

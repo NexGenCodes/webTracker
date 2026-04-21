@@ -1,6 +1,7 @@
 package models
 
 import (
+	"github.com/google/uuid"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 )
@@ -62,6 +63,7 @@ func (m *Manifest) Validate() []string {
 }
 
 type Job struct {
+	CompanyID   uuid.UUID
 	ChatJID     types.JID
 	SenderJID   types.JID
 	MessageID   string

@@ -21,12 +21,13 @@ type Server struct {
 	app        *fiber.App
 	cfg        *config.Config
 	shipmentUC *usecase.ShipmentUsecase
+	configUC   *usecase.ConfigUsecase
 	db         *sql.DB
-	sender     *whatsapp.Sender
+	bots       whatsapp.BotProvider
 	startTime  time.Time
 }
 
-func NewServer(cfg *config.Config, shipmentUC *usecase.ShipmentUsecase, db *sql.DB, sender *whatsapp.Sender) *Server {
+func NewServer(cfg *config.Config, shipmentUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, db *sql.DB, bots whatsapp.BotProvider) *Server {
 	app := fiber.New(fiber.Config{
 		DisableStartupMessage: true,
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
@@ -51,7 +52,7 @@ func NewServer(cfg *config.Config, shipmentUC *usecase.ShipmentUsecase, db *sql.
 
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: allowOrigins,
-		AllowHeaders: "Origin, Content-Type, Accept, Authorization, X-API-Key",
+		AllowHeaders: "Origin, Content-Type, Accept, Authorization, X-API-Key, X-Company-ID",
 		AllowMethods: "GET, POST, PATCH, DELETE, OPTIONS",
 	}))
 
@@ -64,15 +65,19 @@ func NewServer(cfg *config.Config, shipmentUC *usecase.ShipmentUsecase, db *sql.
 		app:        app,
 		cfg:        cfg,
 		shipmentUC: shipmentUC,
+		configUC:   configUC,
 		db:         db,
-		sender:     sender,
+		bots:       bots,
 		startTime:  time.Now(),
 	}
 }
 
 func (s *Server) SetupRoutes() {
-	shipmentHandler := handler.NewShipmentHandler(s.shipmentUC, s.cfg, s.sender)
+	shipmentHandler := handler.NewShipmentHandler(s.shipmentUC, s.cfg, s.bots)
 	shipmentHandler.RegisterRoutes(s.app)
+
+	companyHandler := handler.NewCompanyHandler(s.cfg, s.configUC, s.bots)
+	companyHandler.RegisterRoutes(s.app)
 
 	// Enhanced Healthcheck
 	s.app.Get("/health", func(c *fiber.Ctx) error {

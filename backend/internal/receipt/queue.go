@@ -2,6 +2,7 @@ package receipt
 
 import (
 	"context"
+	"runtime"
 	"sync"
 	"webtracker-bot/internal/i18n"
 	"webtracker-bot/internal/logger"
@@ -24,18 +25,35 @@ type Job struct {
 }
 
 var (
-	queue chan Job
-	once  sync.Once
+	queue    chan Job
+	once     sync.Once
+	shutOnce sync.Once
 )
 
 const QueueSize = 100
 
-// InitProcessor initializes the singleton queue and starts the worker goroutines.
-func InitProcessor(companyName string, shipUC *usecase.ShipmentUsecase, sender *whatsapp.Sender) {
+func InitProcessor() {
 	once.Do(func() {
 		queue = make(chan Job, QueueSize)
-		go startWorker(companyName, shipUC, sender)
-		go startWorker(companyName, shipUC, sender)
+		workerCount := runtime.NumCPU() * 2
+		if workerCount > 8 {
+			workerCount = 8
+		} else if workerCount < 2 {
+			workerCount = 2
+		}
+		for i := 0; i < workerCount; i++ {
+			go startWorker()
+		}
+	})
+}
+
+// Shutdown closes the receipt queue and drains remaining jobs.
+func Shutdown() {
+	shutOnce.Do(func() {
+		if queue != nil {
+			close(queue)
+			logger.Info().Msg("Receipt processor queue closed")
+		}
 	})
 }
 
@@ -53,7 +71,7 @@ func Enqueue(job Job) {
 	}
 }
 
-func startWorker(companyName string, shipUC *usecase.ShipmentUsecase, sender *whatsapp.Sender) {
+func startWorker() {
 	logger.Info().Msg("Singleton Receipt Processor started (Optimized mode)")
 	for rJob := range queue {
 		processReceipt(rJob)
@@ -75,7 +93,7 @@ func processReceipt(rj Job) {
 	}
 
 	// 1. Fetch Shipment
-	dbShip, err := rj.ShipmentUC.Track(context.Background(), rj.TrackingID)
+	dbShip, err := rj.ShipmentUC.Track(context.Background(), rj.Msg.CompanyID, rj.TrackingID)
 	if err != nil || dbShip == nil {
 		logger.Warn().Err(err).Str("tracking_id", rj.TrackingID).Msg("Failed to fetch info for receipt delivery")
 		return

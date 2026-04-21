@@ -9,18 +9,18 @@ import (
 	"syscall"
 	"time"
 
-	"webtracker-bot/internal/commands"
+	"database/sql"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
-	"webtracker-bot/internal/notif"
+	"webtracker-bot/internal/receipt"
 	"webtracker-bot/internal/scheduler"
 	"webtracker-bot/internal/shipment"
 	"webtracker-bot/internal/utils"
-	"webtracker-bot/internal/receipt"
 	"webtracker-bot/internal/whatsapp"
 	"webtracker-bot/internal/worker"
-	"database/sql"
+
+	"github.com/google/uuid"
 
 	"webtracker-bot/internal/adapter/db"
 	"webtracker-bot/internal/adapter/dbconn"
@@ -28,6 +28,9 @@ import (
 	"webtracker-bot/internal/usecase"
 
 	"go.mau.fi/whatsmeow"
+	"go.mau.fi/whatsmeow/store"
+	"go.mau.fi/whatsmeow/store/sqlstore"
+	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 )
 
@@ -35,7 +38,9 @@ type App struct {
 	Cfg        *config.Config
 	ShipmentUC *usecase.ShipmentUsecase
 	ConfigUC   *usecase.ConfigUsecase
-	WA         *whatsmeow.Client
+	WAStore    *sqlstore.Container
+	Bots       map[uuid.UUID]*whatsapp.BotInstance
+	BotsMu     sync.RWMutex
 	Jobs       chan models.Job
 	WG         sync.WaitGroup
 	Cancel     context.CancelFunc
@@ -43,6 +48,64 @@ type App struct {
 	Context    context.Context
 	SqlPool    *sql.DB
 	HttpServer *transport_http.Server
+}
+
+func (a *App) GetBot(companyID uuid.UUID) (*whatsapp.BotInstance, error) {
+	a.BotsMu.RLock()
+	defer a.BotsMu.RUnlock()
+	bot, ok := a.Bots[companyID]
+	if !ok {
+		return nil, fmt.Errorf("bot not found for company %s", companyID)
+	}
+	return bot, nil
+}
+
+// ActivateBot dynamically starts a bot instance for a company.
+func (a *App) ActivateBot(ctx context.Context, companyID uuid.UUID) error {
+	company, err := a.ConfigUC.GetCompanyByID(ctx, companyID)
+	if err != nil {
+		return fmt.Errorf("failed to get company: %w", err)
+	}
+
+	if !company.AuthStatus.Valid || company.AuthStatus.String != "active" {
+		return fmt.Errorf("company is not active")
+	}
+
+	a.BotsMu.RLock()
+	if _, exists := a.Bots[companyID]; exists {
+		a.BotsMu.RUnlock()
+		return fmt.Errorf("bot already active for company")
+	}
+	a.BotsMu.RUnlock()
+
+	return a.initBotForCompany(company)
+}
+
+// DeactivateBot dynamically stops and removes a bot instance.
+func (a *App) DeactivateBot(companyID uuid.UUID) error {
+	a.BotsMu.Lock()
+	bot, exists := a.Bots[companyID]
+	if !exists {
+		a.BotsMu.Unlock()
+		return fmt.Errorf("bot not found")
+	}
+
+	bot.WA.Disconnect()
+	delete(a.Bots, companyID)
+	a.BotsMu.Unlock()
+
+	logger.Info().Str("company_id", companyID.String()).Msg("Bot dynamically deactivated")
+	return nil
+}
+
+func (a *App) GetAllBots() []*whatsapp.BotInstance {
+	a.BotsMu.RLock()
+	defer a.BotsMu.RUnlock()
+	var bots []*whatsapp.BotInstance
+	for _, b := range a.Bots {
+		bots = append(bots, b)
+	}
+	return bots
 }
 
 func New(cfg *config.Config) *App {
@@ -68,57 +131,109 @@ func (a *App) Init() error {
 	a.ShipmentUC = usecase.NewShipmentUsecase(querier, shipService)
 	a.ConfigUC = usecase.NewConfigUsecase(querier, a.SqlPool)
 
-	wa, err := whatsapp.NewClient(a.Cfg.DatabaseURL)
+	// Initialize Multi-Bot Store
+	store, err := whatsapp.NewStore(a.Cfg.DatabaseURL)
 	if err != nil {
-		return fmt.Errorf("whatsapp init (Postgres): %w", err)
+		return fmt.Errorf("whatsapp store init: %w", err)
 	}
-	a.WA = wa
+	a.WAStore = store
+	a.Bots = make(map[uuid.UUID]*whatsapp.BotInstance)
 
-	receipt.InitProcessor(a.Cfg.CompanyName, a.ShipmentUC, whatsapp.NewSender(a.WA, a.Cfg.CompanyName))
+	companies, err := a.ConfigUC.GetAllActiveCompanies(context.Background())
+	if err != nil {
+		logger.Warn().Err(err).Msg("Failed to load active companies")
+	}
 
-	a.WA.AddEventHandler(a.handleWAEvent)
+	for _, c := range companies {
+		if err := a.initBotForCompany(c); err != nil {
+			logger.Error().Err(err).Str("company", c.Name).Msg("Failed to init bot")
+		}
+	}
 
 	if err := utils.InitReceiptRenderer(a.Cfg.UseOptimizedReceipt); err != nil {
-		logger.Error().Err(err).Msg("Failed to initialize receipt renderer (Font download failed?). Receipts may look generic.")
-	} else {
-		logger.Info().Msg("Receipt renderer initialized (Fonts loaded)")
+		logger.Error().Err(err).Msg("Failed to init receipt renderer")
 	}
 
 	// Init Fiber HTTP REST API Server
-	sender := whatsapp.NewSender(a.WA, a.Cfg.CompanyName)
-	a.HttpServer = transport_http.NewServer(a.Cfg, a.ShipmentUC, a.SqlPool, sender)
+	// Note: We need to pass the app or a way to get the Sender per company.
+	// For now, HttpServer doesn't strictly need a global Sender, it can lookup per company.
+	a.HttpServer = transport_http.NewServer(a.Cfg, a.ShipmentUC, a.ConfigUC, a.SqlPool, a)
 
 	return nil
 }
 
-func (a *App) Run() error {
-	sender := whatsapp.NewSender(a.WA, a.Cfg.CompanyName)
-	cmdDispatcher := commands.NewDispatcher(a.Cfg, a.ShipmentUC, a.ConfigUC, sender, a.Cfg.CompanyPrefix, a.Cfg.CompanyName, a.Cfg.PairingPhone, a.Cfg.AdminTimezone)
+func (a *App) initBotForCompany(c db.Company) error {
+	var device *store.Device
+	var err error
 
+	phone := ""
+	if c.WhatsappPhone.Valid {
+		phone = c.WhatsappPhone.String
+	}
+
+	if phone != "" {
+		jid := types.NewJID(phone, "s.whatsapp.net")
+		device, err = a.WAStore.GetDevice(context.Background(), jid)
+		if err != nil {
+			logger.Warn().Err(err).Str("phone", phone).Msg("Device not found for phone, creating new")
+			device = a.WAStore.NewDevice()
+		}
+	} else {
+		device = a.WAStore.NewDevice()
+	}
+
+	waClient := whatsapp.NewClientForDevice(device)
+
+	// Create prefix from name
+	prefix := config.GenerateAbbreviation(c.Name)
+
+	sender := whatsapp.NewSender(waClient, c.Name)
+	receipt.InitProcessor()
+
+	bot := &whatsapp.BotInstance{
+		CompanyID:   c.ID,
+		CompanyName: c.Name,
+		Prefix:      prefix,
+		Tier:        c.SubscriptionStatus.String,
+		WA:          waClient,
+		Sender:      sender,
+	}
+
+	waClient.AddEventHandler(func(evt interface{}) {
+		a.handleWAEvent(bot, evt)
+	})
+
+	a.BotsMu.Lock()
+	a.Bots[c.ID] = bot
+	a.BotsMu.Unlock()
+
+	logger.Info().Str("company", c.Name).Msg("Initialized bot instance")
+	return nil
+}
+
+func (a *App) Run() error {
 	shipmentService := a.ShipmentUC.Service
 
+	// We'll run one worker pool globally that handles jobs from all bots.
+	// The Jobs channel carries the CompanyID, so workers know which bot to use.
 	for i := 1; i <= a.Cfg.WorkerPoolSize; i++ {
 		a.WG.Add(1)
 		w := &worker.Worker{
 			ID:              i,
-			Client:          a.WA,
-			Sender:          sender,
 			Jobs:            a.Jobs,
 			WG:              &a.WG,
 			Cfg:             a.Cfg,
-			AwbCmd:          a.Cfg.CompanyPrefix,
-			CompanyName:     a.Cfg.CompanyName,
-			Cmd:             cmdDispatcher,
 			ShipmentUC:      a.ShipmentUC,
 			ConfigUC:        a.ConfigUC,
 			TrackingBaseURL: a.Cfg.TrackingBaseURL,
 			ShipmentService: shipmentService,
+			Bots:            a, // 'a' implements BotProvider
 		}
 		go w.Start()
 	}
 
-
-	a.Cron = scheduler.NewManager(a.Cfg, a.ShipmentUC, a.ConfigUC, a.WA)
+	// The CronManager needs to loop through bots
+	a.Cron = scheduler.NewManager(a.Cfg, a.ShipmentUC, a.ConfigUC, a)
 	a.Cron.Start()
 
 	go func() {
@@ -160,46 +275,51 @@ func (a *App) Run() error {
 }
 
 func (a *App) connectWA() error {
-	if a.WA.Store.ID == nil {
-		if a.Cfg.PairingPhone == "" {
-			return fmt.Errorf("not logged in and no WHATSAPP_PAIRING_PHONE provided in .env")
+	for _, bot := range a.GetAllBots() {
+		if bot.WA.Store.ID != nil {
+			if err := bot.WA.Connect(); err != nil {
+				logger.Error().Err(err).Str("company", bot.CompanyName).Msg("Failed to connect")
+			}
 		}
-
-		if err := a.WA.Connect(); err != nil {
-			return err
-		}
-
-		// Wait for connection to stabilize
-		time.Sleep(5 * time.Second)
-
-		code, err := a.WA.PairPhone(a.Context, a.Cfg.PairingPhone, true, whatsmeow.PairClientChrome, "Chrome (Windows)")
-		if err != nil {
-			return err
-		}
-
-		logger.Info().Str("code", code).Msg("Pairing code generated")
-		fmt.Println("********************************")
-		fmt.Println("*                              *")
-		fmt.Println("*   PAIRING CODE: " + code + "   *")
-		fmt.Println("*                              *")
-		fmt.Println("********************************")
-
-		// Send via Email (if configured)
-		notif.SendPairingCodeEmail(a.Cfg, code)
-	} else {
-		return a.WA.Connect()
 	}
 	return nil
 }
 
-func (a *App) handleWAEvent(evt interface{}) {
-	whatsapp.HandleEvent(a.WA, evt, a.Jobs, a.Cfg, a.ConfigUC)
+// GeneratePairingCode dynamically connects a bot and returns a pairing code for a given phone number.
+func (a *App) GeneratePairingCode(ctx context.Context, companyID uuid.UUID, phone string) (string, error) {
+	bot, err := a.GetBot(companyID)
+	if err != nil {
+		return "", err
+	}
+
+	if err := bot.WA.Connect(); err != nil {
+		return "", fmt.Errorf("failed to connect to WhatsApp: %w", err)
+	}
+
+	code, err := bot.WA.PairPhone(ctx, phone, true, whatsmeow.PairClientChrome, "Chrome (Windows)")
+	if err != nil {
+		return "", fmt.Errorf("failed to pair phone: %w", err)
+	}
+
+	return code, nil
+}
+
+func (a *App) handleWAEvent(bot *whatsapp.BotInstance, evt interface{}) {
+	whatsapp.HandleEvent(bot.WA, evt, a.Jobs, a.Cfg, a.ConfigUC, bot.CompanyID)
 
 	switch evt.(type) {
-	case *events.Connected:
-		logger.Info().Msg("WhatsApp Connected!")
+	case *events.Connected, *events.PairSuccess:
+		logger.Info().Str("company", bot.CompanyID.String()).Msg("WhatsApp Connected/Paired!")
+		err := a.ConfigUC.UpdateCompanyAuthStatus(context.Background(), bot.CompanyID, "active")
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to update company auth_status to active")
+		}
 	case *events.LoggedOut:
-		logger.Warn().Msg("WhatsApp Logged Out!")
+		logger.Warn().Str("company", bot.CompanyID.String()).Msg("WhatsApp Logged Out!")
+		err := a.ConfigUC.UpdateCompanyAuthStatus(context.Background(), bot.CompanyID, "pending")
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to update company auth_status to pending")
+		}
 		a.Cancel()
 	}
 }
@@ -225,10 +345,10 @@ func (a *App) Shutdown() error {
 	}
 
 	// 2. Disconnect WhatsApp
-	if a.WA != nil {
-		a.WA.Disconnect()
-		logger.Info().Msg("WhatsApp disconnected")
+	for _, bot := range a.GetAllBots() {
+		bot.WA.Disconnect()
 	}
+	logger.Info().Msg("All WhatsApp clients disconnected")
 
 	// 3. Stop Scheduler
 	if a.Cron != nil {
@@ -236,9 +356,12 @@ func (a *App) Shutdown() error {
 		logger.Info().Msg("Cron scheduler stopped")
 	}
 
-	// 4. Close Worker Channel and Wait
+	// 4. Close Receipt Queue (drain goroutines)
+	receipt.Shutdown()
+
+	// 5. Close Worker Channel and Wait
 	close(a.Jobs)
-	
+
 	// Create a channel to wait for workers
 	done := make(chan struct{})
 	go func() {
