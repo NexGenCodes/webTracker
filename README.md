@@ -66,11 +66,13 @@ graph TB
 ### Component Breakdown
 
 #### **Edge (Frontend / Public API)**
+
 - **Next.js & Vercel Edge**: Handles all high-traffic web requests (Tracking, Dashboard).
 - **Direct Database Access**: The frontend connects directly to PostgreSQL via `postgres.js` to minimize latency.
 - **Unified Routing**: APIs are nested within the frontend project to ensure 100% uptime even if the VPS is down.
 
 #### **Core (WhatsApp Bot / Automation)**
+
 - **Pure WhatsApp Service**: The VPS is now dedicated exclusively to the WhatsApp socket and background processing.
 - **Internal Cron**: All proactive tasks (SLA recalculations, automated status alerts) are handled here to stay live with the WhatsApp connection.
 - **RAM Optimized**: Stripped of its web server, the bot consumes **70% less memory** than before.
@@ -80,6 +82,7 @@ graph TB
 ## ✨ Features
 
 ### 🌐 Edge Tracking Interface
+
 - **Vercel Global Delivery** - Lightning-fast tracking lookups from any location.
 - **Interactive Map** - Visual representation of shipment journey.
 - **Status Timeline** - Detailed event history with timestamps.
@@ -233,7 +236,7 @@ graph TB
    ./bot.exe
    ```
 
-   The bot will generate an 8-character **Pairing Code** and print it in the console. 
+   The bot will generate an 8-character **Pairing Code** and print it in the console.
    If SMTP is configured, this code will also be sent to your `NOTIFY_EMAIL` in a professional HTML template.
    Enter this code in WhatsApp (Linked Devices > Link with Phone Number) to authenticate.
 
@@ -493,6 +496,6 @@ For support, email `support@yourlogistics.com` or join our WhatsApp group.
 
 **Built with ❤️ by NexGenCodes**
 
-[Website](https://yourlogistics.com) • [Documentation](https://docs.yourlogistics.com) • [Support](mailto:support@yourlogistics.com)
+[Website](https://web-tracker-git-main-holy-guys-projects.vercel.app) • [Documentation](https://docs.yourlogistics.com) • [Support](mailto:emmanuelforchinagorom@gmail.com)
 
 </div>
