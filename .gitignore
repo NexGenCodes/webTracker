@@ -95,6 +95,7 @@ backend/internal/logger/test_logs/
 
 # Editors
 .idea/
+.agents
 .vscode/*.log
 *.suo
 *.ntvs
@@ -127,3 +128,5 @@ backend/assets/fonts/
 
 # Planning
 PLAN.md
+
+
