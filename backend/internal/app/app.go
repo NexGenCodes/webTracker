@@ -131,8 +131,12 @@ func (a *App) Init() error {
 	a.ShipmentUC = usecase.NewShipmentUsecase(querier, shipService)
 	a.ConfigUC = usecase.NewConfigUsecase(querier, a.SqlPool)
 
-	// Initialize Multi-Bot Store
-	store, err := whatsapp.NewStore(a.Cfg.DatabaseURL)
+	// Initialize Multi-Bot Store (must use Direct URL because of prepared statements in PgBouncer)
+	dbUrl := a.Cfg.DirectURL
+	if dbUrl == "" {
+		dbUrl = a.Cfg.DatabaseURL
+	}
+	store, err := whatsapp.NewStore(dbUrl)
 	if err != nil {
 		return fmt.Errorf("whatsapp store init: %w", err)
 	}
