@@ -46,9 +46,24 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
           script: |
-            # 1. Setup Directories
+            # 1. Setup Directories & Caddy
             sudo mkdir -p /opt/webtracker/assets
             
+            if ! command -v caddy &> /dev/null; then
+              echo "Installing Caddy..."
+              sudo apt update
+              sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https
+              curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+              curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+              sudo apt update
+              sudo apt install -y caddy
+              
+              # Set up nip.io mapping for Caddy automatically
+              VPS_IP=$(curl -s ifconfig.me)
+              echo "${VPS_IP//./-}.nip.io { reverse_proxy localhost:8080 }" | sudo tee /etc/caddy/Caddyfile
+              sudo systemctl restart caddy
+            fi
+
             # 2. Stop existing service if running
             sudo systemctl stop webtracker-bot || true
             
