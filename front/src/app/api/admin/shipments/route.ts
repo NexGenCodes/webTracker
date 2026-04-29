@@ -1,34 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getServerSession } from '@/lib/auth';
 import { getBackendUrl, backendHeaders } from '@/lib/backend';
 
-export async function GET(request: NextRequest) {
-    const session = await getServerSession(authOptions);
-    if (!session) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    try {
-        const { search } = new URL(request.url);
-        const res = await fetch(`${getBackendUrl()}/api/admin/shipments${search}`, {
-            headers: backendHeaders(),
-            cache: 'no-store'
-        });
-        
-        if (!res.ok) throw new Error('Backend error');
-        const data = await res.json();
-        
-        return NextResponse.json(data);
-    } catch (error) {
-        console.error('List Shipments Proxy Error:', error);
-        return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-    }
-}
+// GET reads are now handled directly via Supabase in ShipmentService.
+// Only the POST (write) proxy to Go remains here.
 
 export async function POST(request: NextRequest) {
-    const session = await getServerSession(authOptions);
-    if (!session) {
+    const { authenticated } = await getServerSession();
+    if (!authenticated) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -49,5 +28,3 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 }
-
-

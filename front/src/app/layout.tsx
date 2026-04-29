@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { APP_NAME, APP_DESCRIPTION } from "@/lib/constants";
-import Providers from "@/components/Providers";
+import { PLATFORM_NAME, APP_DESCRIPTION } from "@/constants";
+import Providers from '@/components/providers/Providers';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -21,12 +21,11 @@ export const viewport = {
 };
 
 export const metadata: Metadata = {
-  title: `${APP_NAME} - Premium Logistics`,
+  title: `${PLATFORM_NAME} - Premium Logistics`,
   description: APP_DESCRIPTION,
 };
 
-import { ClientTransitionProvider } from "@/components/ClientTransitionProvider";
-import { LayoutHeader } from "@/components/LayoutHeader";
+import { ClientTransitionProvider } from '@/components/providers/ClientTransitionProvider';
 import { Toaster } from "react-hot-toast";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
@@ -42,7 +41,6 @@ export default function RootLayout({
       >
         <Providers>
           <Toaster position="top-left" toastOptions={{
-            /* ... toast options keep as is ... */
             className: 'font-bold uppercase text-[11px] tracking-[0.1em] border shadow-2xl rounded-2xl p-4 min-w-[320px]',
             duration: 5000,
             style: {
@@ -73,7 +71,6 @@ export default function RootLayout({
               }
             }
           }} />
-          <LayoutHeader />
           <ClientTransitionProvider>
             {children}
             <SpeedInsights />

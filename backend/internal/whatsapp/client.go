@@ -12,8 +12,7 @@ import (
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
-	"webtracker-bot/internal/usecase"
-
+	
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/store"
 	"go.mau.fi/whatsmeow/store/sqlstore"
@@ -26,6 +25,13 @@ import (
 
 func NewStore(dsn string) (*sqlstore.Container, error) {
 	dbLog := waLog.Stdout("Database", "DEBUG", true)
+	if !strings.Contains(dsn, "default_query_exec_mode") {
+		if strings.Contains(dsn, "?") {
+			dsn += "&default_query_exec_mode=simple_protocol"
+		} else {
+			dsn += "?default_query_exec_mode=simple_protocol"
+		}
+	}
 	container, err := sqlstore.New(context.Background(), "pgx", dsn, dbLog)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open session database: %w", err)
@@ -72,7 +78,7 @@ func checkCacheCleanup() {
 	}
 }
 
-func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.Job, cfg *config.Config, configUC *usecase.ConfigUsecase, companyID uuid.UUID) {
+func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.Job, cfg *config.Config, configUC *config.Usecase, companyID uuid.UUID) {
 	switch v := evt.(type) {
 	case *events.JoinedGroup:
 		logger.Info().Str("chat", v.JID.String()).Msg("[RBAC EVENT] Joined group, re-verifying authority")
@@ -235,7 +241,7 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 }
 
 // verifyGroupAuthority performs a real-time check. Updates both DB and in-memory cache.
-func verifyGroupAuthority(client *whatsmeow.Client, configUC *usecase.ConfigUsecase, companyID uuid.UUID, chat types.JID) bool {
+func verifyGroupAuthority(client *whatsmeow.Client, configUC *config.Usecase, companyID uuid.UUID, chat types.JID) bool {
 	resp, err := client.GetGroupInfo(context.Background(), chat)
 	if err != nil {
 		logger.Error().Err(err).Str("chat", chat.String()).Msg("[RBAC EVENT] Failed to fetch group info")
@@ -280,3 +286,4 @@ func verifyGroupAuthority(client *whatsmeow.Client, configUC *usecase.ConfigUsec
 
 	return isAuth
 }
+

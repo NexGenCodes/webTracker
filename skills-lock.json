@@ -1,6 +1,151 @@
 {
   "version": 1,
   "skills": {
+    "golang-patterns": {
+      "source": "affaan-m/everything-claude-code",
+      "sourceType": "github",
+      "computedHash": "2168b141260f2c0c2c952afe22f0947cdc76f4339e823ab666933853e206e511"
+    },
+    "golang-performance": {
+      "source": "samber/cc-skills-golang",
+      "sourceType": "github",
+      "computedHash": "6222b1143db115ea9ce12d90a4afc68888a301c32e7a32cbfd126a8dbc73d5c5"
+    },
+    "golang-pro": {
+      "source": "jeffallan/claude-skills",
+      "sourceType": "github",
+      "computedHash": "517209072b5cbeb7dfdb41f634ecff658e34e7c9e081e425d618378e9818a941"
+    },
+    "nextjs": {
+      "source": "vercel-labs/vercel-plugin",
+      "sourceType": "github",
+      "computedHash": "d3a48eada4dbae95856d643a0c9c54a38974ee7896a4d34f93aead13d26c343a"
+    },
+    "nextjs-app-router-patterns": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "computedHash": "04c1df896cc2c9ef824d618b95d21686c5b8e24e5cb32b3d6fe9d97d4b661536"
+    },
+    "nextjs-supabase-auth": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "f2f8b00877ed450e4b5d1e040b52c1c4d312ec2264c75d2248253814c2a9e9ba"
+    },
+    "paystack-charges": {
+      "source": "rexedge/paystack",
+      "sourceType": "github",
+      "computedHash": "1960008170cbe1d181df4cf9b05a08b6122458c45a3a970f644c0e6bcae0e46b"
+    },
+    "paystack-customers": {
+      "source": "rexedge/paystack",
+      "sourceType": "github",
+      "computedHash": "53201ee16009c208c04bff0cce06d1bde7e82f158d4eaf0ccc0b5e8d3e5881de"
+    },
+    "paystack-dedicated-accounts": {
+      "source": "rexedge/paystack",
+      "sourceType": "github",
+      "computedHash": "ecfc75f2220e28c00768954f2a676affc8cd0082438fcf1b1975c416d14e4696"
+    },
+    "paystack-disputes": {
+      "source": "rexedge/paystack",
+      "sourceType": "github",
+      "computedHash": "73ea1ef885dd604ff01ad12caf73ba97e7a9999e9741b1551c0bb7290f1c2981"
+    },
+    "paystack-integration": {
+      "source": "rexedge/paystack",
+      "sourceType": "github",
+      "computedHash": "5bc454bf5d9c96cd0148921b062c8c0a426530d2848b08156dffb09f26b51c41"
+    },
+    "paystack-miscellaneous": {
+      "source": "rexedge/paystack",
+      "sourceType": "github",
+      "computedHash": "55b817b2caea039f0521d9229dbc78a551ea391f422ea331bb4387bbb078b42e"
+    },
+    "paystack-payment-pages": {
+      "source": "rexedge/paystack",
+      "sourceType": "github",
+      "computedHash": "16226f9eb7cf521bb8efa59dcdadddeb0cd88d79fabf7376dec1c3558a8693bc"
+    },
+    "paystack-payment-requests": {
+      "source": "rexedge/paystack",
+      "sourceType": "github",
+      "computedHash": "9e62367bf20705b601ee943882a032fbf39a3057d60fa847540a55fa1cdfd494"
+    },
+    "paystack-plans": {
+      "source": "rexedge/paystack",
+      "sourceType": "github",
+      "computedHash": "1e690e154a62157b95b94272c762bc9450afdc0ac3ff6907aabef2b957555d5b"
+    },
+    "paystack-products": {
+      "source": "rexedge/paystack",
+      "sourceType": "github",
+      "computedHash": "57c66a71823b6ac8bed86c6433cd0e4f4011b2322a1093800c1b76fe4d345b95"
+    },
+    "paystack-refunds": {
+      "source": "rexedge/paystack",
+      "sourceType": "github",
+      "computedHash": "cfc851aec1e05e5d5d73f207f21320b2250e96a1c8a1f3bc1395955068531224"
+    },
+    "paystack-settlements": {
+      "source": "rexedge/paystack",
+      "sourceType": "github",
+      "computedHash": "232ed9b80954ef9480bf88a58989ecaebfc3d462f606503e2049c3027a6bb4e6"
+    },
+    "paystack-setup": {
+      "source": "rexedge/paystack",
+      "sourceType": "github",
+      "computedHash": "4084505f180db2d2013b978b68136f807969e73ac879bc4b58305a7a8b9dd008"
+    },
+    "paystack-splits": {
+      "source": "rexedge/paystack",
+      "sourceType": "github",
+      "computedHash": "90eea4d34affb73ae08ff942cce364b7dbd6e914d50e6153745247620547181d"
+    },
+    "paystack-subaccounts": {
+      "source": "rexedge/paystack",
+      "sourceType": "github",
+      "computedHash": "61c9d98d285b83b55a2c615220ffde20448467903ac646f174f64db7d45df9b2"
+    },
+    "paystack-subscriptions": {
+      "source": "rexedge/paystack",
+      "sourceType": "github",
+      "computedHash": "a3f25c3fe06b6ee1688aecddb3e32e28da342ef2c571c8a6e030b0edc34f5fed"
+    },
+    "paystack-terminal": {
+      "source": "rexedge/paystack",
+      "sourceType": "github",
+      "computedHash": "4a421c75eddac60c189e3a52fded506e622bc04006d018cf63ffc33be08a45dc"
+    },
+    "paystack-testing": {
+      "source": "rexedge/paystack",
+      "sourceType": "github",
+      "computedHash": "0c013ae6a85d813b1b8ada7b8216dc2db540fa0ea1e328b2d2b541ee668cddc7"
+    },
+    "paystack-transactions": {
+      "source": "rexedge/paystack",
+      "sourceType": "github",
+      "computedHash": "92799467536f8c95a0ae8fa63e989813ed942ff6eb97ee7b814b028c4ec48ec7"
+    },
+    "paystack-transfer-recipients": {
+      "source": "rexedge/paystack",
+      "sourceType": "github",
+      "computedHash": "0c92d0692a493e8722ec7c45f8107be9c25c575e63ddc2236eff9119fbfdea94"
+    },
+    "paystack-transfers": {
+      "source": "rexedge/paystack",
+      "sourceType": "github",
+      "computedHash": "df23f56e95c02314a0ec868b2bb0edbfbff518533779224f7257f88a3625394b"
+    },
+    "paystack-verification": {
+      "source": "rexedge/paystack",
+      "sourceType": "github",
+      "computedHash": "4cad61046e0ad183391e654da3911b60e5e32538ca6f2d575bbbd06eb5415ffc"
+    },
+    "paystack-webhooks": {
+      "source": "rexedge/paystack",
+      "sourceType": "github",
+      "computedHash": "175e38c01d4c30121fa43b07a9b76ffcace0fa7366ce3fbf64bd9aa36bdcf1ed"
+    },
     "supabase-postgres-best-practices": {
       "source": "supabase/agent-skills",
       "sourceType": "github",

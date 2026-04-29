@@ -111,3 +111,24 @@ export function generateAbbreviation(name: string): string {
 
     return abbr;
 }
+
+/**
+ * Validates tracking number format.
+ * Matches backend: PREFIX-123456789 (Prefix + '-' + 9 digits)
+ */
+export function isValidTrackingNumber(id: string): boolean {
+    if (!id) return false;
+    const regex = /^[A-Z0-9]{2,6}-[0-9]{5,12}$/i;
+    return regex.test(id);
+}
+
+/**
+ * Resolves the backend API URL dynamically.
+ * Uses localhost:8080 during local development, and the .env URL in production.
+ */
+export function getApiUrl(): string {
+    if (process.env.NODE_ENV === 'development') {
+        return 'http://localhost:8080';
+    }
+    return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+}

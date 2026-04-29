@@ -10,7 +10,7 @@ import (
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/notif"
-	"webtracker-bot/internal/usecase"
+	"webtracker-bot/internal/shipment"
 
 	"github.com/robfig/cron/v3"
 	waProto "go.mau.fi/whatsmeow/binary/proto"
@@ -21,8 +21,8 @@ import (
 type CronManager struct {
 	scheduler *cron.Cron
 	cfg       *config.Config
-	shipUC    *usecase.ShipmentUsecase
-	configUC  *usecase.ConfigUsecase
+	shipUC    *shipment.Usecase
+	configUC  *config.Usecase
 	bots      whatsapp.BotProvider
 	locks     map[string]*sync.Mutex
 	mu        sync.RWMutex
@@ -33,7 +33,7 @@ var (
 	once     sync.Once
 )
 
-func NewManager(cfg *config.Config, shipUC *usecase.ShipmentUsecase, configUC *usecase.ConfigUsecase, bots whatsapp.BotProvider) *CronManager {
+func NewManager(cfg *config.Config, shipUC *shipment.Usecase, configUC *config.Usecase, bots whatsapp.BotProvider) *CronManager {
 	once.Do(func() {
 		// Use seconds precision for robfig/cron/v3
 		c := cron.New(cron.WithSeconds())
@@ -126,7 +126,7 @@ func (m *CronManager) handlePulse() {
 					continue
 				}
 
-				go func(t usecase.TransitionResult, b *whatsapp.BotInstance) {
+				go func(t shipment.TransitionResult, b *whatsapp.BotInstance) {
 					notif.SendStatusAlert(ctx, b.WA, m.cfg, b.CompanyName, t.UserJID, t.TrackingID, t.NewStatus, t.RecipientEmail)
 				}(t, bot)
 			}
@@ -202,3 +202,4 @@ func (m *CronManager) handleHealthCheck() {
 		logger.Error().Err(err).Msg("Health check ping failed")
 	}
 }
+

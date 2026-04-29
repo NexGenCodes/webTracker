@@ -1,38 +1,42 @@
+import { cookies } from 'next/headers';
+import { jwtVerify } from 'jose';
 
-import { NextAuthOptions } from "next-auth";
-import CredentialsProvider from "next-auth/providers/credentials";
+const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || 'fallback_secret_change_me');
 
-export const authOptions: NextAuthOptions = {
-    providers: [
-        CredentialsProvider({
-            name: "Credentials",
-            credentials: {
-                username: { label: "Username", type: "text", placeholder: "admin" },
-                password: { label: "Password", type: "password" }
-            },
-            async authorize(credentials) {
-                const adminUser = process.env.ADMIN_USERNAME;
-                const adminPass = process.env.ADMIN_PASSWORD;
-                const adminEmail = process.env.ADMIN_EMAIL;
+export interface SessionUser {
+    company_id: string;
+    company_name: string;
+    email: string;
+    plan_type: string;
+    auth_status: string;
+}
 
-                if (credentials?.username === adminUser && credentials?.password === adminPass) {
-                    return {
-                        id: "admin-user",
-                        name: adminUser,
-                        email: adminEmail
-                    };
-                }
-                return null;
+/**
+ * Server-side auth check.
+ * Verifies the backend JWT cookie using jose.
+ */
+export async function getServerSession(): Promise<{ authenticated: boolean; user?: SessionUser }> {
+    try {
+        const cookieStore = await cookies();
+        const jwt = cookieStore.get('jwt')?.value;
+        
+        if (!jwt) {
+            return { authenticated: false };
+        }
+
+        const { payload } = await jwtVerify(jwt, JWT_SECRET);
+        
+        return { 
+            authenticated: true,
+            user: {
+                company_id: payload.company_id as string,
+                company_name: payload.company_name as string,
+                email: payload.email as string,
+                plan_type: payload.plan_type as string,
+                auth_status: payload.auth_status as string,
             }
-        })
-    ],
-    callbacks: {
-        async session({ session }) {
-            return session
-        },
-    },
-    pages: {
-        signIn: '/auth/signin',
-    },
-    secret: process.env.NEXTAUTH_SECRET,
-};
+        };
+    } catch (error) {
+        return { authenticated: false };
+    }
+}

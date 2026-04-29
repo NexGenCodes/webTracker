@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"webtracker-bot/internal/i18n"
+	"webtracker-bot/internal/receipt"
 	"webtracker-bot/internal/shipment"
-	"webtracker-bot/internal/utils"
 )
 
 func TestRenderReceipts(t *testing.T) {
@@ -37,7 +37,7 @@ func TestRenderReceipts(t *testing.T) {
 	}
 
 	// 2. Initialize renderer (with fonts path)
-	err := utils.InitReceiptRenderer(false) // Sets useOptimized = false initially
+	err := receipt.InitReceiptRenderer(false) // Sets useOptimized = false initially
 	if err != nil {
 		t.Fatalf("Failed to initialize receipt renderer: %v", err)
 	}
@@ -50,7 +50,7 @@ func TestRenderReceipts(t *testing.T) {
 
 	// 3. Test Legacy Render
 	t.Run("Legacy Render", func(t *testing.T) {
-		bytes, err := utils.RenderReceiptLegacy(mockShipment, "Global Express", i18n.EN)
+		bytes, err := receipt.RenderReceiptLegacy(mockShipment, "Global Express", i18n.EN)
 		if err != nil {
 			t.Fatalf("Legacy render failed: %v", err)
 		}
@@ -68,12 +68,12 @@ func TestRenderReceipts(t *testing.T) {
 	// 4. Test Optimized Render
 	t.Run("Optimized Render", func(t *testing.T) {
 		// Initialize for optimized
-		err := utils.InitReceiptRenderer(true)
+		err := receipt.InitReceiptRenderer(true)
 		if err != nil {
 			t.Fatalf("Failed to re-init for optimized: %v", err)
 		}
 
-		bytes, err := utils.RenderReceiptOptimized(mockShipment, "Global Express", i18n.EN)
+		bytes, err := receipt.RenderReceiptOptimized(mockShipment, "AIRWAYBILL", i18n.EN)
 		if err != nil {
 			t.Fatalf("Optimized render failed: %v", err)
 		}

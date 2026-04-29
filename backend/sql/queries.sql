@@ -2,7 +2,10 @@
 SELECT id FROM companies;
 
 -- name: GetAllActiveCompanies :many
-SELECT * FROM companies WHERE auth_status = 'active';
+SELECT * FROM companies 
+WHERE auth_status = 'active' 
+  AND subscription_status IN ('active', 'trialing')
+  AND (subscription_expiry IS NULL OR subscription_expiry > CURRENT_TIMESTAMP);
 
 -- name: GetCompanyByID :one
 SELECT * FROM companies WHERE id = $1;
@@ -195,3 +198,13 @@ LIMIT $2;
 UPDATE Shipment
 SET status = $3, updated_at = CURRENT_TIMESTAMP
 WHERE company_id = $1 AND tracking_id = ANY($2::text[]);
+
+-- name: GetCompanyByEmail :one
+SELECT * FROM companies WHERE admin_email = $1;
+
+-- name: SetCompanyPassword :exec
+UPDATE companies SET admin_password_hash = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1;
+
+
+-- name: UpdateCompanyOnboarding :exec
+UPDATE companies SET whatsapp_phone = $2, tracking_prefix = $3, auth_status = 'active', updated_at = CURRENT_TIMESTAMP WHERE id = $1;

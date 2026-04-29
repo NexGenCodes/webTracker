@@ -22,11 +22,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"webtracker-bot/internal/adapter/db"
-	"webtracker-bot/internal/adapter/dbconn"
-	transport_http "webtracker-bot/internal/transport/http"
-	"webtracker-bot/internal/usecase"
-
+	"webtracker-bot/internal/database/db"
+	"webtracker-bot/internal/database"
+	transport_http "webtracker-bot/internal/api"
+	
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/store"
 	"go.mau.fi/whatsmeow/store/sqlstore"
@@ -36,8 +35,8 @@ import (
 
 type App struct {
 	Cfg        *config.Config
-	ShipmentUC *usecase.ShipmentUsecase
-	ConfigUC   *usecase.ConfigUsecase
+	ShipmentUC *shipment.Usecase
+	ConfigUC   *config.Usecase
 	WAStore    *sqlstore.Container
 	Bots       map[uuid.UUID]*whatsapp.BotInstance
 	BotsMu     sync.RWMutex
@@ -120,16 +119,16 @@ func New(cfg *config.Config) *App {
 
 func (a *App) Init() error {
 	// Init Clean Architecture dependencies (SQLC + UseCases)
-	sqlPool, err := dbconn.Connect(a.Cfg.DatabaseURL)
+	sqlPool, err := database.Connect(a.Cfg.DatabaseURL)
 	if err != nil {
-		return fmt.Errorf("dbconn init (Pgx): %w", err)
+		return fmt.Errorf("database init: %w", err)
 	}
 	a.SqlPool = sqlPool
 
 	querier := db.New(a.SqlPool)
 	shipService := &shipment.Calculator{}
-	a.ShipmentUC = usecase.NewShipmentUsecase(querier, shipService)
-	a.ConfigUC = usecase.NewConfigUsecase(querier, a.SqlPool)
+	a.ShipmentUC = shipment.NewUsecase(querier, shipService)
+	a.ConfigUC = config.NewUsecase(querier, a.SqlPool)
 
 	// Initialize Multi-Bot Store (must use Direct URL because of prepared statements in PgBouncer)
 	dbUrl := a.Cfg.DirectURL
@@ -150,11 +149,11 @@ func (a *App) Init() error {
 
 	for _, c := range companies {
 		if err := a.initBotForCompany(c); err != nil {
-			logger.Error().Err(err).Str("company", c.Name).Msg("Failed to init bot")
+			logger.Error().Err(err).Str("company", c.Name.String).Msg("Failed to init bot")
 		}
 	}
 
-	if err := utils.InitReceiptRenderer(a.Cfg.UseOptimizedReceipt); err != nil {
+	if err := receipt.InitReceiptRenderer(a.Cfg.UseOptimizedReceipt); err != nil {
 		logger.Error().Err(err).Msg("Failed to init receipt renderer")
 	}
 
@@ -179,7 +178,10 @@ func (a *App) initBotForCompany(c db.Company) error {
 		jid := types.NewJID(phone, "s.whatsapp.net")
 		device, err = a.WAStore.GetDevice(context.Background(), jid)
 		if err != nil {
-			logger.Warn().Err(err).Str("phone", phone).Msg("Device not found for phone, creating new")
+			logger.Warn().Err(err).Str("phone", phone).Msg("Error getting device, creating new")
+			device = a.WAStore.NewDevice()
+		} else if device == nil {
+			logger.Warn().Str("phone", phone).Msg("Device not found (nil returned), creating new")
 			device = a.WAStore.NewDevice()
 		}
 	} else {
@@ -188,15 +190,20 @@ func (a *App) initBotForCompany(c db.Company) error {
 
 	waClient := whatsapp.NewClientForDevice(device)
 
-	// Create prefix from name
-	prefix := config.GenerateAbbreviation(c.Name)
+	// Use DB tracking_prefix if set; otherwise auto-generate from company name
+	prefix := ""
+	if c.TrackingPrefix.Valid && c.TrackingPrefix.String != "" {
+		prefix = c.TrackingPrefix.String
+	} else {
+		prefix = config.GenerateAbbreviation(c.Name.String)
+	}
 
-	sender := whatsapp.NewSender(waClient, c.Name)
+	sender := whatsapp.NewSender(waClient, c.Name.String)
 	receipt.InitProcessor()
 
 	bot := &whatsapp.BotInstance{
 		CompanyID:   c.ID,
-		CompanyName: c.Name,
+		CompanyName: c.Name.String,
 		Prefix:      prefix,
 		Tier:        c.SubscriptionStatus.String,
 		WA:          waClient,
@@ -211,7 +218,7 @@ func (a *App) initBotForCompany(c db.Company) error {
 	a.Bots[c.ID] = bot
 	a.BotsMu.Unlock()
 
-	logger.Info().Str("company", c.Name).Msg("Initialized bot instance")
+	logger.Info().Str("company", c.Name.String).Msg("Initialized bot instance")
 	return nil
 }
 
@@ -280,7 +287,7 @@ func (a *App) Run() error {
 
 func (a *App) connectWA() error {
 	for _, bot := range a.GetAllBots() {
-		if bot.WA.Store.ID != nil {
+		if bot.WA != nil && bot.WA.Store != nil && bot.WA.Store.ID != nil {
 			if err := bot.WA.Connect(); err != nil {
 				logger.Error().Err(err).Str("company", bot.CompanyName).Msg("Failed to connect")
 			}
@@ -318,13 +325,37 @@ func (a *App) handleWAEvent(bot *whatsapp.BotInstance, evt interface{}) {
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to update company auth_status to active")
 		}
+		// Store phone number if available after pairing
+		if bot.WA.Store != nil && bot.WA.Store.ID != nil {
+			phone := whatsapp.GetBarePhone(bot.WA.Store.ID.User)
+			if phone != "" {
+				_ = a.ConfigUC.UpdateCompanyWhatsAppPhone(context.Background(), bot.CompanyID, phone)
+			}
+		}
 	case *events.LoggedOut:
-		logger.Warn().Str("company", bot.CompanyID.String()).Msg("WhatsApp Logged Out!")
+		logger.Warn().Str("company", bot.CompanyID.String()).Msg("WhatsApp Logged Out — deactivating bot (other tenants unaffected)")
 		err := a.ConfigUC.UpdateCompanyAuthStatus(context.Background(), bot.CompanyID, "pending")
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to update company auth_status to pending")
 		}
-		a.Cancel()
+		// Only deactivate THIS company's bot, NOT the entire server
+		_ = a.DeactivateBot(bot.CompanyID)
+	case *events.Disconnected:
+		// Temporary disconnect (network blip) — attempt reconnect after delay
+		logger.Warn().Str("company", bot.CompanyID.String()).Msg("WhatsApp Disconnected — will attempt reconnect in 30s")
+		go func() {
+			time.Sleep(30 * time.Second)
+			a.BotsMu.RLock()
+			_, stillActive := a.Bots[bot.CompanyID]
+			a.BotsMu.RUnlock()
+			if stillActive && bot.WA.Store != nil && bot.WA.Store.ID != nil {
+				if err := bot.WA.Connect(); err != nil {
+					logger.Error().Err(err).Str("company", bot.CompanyID.String()).Msg("Auto-reconnect failed")
+				} else {
+					logger.Info().Str("company", bot.CompanyID.String()).Msg("Auto-reconnect successful")
+				}
+			}
+		}()
 	}
 }
 
@@ -398,3 +429,5 @@ func (a *App) Shutdown() error {
 	logger.Info().Msg("App shutdown complete.")
 	return nil
 }
+
+

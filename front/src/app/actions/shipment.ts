@@ -1,19 +1,18 @@
 'use server';
 
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { revalidatePath } from 'next/cache';
 import { CreateShipmentDto, ShipmentData, ServiceResult } from '@/types/shipment';
 import { ShipmentService } from '@/services/shipment.service';
 import { logger } from '@/lib/logger';
 import { vitals } from '@/lib/vitals';
+import { getServerSession } from '@/lib/auth';
 
 /**
  * Common Authorization wrapper
  */
-async function isAdmin() {
-    const session = await getServerSession(authOptions);
-    return !!session;
+export async function isAdmin() {
+    const { authenticated } = await getServerSession();
+    return authenticated;
 }
 
 /**
@@ -25,7 +24,7 @@ export async function createShipment(data: CreateShipmentDto): Promise<ServiceRe
 
     logger.info('Creating shipment', { data });
     const result = await ShipmentService.create(data);
-    if (result.success) revalidatePath('/admin');
+    if (result.success) revalidatePath('/dashboard');
     return result;
 }
 
@@ -57,7 +56,7 @@ export async function updateShipmentStatus(
     const result = await ShipmentService.updateStatus(trackingNumber, status, location);
     if (result.success) {
         revalidatePath('/');
-        revalidatePath('/admin');
+        revalidatePath('/dashboard');
     }
     return result;
 }
@@ -78,7 +77,7 @@ export async function markAsDelivered(trackingNumber: string) {
     const result = await ShipmentService.markDelivered(trackingNumber);
     if (result.success) {
         revalidatePath('/');
-        revalidatePath('/admin');
+        revalidatePath('/dashboard');
     }
     return result;
 }
@@ -90,7 +89,7 @@ export async function deleteShipment(trackingNumber: string) {
     if (!(await isAdmin())) return { success: false, error: 'Unauthorized' };
 
     const result = await ShipmentService.delete(trackingNumber);
-    if (result.success) revalidatePath('/admin');
+    if (result.success) revalidatePath('/dashboard');
     return result;
 }
 
@@ -101,7 +100,7 @@ export async function bulkDeleteDelivered() {
     if (!(await isAdmin())) return { success: false, error: 'Unauthorized' };
 
     const result = await ShipmentService.bulkDeleteDelivered();
-    if (result.success) revalidatePath('/admin');
+    if (result.success) revalidatePath('/dashboard');
     return result;
 }
 

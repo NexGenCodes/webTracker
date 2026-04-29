@@ -1,16 +1,17 @@
 CREATE TABLE IF NOT EXISTS companies (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL,
+    name TEXT,
     admin_email TEXT NOT NULL UNIQUE,
     admin_password_hash TEXT,
     whatsapp_phone TEXT,
     logo_url TEXT,
     brand_color TEXT DEFAULT '#0066FF',
-    auth_status TEXT DEFAULT 'pending_linking',
+    auth_status TEXT DEFAULT 'pending_verification',
     subscription_status TEXT DEFAULT 'active',
     subscription_expiry TIMESTAMP,
-    plan_type TEXT DEFAULT 'pro',
+    plan_type TEXT DEFAULT 'trial',
     setup_token TEXT UNIQUE,
+    tracking_prefix TEXT UNIQUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

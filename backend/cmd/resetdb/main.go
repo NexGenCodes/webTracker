@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -91,4 +93,36 @@ func main() {
 	}
 
 	fmt.Println("Database reset successfully with pristine SQLC Schema.")
+
+	// Auto-run generate to ensure Go code is in sync
+	fmt.Println("Auto-running code generation...")
+	root := findRoot()
+	if root != "" {
+		cmd := exec.Command("go", "run", "cmd/generate/main.go")
+		cmd.Dir = root
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			log.Printf("Warning: Auto-generate failed: %v", err)
+		}
+	} else {
+		log.Println("Warning: Could not find backend root for auto-generation")
+	}
+}
+
+func findRoot() string {
+	// Try CWD first
+	if _, err := os.Stat("sqlc.yaml"); err == nil {
+		abs, _ := filepath.Abs(".")
+		return abs
+	}
+	// Try parent dirs
+	dir, _ := os.Getwd()
+	for dir != "" && dir != filepath.Dir(dir) {
+		if _, err := os.Stat(filepath.Join(dir, "sqlc.yaml")); err == nil {
+			return dir
+		}
+		dir = filepath.Dir(dir)
+	}
+	return ""
 }

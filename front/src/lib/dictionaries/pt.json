@@ -1,0 +1,269 @@
+{
+  "hero": {
+    "title": "Rastreie Seu Envio",
+    "subtitle": "Digite seu número de rastreamento para ver o progresso em tempo real",
+    "placeholder": "ex. AWB-...",
+    "track": "Rastrear",
+    "feature1Title": "Dados Seguros",
+    "feature1Desc": "A limpeza automatizada de PII garante a privacidade do rastreamento.",
+    "feature2Title": "Alcance Global",
+    "feature2Desc": "Atualizações em tempo real através de fronteiras internacionais.",
+    "feature3Title": "Alertas Instantâneos",
+    "feature3Desc": "Sincronização de status de latência zero para entrega.",
+    "loadingMessages": [
+      "Conectando ao relé orbital...",
+      "Triangulando coordenadas de carga...",
+      "Descriptografando manifesto de alta prioridade...",
+      "Sincronizando com a rede logística global...",
+      "Finalizando telemetria segura..."
+    ]
+  },
+  "common": {
+    "about": "Sobre Nós",
+    "contact": "Suporte",
+    "home": "Rastreamento",
+    "admin": "Portal",
+    "loading": "Atualizando sistema...",
+    "error": "Serviço temporariamente indisponível.",
+    "notFound": "ID não reconhecido. Verifique o código.",
+    "privacy": "Política de Privacidade",
+    "terms": "Termos de Serviço",
+    "cookies": "Política de Cookies",
+    "company": "Empresa",
+    "legal": "Legal",
+    "services": "Serviços",
+    "tagline": "Logística Global",
+    "footerDesc": "Soluções de rastreamento de classe mundial para o ecossistema logístico global. Precisão, privacidade e velocidade em cada pacote.",
+    "globalSystems": "Sistemas Globais",
+    "safeLogistics": "Logística Segura",
+    "default": "Padrão",
+    "press": "Imprensa e Mídia",
+    "enterprise": "Rastreamento Empresarial",
+    "api": "Integração API",
+    "analytics": "Análise Logística",
+    "corp": "Logística Corp."
+  },
+  "shipment": {
+    "status": "Status Atual",
+    "destination": "Destino",
+    "details": "Detalhes do Envio",
+    "trackingId": "ID de Rastreamento",
+    "receiver": "Destinatário",
+    "from": "De",
+    "latestUpdates": "Últimas Atualizações",
+    "liveLocation": "Localização ao Vivo",
+    "deliveredTitle": "Pacote Entregue",
+    "deliveredDesc": "Este envio foi entregue com sucesso. De acordo com nossa política de privacidade, os detalhes pessoais foram anonimizados.",
+    "hidden": "Oculto (Entregue)",
+    "finalized": "Finalizado",
+    "live": "Ao Vivo",
+    "currentLocation": "Localização Atual:",
+    "origin": "Origem",
+    "originFacility": "Instalação de Origen",
+    "estimatedDelivery": "Entrega Est.",
+    "created": "Criado",
+    "address": "Endereço",
+    "weight": "Peso",
+    "outForDeliveryTitle": "🚚 Saiu para Entrega",
+    "outForDeliveryDesc": "Nosso agente local está a caminho do seu destino.",
+    "expectedDelivery": "Entrega prevista:",
+    "soon": "Em breve",
+    "canceledTitle": "Envio Cancelado",
+    "canceledDesc": "Este envio foi cancelado pelo administrador.",
+    "destinationLabel": "(Destino)",
+    "originLabel": "(Origem)",
+    "inTransitLabel": "Em Trânsito",
+    "airFreight": "Frete Aéreo"
+  },
+  "errors": {
+    "unauthorized": "Não autorizado",
+    "databaseError": "Erro de banco de dados",
+    "notFound": "Não encontrado",
+    "cannotCancelDelivered": "Não é possível cancelar envio entregue",
+    "shipmentNotFound": "Envio não encontrado"
+  },
+  "map": {
+    "orbitalTracking": "Fase de Rastreamento Orbital",
+    "statusLabel": "Status",
+    "uplinkActive": "Uplink Ativo",
+    "signalTerminated": "Sinal Terminado",
+    "etaWindow": "Janela ETA",
+    "liveTelemetry": "Telemetria ao Vivo",
+    "signalOrigin": "Origem do Sinal",
+    "signalTarget": "Alvo do Sinal",
+    "deepSpace": "Espaço Profundo",
+    "undisclosed": "Não Divulgado"
+  },
+  "admin": {
+    "title": "Criar Novo Envio",
+    "instructions": "Instruções:",
+    "step1": "Copie o corpo do e-mail.",
+    "step2": "Cole abaixo.",
+    "step3": "Clique em Gerar.",
+    "placeholder": "Cole o conteúdo do e-mail aqui...",
+    "generate": "Gerar ID de Rastreamento",
+    "success": "Envio Criado!",
+    "successDesc": "Por favor, envie este ID ao cliente.",
+    "copy": "Copiar para Área de Transferência",
+    "copied": "Copiado!",
+    "createAnother": "Criar Outro",
+    "loginTitle": "Acesso Admin",
+    "loginPlaceholder": "Senha admin",
+    "loginButton": "Entrar",
+    "wrongPassword": "Senha incorreta",
+    "failedCreate": "Falha ao criar envio",
+    "invalidEmail": "Formato de e-mail inválido",
+    "dashboard": "Painel",
+    "manageShipments": "Gerenciar Envios",
+    "createNew": "Criar Novo",
+    "totalShipments": "Total de Envios",
+    "inTransit": "Em Trânsito",
+    "outForDelivery": "Saiu para Entrega",
+    "delivered": "Chegou",
+    "pending": "Pendente",
+    "canceled": "Cancelado",
+    "deleteShipment": "Excluir",
+    "bulkDelete": "Excluir Todos Entregues",
+    "confirmDelete": "Tem certeza que deseja excluir este envio?",
+    "confirmBulkDelete": "Excluir todos os envios entregues?",
+    "deleted": "Envio excluído",
+    "bulkDeleted": "envios excluídos",
+    "noShipments": "Nenhum envio encontrado",
+    "search": "Buscar ID...",
+    "receiver": "Destinatário",
+    "sender": "Remetente",
+    "createdAt": "Criado",
+    "actions": "Ações",
+    "markDelivered": "Marcar como Entregue",
+    "updateStatus": "Atualizar Status"
+  },
+  "privacy_page": {
+    "introTitle": "Introdução",
+    "introDesc": "Na , levamos a privacidade dos seus dados muito a sério. Esta política descreve como lidamos com dados de rastreamento e as medidas rigorosas para proteger Informações Pessoais Identificáveis (PII).",
+    "dataTitle": "Retenção e Limpeza de Dados",
+    "dataDesc": "Nosso sistema é baseado em uma arquitetura de \"Privacidade Primeiro\". Uma vez que um envio é marcado como **Entregue**, nossa política ativa uma limpeza abrangente de todas as PII, incluindo:",
+    "item1": "Nomes de destinatários e números de contato",
+    "item2": "Endereços de entrega completos",
+    "item3": "Detalhes de identificação do remetente",
+    "dataFinal": "Esses dados anonimizados são retidos apenas para fins de auditoria logística sem qualquer vínculo com as pessoas envolvidas.",
+    "securityTitle": "Padrões de Segurança",
+    "securityDesc": "Usamos criptografia padrão da indústria (AES-256) para dados em repouso e TLS 1.3 para todos os dados em trânsito. O acesso aos portais administrativos é estritamente controlado."
+  },
+  "terms_page": {
+    "agreeTitle": "Acordo",
+    "agreeDesc": "Ao usar a plataforma de rastreamento , você concorda com estes termos de serviço profissionais. Nosso serviço é fornecido como está para fins de visibilidade e transparência de envios.",
+    "useTitle": "Uso Aceitável",
+    "useDesc": "É proibido tentar fazer engenharia reversa na geração de ID de rastreamento ou contornar portões de segurança. O acesso não autorizado viola os padrões logísticos.",
+    "limitTitle": "Responsabilidade",
+    "limitDesc": "Embora nos esforcemos por 100% de precisão, a Airway Bill não é responsável por atrasos causados por interrupções de mensageiros ou latência de rede."
+  },
+  "about": {
+    "title": "Rastreamento Logístico Premium",
+    "subtitle": "Visibilidade Segura e em Tempo Real para Sua Cadeia de Suprimentos.",
+    "description": "A  oferece soluções de rastreamento de nível empresarial para envios críticos. Nossa plataforma garante que cada pacote seja monitorado com precisão, oferecendo transparência e privacidade sem precedentes.",
+    "mission": "Nosso Compromisso",
+    "missionDesc": "Redefinir a experiência de rastreamento através de design intuitivo e segurança de dados sem concessões.",
+    "transparency": "Transparência Global",
+    "transparencyDesc": "Acreditamos em comunicação de latência zero. Cada atualização de status é verificada e sincronizada em segundos.",
+    "ctaTitle": "Pronto para otimizar seu rastreamento?",
+    "ctaDesc": "Junte-se a milhares de empresas que confiam Na  para sua visibilidade crítica.",
+    "ctaButton": "Começar"
+  },
+  "contact": {
+    "title": "Entre em Contato",
+    "subtitle": "Tem perguntas? Estamos aqui para ajudar.",
+    "name": "Nome",
+    "email": "E-mail",
+    "message": "Mensagem",
+    "send": "Enviar Mensagem",
+    "success": "Mensagem Enviada!",
+    "successDesc": "Nossa equipe verificará sua consulta e entrará em contato em 24 horas.",
+    "support": "Canais de Suporte",
+    "emailLabel": "E-mail Corporativo",
+    "phoneLabel": "Linha de Suporte",
+    "hqLabel": "Sede Global"
+  },
+  "statuses": {
+    "PENDING": "Pendente",
+    "IN_TRANSIT": "Em Trânsito",
+    "OUT_FOR_DELIVERY": "Saiu para Entrega",
+    "DELIVERED": "Chegou",
+    "CANCELED": "Cancelado"
+  },
+  "marketing": {
+    "hero": {
+      "headline": "A Próxima Geração",
+      "headlineLine2": "Logística Global",
+      "subtitle": "Rastreie envios em tempo real através de fronteiras.",
+      "ctaTrack": "Rastrear Envio",
+      "ctaPricing": "Ver Preços",
+      "ctaCreate": "Criar Conta Grátis"
+    },
+    "pricing": {
+      "badge": "Preços",
+      "title": "Preços Simples",
+      "subtitle": "Escolha o plano perfeito para você.",
+      "monthly": "Mensal",
+      "yearly": "Anual",
+      "saveLabel": "Economize 15%",
+      "mostPopular": "Mais Popular",
+      "custom": "Personalizado",
+      "perMonth": "/mês",
+      "billed": "Faturado",
+      "perYear": "/ano"
+    },
+    "howItWorks": {
+      "badge": "Como Funciona",
+      "title": "Três Passos para Controle Global",
+      "subtitle": "Da criação à entrega.",
+      "step1": {
+        "title": "Criar",
+        "description": "Registre envios via portal ou WhatsApp."
+      },
+      "step2": {
+        "title": "Rastrear",
+        "description": "Visualização em tempo real."
+      },
+      "step3": {
+        "title": "Entregar",
+        "description": "Notificações automatizadas no WhatsApp."
+      }
+    },
+    "trust": {
+      "shipments": "Envios Rastreados",
+      "countries": "Países",
+      "uptime": "Tempo de Atividade",
+      "live": "Monitoramento",
+      "twentyFourSeven": "24/7"
+    },
+    "features": {
+      "badge": "Recursos",
+      "title": "Construído para Escalar",
+      "subtitle": "Ferramentas empresariais modernas.",
+      "f1": {
+        "title": "Rastreamento em Tempo Reale",
+        "desc": "Visualizações de mapa."
+      },
+      "f2": {
+        "title": "Alertas",
+        "desc": "WhatsApp & email."
+      },
+      "f3": {
+        "title": "Análise de IA",
+        "desc": "Criação de envios via emails."
+      },
+      "f4": {
+        "title": "Análise",
+        "desc": "Painéis completos."
+      }
+    },
+    "getStarted": {
+      "badge": "Comece",
+      "title": "Pronto para Atualizar<br />Sua Logística?",
+      "subtitle": "Junte-se aos líderes globais.",
+      "ctaTrack": "Rastrear Envio",
+      "ctaAccount": "Criar Conta Grátis",
+      "trustLine": "Sem cartão de crédito · 7 dias de teste"
+    }
+  }
+}

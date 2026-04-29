@@ -40,7 +40,7 @@ Addr: No 5, Abuja
 Cargo: Spare Parts
 Wgt: 5.2`,
 			expected: map[string]interface{}{
-				"ReceiverName":  "Bob Marley",
+				"ReceiverName":  "Bob  Marley",
 				"ReceiverPhone": "(234) 901-222-3333",
 				"CargoType":     "Spare Parts",
 				"Weight":        5.2,

@@ -83,10 +83,6 @@ export interface PaginatedResult<T> {
     pagination: Pagination;
 }
 
-export interface Dictionary {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    [key: string]: any;
-}
 
 export interface ParseResult {
     success: boolean;
