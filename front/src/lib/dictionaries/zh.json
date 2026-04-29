@@ -1,0 +1,268 @@
+{
+  "hero": {
+    "title": "追踪您的货物",
+    "subtitle": "输入您的追踪单号以实时查看进度",
+    "placeholder": "例如 AWB-...",
+    "track": "追踪",
+    "feature1Title": "安全数据",
+    "feature1Desc": "自动 PII 清洗确保追踪过程中的隐私安全。",
+    "feature2Title": "全球覆盖",
+    "feature2Desc": "跨国边界的实时更新同步。",
+    "feature3Title": "即时提醒",
+    "feature3Desc": "交付状态零延迟同步。",
+    "loadingMessages": [
+      "连接轨道中继站...",
+      "货运坐标三角测量...",
+      "解密高优先级清单...",
+      "同步全球物流网格...",
+      "完成安全遥测数据..."
+    ]
+  },
+  "common": {
+    "about": "关于我们",
+    "contact": "客户支持",
+    "home": "货物追踪",
+    "admin": "管理入口",
+    "loading": "系统更新中...",
+    "error": "服务暂时不可用，请稍后重试。",
+    "notFound": "未识别追踪单号，请检查代码。",
+    "privacy": "隐私政策",
+    "terms": "服务条款",
+    "cookies": "Cookie 政策",
+    "company": "公司信息",
+    "legal": "法律条款",
+    "services": "核心服务",
+    "tagline": "全球物流",
+    "footerDesc": "为全球物流生态系统提供世界级的追踪解决方案。每个包裹都具备精准、隐私和速度。",
+    "globalSystems": "全球系统",
+    "safeLogistics": "安全物流保障",
+    "default": "默认位置",
+    "press": "新闻与媒体",
+    "enterprise": "企业级追踪",
+    "api": "API 集成接口",
+    "analytics": "物流数据分析",
+    "corp": "物流公司"
+  },
+  "shipment": {
+    "status": "当前状态",
+    "destination": "目的地",
+    "details": "货物详情",
+    "trackingId": "追踪单号",
+    "receiver": "收件人",
+    "from": "发件人",
+    "latestUpdates": "最新动态",
+    "liveLocation": "实时位置",
+    "deliveredTitle": "包裹已送达",
+    "deliveredDesc": "该货物已成功送达。根据我们的隐私政策，个人信息已进行匿名化处理。",
+    "hidden": "已隐藏（已送达）",
+    "address": "地址",
+    "finalized": "已完成",
+    "live": "实时",
+    "currentLocation": "当前位置：",
+    "origin": "始发地",
+    "originFacility": "始发地设施",
+    "estimatedDelivery": "预计送达",
+    "weight": "重量",
+    "outForDeliveryTitle": "🚚 派送中",
+    "outForDeliveryDesc": "我们的本地代理正在前往您的目的地。",
+    "expectedDelivery": "预计送达：",
+    "soon": "即将",
+    "canceledTitle": "货件已取消",
+    "canceledDesc": "此货件已被管理员取消。请联系支持人员获取更多详细信息。",
+    "destinationLabel": "(目的地)",
+    "originLabel": "(原产地)",
+    "inTransitLabel": "运输中",
+    "airFreight": "航空货运"
+  },
+  "errors": {
+    "unauthorized": "未授权",
+    "databaseError": "数据库错误",
+    "notFound": "未找到",
+    "cannotCancelDelivered": "无法取消已送达的货运",
+    "shipmentNotFound": "未找到货运"
+  },
+  "map": {
+    "orbitalTracking": "轨道追踪阶段",
+    "statusLabel": "状态",
+    "uplinkActive": "上行链路激活",
+    "signalTerminated": "信号终止",
+    "etaWindow": "预计到达窗口",
+    "liveTelemetry": "实时遥测",
+    "signalOrigin": "信号源",
+    "signalTarget": "信号目标",
+    "deepSpace": "深空",
+    "undisclosed": "未公开"
+  },
+  "admin": {
+    "title": "创建新货运",
+    "instructions": "操作指南：",
+    "step1": "复制完整的邮件正文。",
+    "step2": "将其粘贴在下方。",
+    "step3": "点击“生成追踪码”。",
+    "placeholder": "在此粘贴邮件内容...",
+    "generate": "生成追踪单号",
+    "success": "货运已创建！",
+    "successDesc": "请将此追踪单号发送给客户。",
+    "copy": "复制到剪贴板",
+    "copied": "已复制！",
+    "createAnother": "再来一个",
+    "loginTitle": "管理员登录",
+    "loginPlaceholder": "输入管理员密码",
+    "loginButton": "登录",
+    "wrongPassword": "密码错误",
+    "failedCreate": "创建货运失败",
+    "invalidEmail": "邮件格式无效",
+    "dashboard": "仪表盘",
+    "manageShipments": "管理货运",
+    "createNew": "新建货运",
+    "totalShipments": "总货运量",
+    "inTransit": "运输中",
+    "outForDelivery": "派送中",
+    "delivered": "已送达",
+    "pending": "待处理",
+    "canceled": "已取消",
+    "deleteShipment": "删除",
+    "bulkDelete": "删除所有已送达",
+    "confirmDelete": "您确定要删除此货运吗？",
+    "confirmBulkDelete": "删除所有已送达货运？此操作无法撤销。",
+    "deleted": "货运已删除",
+    "bulkDeleted": "货运已删除",
+    "noShipments": "未找到货运",
+    "search": "搜索追踪单号...",
+    "receiver": "收件人",
+    "sender": "发件人",
+    "createdAt": "创建时间",
+    "actions": "操作",
+    "markDelivered": "标记为已送达",
+    "updateStatus": "更新状态"
+  },
+  "privacy_page": {
+    "introTitle": "引言",
+    "introDesc": "在 Airway Bill，我们极其重视您的数据隐私。本政策概述了我们如何处理追踪数据，以及我们为保护个人身份信息 (PII) 所采取的严密措施。",
+    "dataTitle": "数据保留与清洗",
+    "dataDesc": "我们的系统建立在“隐私至上”的架构之上。一旦货物被标记为**已送达**，我们的自动数据保留政策将触发对所有 PII 的全面清洗，包括：",
+    "item1": "收件人姓名及联系电话",
+    "item2": "完整的送货地址",
+    "item3": "发件人身份详情",
+    "dataFinal": "这些匿名数据仅用于物流审计目的，不与任何涉及的个人有关联。",
+    "securityTitle": "安全标准",
+    "securityDesc": "我们在存储中使用行业标准加密 (AES-256)，在传输中对所有数据使用 TLS 1.3。由于进入我们管理门户的权限受到安全身份验证网关的严格控制。"
+  },
+  "terms_page": {
+    "agreeTitle": "协议",
+    "agreeDesc": "通过使用 Airway Bill 追踪平台，您同意这些专业的服务条款。我们的服务按“现状”提供，旨在提高货运可见性和透明度。",
+    "useTitle": "可接受的使用",
+    "useDesc": "禁止用户尝试对追踪 ID 生成逻辑进行逆向工程或绕过管理安全门。未经授权访问分发数据违反了国际物流标准。",
+    "limitTitle": "责任限制",
+    "limitDesc": "虽然我们力求 100% 的遥测准确性，但 Airway Bill 对由上游快递中断或网络延迟引起的状态更新延迟不承担责任。"
+  },
+  "about": {
+    "title": "高端物流追踪系统",
+    "subtitle": "为您的供应链提供安全、实时的可视性。",
+    "description": "Airway Bill 为高价值货物提供企业级追踪解决方案。我们的平台确保精确监控每一个包裹，为收发双方提供无与伦比的透明度和隐私保护。",
+    "mission": "我们的承诺",
+    "missionDesc": "通过直观的设计和严密的数据安全重新定义追踪体验。",
+    "transparency": "全球透明度",
+    "transparencyDesc": "我们坚信零延迟沟通。每一项状态更新都会在几秒钟内在全球网络中完成验证和同步。",
+    "ctaTitle": "准备好优化您的追踪系统了吗？",
+    "ctaDesc": "加入成千上万家信任 Airway Bill 的企业，实现高风险供应链的可视化。",
+    "ctaButton": "立即开始"
+  },
+  "contact": {
+    "title": "联系我们",
+    "subtitle": "对您的货物有疑问？我们随时为您提供帮助。",
+    "name": "您的姓名",
+    "email": "您的邮箱",
+    "message": "留言内容",
+    "send": "发送留言",
+    "success": "留言已发送！",
+    "successDesc": "我们的调度团队将核实您的咨询，并在24小时内与您联系。",
+    "support": "支持渠道",
+    "emailLabel": "公司邮箱",
+    "phoneLabel": "服务热线",
+    "hqLabel": "全球总部"
+  },
+  "statuses": {
+    "PENDING": "待处理",
+    "IN_TRANSIT": "运输中",
+    "OUT_FOR_DELIVERY": "派送中",
+    "DELIVERED": "已送达",
+    "CANCELED": "已取消"
+  },
+  "marketing": {
+    "hero": {
+      "headline": "下一代",
+      "headlineLine2": "全球物流",
+      "subtitle": "实时跨国追踪货件。人工智能解析，WhatsApp 提醒。",
+      "ctaTrack": "追踪货件",
+      "ctaPricing": "查看价格",
+      "ctaCreate": "免费创建账户"
+    },
+    "pricing": {
+      "badge": "定价",
+      "title": "简单透明的定价",
+      "subtitle": "选择完美的计划。没有隐藏费用。",
+      "monthly": "包月",
+      "yearly": "包年",
+      "saveLabel": "节省 15%",
+      "mostPopular": "最受欢迎",
+      "custom": "定制",
+      "perMonth": "/月",
+      "billed": "计费",
+      "perYear": "/年"
+    },
+    "howItWorks": {
+      "badge": "运作方式",
+      "title": "全球控制的三个步骤",
+      "subtitle": "从创建到交付 - 无缝流程。",
+      "step1": {
+        "title": "创建",
+        "description": "通过管理门户、WhatsApp 或 CSV 注册货件。"
+      },
+      "step2": {
+        "title": "追踪",
+        "description": "客户获得带有实时地图的独特追踪链接。"
+      },
+      "step3": {
+        "title": "交付",
+        "description": "每个里程碑都有自动 WhatsApp 和电子邮件通知。"
+      }
+    },
+    "trust": {
+      "shipments": "追踪货件数",
+      "countries": "覆盖国家",
+      "uptime": "正常运行时间",
+      "live": "实时监控",
+      "twentyFourSeven": "24/7"
+    },
+    "features": {
+      "badge": "功能",
+      "title": "为规模而建",
+      "subtitle": "现代物流的企业级工具。",
+      "f1": {
+        "title": "实时追踪",
+        "desc": "实时地图视图。"
+      },
+      "f2": {
+        "title": "自动提醒",
+        "desc": "自动发送 WhatsApp 和电子邮件。"
+      },
+      "f3": {
+        "title": "AI 解析",
+        "desc": "粘贴电子邮件即刻创建货件。"
+      },
+      "f4": {
+        "title": "分析",
+        "desc": "全面的性能仪表板。"
+      }
+    },
+    "getStarted": {
+      "badge": "开始使用",
+      "title": "准备好升级<br />您的物流了吗？",
+      "subtitle": "加入使用本平台的全球物流领导者行列。",
+      "ctaTrack": "追踪货件",
+      "ctaAccount": "免费创建账户",
+      "trustLine": "无需信用卡 · 7 天免费试用"
+    }
+  }
+}

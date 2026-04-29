@@ -8,8 +8,6 @@ import (
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/shipment"
-	"webtracker-bot/internal/usecase"
-	"webtracker-bot/internal/utils"
 	"webtracker-bot/internal/whatsapp"
 )
 
@@ -19,7 +17,7 @@ type Job struct {
 	TrackingID  string
 	Language    i18n.Language
 	CompanyName string
-	ShipmentUC  *usecase.ShipmentUsecase
+	ShipmentUC  *shipment.Usecase
 	Sender      *whatsapp.Sender
 	RenderMode  string // "legacy" or "default"
 }
@@ -41,8 +39,9 @@ func InitProcessor() {
 		} else if workerCount < 2 {
 			workerCount = 2
 		}
+		logger.Info().Int("workers", workerCount).Msg("Receipt Processor pool started (Optimized mode)")
 		for i := 0; i < workerCount; i++ {
-			go startWorker()
+			go startWorker(i + 1)
 		}
 	})
 }
@@ -71,8 +70,8 @@ func Enqueue(job Job) {
 	}
 }
 
-func startWorker() {
-	logger.Info().Msg("Singleton Receipt Processor started (Optimized mode)")
+func startWorker(id int) {
+	logger.Debug().Int("worker_id", id).Msg("Receipt worker ready")
 	for rJob := range queue {
 		processReceipt(rJob)
 	}
@@ -132,7 +131,7 @@ func processReceipt(rj Job) {
 	}
 
 	// 3. Render (Memory Intensive Step - Only one at a time)
-	receiptImg, err := utils.RenderReceipt(*s, rj.CompanyName, rj.Language)
+	receiptImg, err := RenderReceipt(*s, rj.CompanyName, rj.Language)
 	if err != nil {
 		logger.Error().Err(err).Str("tracking_id", rj.TrackingID).Msg("Failed to render receipt")
 		return
@@ -146,3 +145,5 @@ func processReceipt(rj Job) {
 
 	logger.Info().Str("id", rj.TrackingID).Msg("Receipt processing complete")
 }
+
+

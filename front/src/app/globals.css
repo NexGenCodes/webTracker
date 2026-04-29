@@ -28,53 +28,47 @@
   --radius-lg: 16px;
 
   /* High-Performance Light Theme (Corporate Logistics) */
-  --color-bg: #f8fafc;
+  --color-bg: #fafafa;
   --color-surface: #ffffff;
-  --color-surface-muted: #f1f5f9;
+  --color-surface-muted: #f4f4f5;
 
-  --color-primary: #0f172a;
-  /* Slate 900 */
-  --color-accent: #2563eb;
-  /* Blue 600 */
-  --color-accent-deep: #1e40af;
-  /* Blue 800 */
-  --color-accent-soft: rgba(37, 99, 235, 0.08);
+  --color-primary: #18181b;
+  --color-accent: #4f46e5;
+  --color-accent-deep: #3730a3;
+  --color-accent-soft: rgba(79, 70, 229, 0.06);
 
-  --color-text-main: #0f172a;
-  --color-text-muted: #475569;
-  /* Slate 600 - WCAG compliant */
+  --color-text-main: #18181b;
+  --color-text-muted: #52525b;
 
   --color-border: rgba(0, 0, 0, 0.08);
   --glass-bg: rgba(255, 255, 255, 0.85);
   --glass-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 10px 20px -5px rgba(0, 0, 0, 0.04);
 
-  --color-success: #059669;
-  --color-warning: #d97706;
-  --color-error: #dc2626;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
 }
 
 .dark {
-  --color-bg: #020617;
-  /* Darker Slate 950 */
-  --color-surface: #0f172a;
-  /* Slate 900 */
-  --color-surface-muted: #1e293b;
-  /* Slate 800 */
+  --color-bg: #0a0a0a;
+  --color-surface: #171717;
+  --color-surface-muted: #262626;
 
-  --color-primary: #f8fafc;
-  --color-accent: #38bdf8;
-  /* Sky 400 */
-  --color-accent-deep: #0ea5e9;
-  /* Sky 500 */
-  --color-accent-soft: rgba(56, 189, 248, 0.12);
+  --color-primary: #fafafa;
+  --color-accent: #6366f1;
+  --color-accent-deep: #4f46e5;
+  --color-accent-soft: rgba(99, 102, 241, 0.12);
 
-  --color-text-main: #f8fafc;
-  --color-text-muted: #94a3b8;
-  /* Slate 400 */
+  --color-text-main: #f4f4f5;
+  --color-text-muted: #a1a1aa;
 
-  --color-border: rgba(255, 255, 255, 0.06);
-  --glass-bg: rgba(15, 23, 42, 0.8);
-  --glass-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.5);
+  --color-border: rgba(255, 255, 255, 0.08);
+  --glass-bg: rgba(10, 10, 10, 0.6);
+  --glass-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.8);
+
+  --color-success: #34d399;
+  --color-warning: #fbbf24;
+  --color-error: #f87171;
 }
 
 body {
@@ -82,7 +76,7 @@ body {
   background-image:
     radial-gradient(at 100% 0%, var(--color-accent-soft) 0px, transparent 50%),
     radial-gradient(at 0% 100%, var(--color-accent-soft) 0px, transparent 50%),
-    url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M10 10h2v2h-2zM40 40h2v2h-2zM70 70h2v2h-2zM10 70h2v2h-2zM70 10h2v2h-2z' fill='%232563eb' fill-opacity='0.03'/%3E%3C/svg%3E");
+    url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M10 10h2v2h-2zM40 40h2v2h-2zM70 70h2v2h-2zM10 70h2v2h-2zM70 10h2v2h-2z' fill='%234f46e5' fill-opacity='0.03'/%3E%3C/svg%3E");
   background-attachment: fixed;
   color: var(--color-text-main);
   font-family: 'Inter', var(--font-geist-sans), sans-serif;
@@ -238,7 +232,7 @@ body {
 }
 
 .bg-topography {
-  background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M10 10q15 0 15 15t15 15 15-15 15-15' stroke='%232563eb' stroke-width='0.5' fill='none' opacity='0.05'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M10 10q15 0 15 15t15 15 15-15 15-15' stroke='%234f46e5' stroke-width='0.5' fill='none' opacity='0.05'/%3E%3C/svg%3E");
   background-size: 200px 200px;
 }
 
@@ -269,7 +263,7 @@ body {
     radial-gradient(1.5px 1.5px at 280px 100px, var(--color-accent-deep), transparent),
     radial-gradient(1px 1px at 40px 380px, var(--color-accent), transparent),
     radial-gradient(2px 2px at 180px 200px, var(--color-accent-soft), transparent),
-    url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M21 8l-9-4-9 4v8l9 4 9-4V8z' stroke='%232563eb' stroke-width='0.1' opacity='0.03'/%3E%3Cpath d='M12 12v10M3 8l9 4 9-4' stroke='%232563eb' stroke-width='0.1' opacity='0.03'/%3E%3C/svg%3E");
+    url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M21 8l-9-4-9 4v8l9 4 9-4V8z' stroke='%234f46e5' stroke-width='0.1' opacity='0.03'/%3E%3Cpath d='M12 12v10M3 8l9 4 9-4' stroke='%234f46e5' stroke-width='0.1' opacity='0.03'/%3E%3C/svg%3E");
   background-size: 400px 400px, 120px 120px;
   animation: drift 15s linear infinite;
   will-change: transform;

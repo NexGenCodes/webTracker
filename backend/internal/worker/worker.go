@@ -4,11 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
 
-	"webtracker-bot/internal/adapter/db"
+	"webtracker-bot/internal/database/db"
 	"webtracker-bot/internal/commands"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/i18n"
@@ -17,15 +18,14 @@ import (
 	"webtracker-bot/internal/parser"
 	"webtracker-bot/internal/receipt"
 	"webtracker-bot/internal/shipment"
-	"webtracker-bot/internal/usecase"
-	"webtracker-bot/internal/whatsapp"
+		"webtracker-bot/internal/whatsapp"
 )
 
 type Worker struct {
 	ID              int
 	Bots            whatsapp.BotProvider
-	ShipmentUC      *usecase.ShipmentUsecase
-	ConfigUC        *usecase.ConfigUsecase
+	ShipmentUC      *shipment.Usecase
+	ConfigUC        *config.Usecase
 	Jobs            <-chan models.Job
 	WG              *sync.WaitGroup
 	Cfg             *config.Config
@@ -41,7 +41,7 @@ func (w *Worker) Start() {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
-					logger.Error().Msgf("Worker %d panicked: %v", w.ID, r)
+					logger.Error().Msgf("Worker %d panicked: %v\n%s", w.ID, r, string(debug.Stack()))
 				}
 			}()
 			w.process(job)
@@ -169,7 +169,7 @@ func (w *Worker) process(job models.Job) {
 		Destination:      m.ReceiverCountry,
 
 		CargoType: m.CargoType,
-		Weight:    15.0, // STRICT: Always 15kg as per policy
+		Weight:    m.Weight,
 		Cost:      0.0,
 	}
 
@@ -181,6 +181,9 @@ func (w *Worker) process(job models.Job) {
 	}
 	if newShipment.Destination == "" {
 		newShipment.Destination = "Local Delivery"
+	}
+	if newShipment.Weight <= 0 {
+		newShipment.Weight = 15.0 // Fallback if parser didn't extract weight
 	}
 
 	// 5b. Deduplication Check (Strict Phone Match)
@@ -312,3 +315,5 @@ func (w *Worker) isPotentialManifest(text string) (bool, bool) {
 
 	return false, count >= 3
 }
+
+

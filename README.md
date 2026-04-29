@@ -44,7 +44,7 @@ graph TB
         M[whatsmeow Client]
     end
 
-    subgraph "Shared Data Layer (Neon/Supabase)"
+    subgraph "Shared Data Layer (Supabase)"
         K[(PostgreSQL)]
     end
 

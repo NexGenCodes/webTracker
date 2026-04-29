@@ -1,5 +1,7 @@
 import { CreateShipmentDto, ShipmentData, ServiceResult, ShipmentStatus, DashboardStats, PaginatedResult, Pagination } from '@/types/shipment';
 import { logger } from '@/lib/logger';
+import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 function getNextJsBaseUrl() {
     if (typeof window !== 'undefined') return '';
@@ -203,25 +205,18 @@ export class ShipmentService {
         if (!trackingNumber) return null;
 
         try {
-            // CRITICAL: Fetch directly from Go backend during SSR to bypass Vercel internal fetch 401 error.
-            const baseUrl = typeof window === 'undefined' ? (process.env.BACKEND_URL || 'http://localhost:5000') : '';
-            const url = typeof window === 'undefined' ? `${baseUrl}/api/track/${trackingNumber}` : `/api/track/${trackingNumber}`;
+            const supabase = createAdminClient();
 
-            const apiKey = process.env.API_SECRET_KEY;
-            const headers: Record<string, string> = {};
-            if (apiKey) headers['X-API-Key'] = apiKey;
+            const { data, error } = await supabase
+                .from('shipment')
+                .select('*')
+                .eq('tracking_id', trackingNumber)
+                .single();
 
-            const response = await fetchWithTimeout(url, {
-                headers,
-                next: { revalidate: 0 }
-            });
-
-            if (!response.ok) {
-                if (response.status === 404) return null;
-                throw new Error(`API error: ${response.statusText} (${response.status})`);
+            if (error || !data) {
+                if (error?.code === 'PGRST116') return null;
+                throw new Error(`Supabase error: ${error?.message}`);
             }
-
-            const data = flattenSqlc(await response.json()) as Record<string, unknown>;
 
             const now = new Date();
             const timelineStr = (val: unknown) => typeof val === 'string' ? val : '';
@@ -353,37 +348,36 @@ export class ShipmentService {
         status?: string;
     } = {}): Promise<ServiceResult<PaginatedResult<ShipmentData>>> {
         try {
-            const query = new URLSearchParams();
-            if (params.page) query.set('page', params.page.toString());
-            if (params.limit) query.set('limit', params.limit.toString());
-            if (params.search) query.set('search', params.search);
-            if (params.status) query.set('status', params.status);
+            const supabase = createAdminClient();
+            const page = params.page || 1;
+            const limit = params.limit || 20;
+            const offset = (page - 1) * limit;
 
-            const res = await fetchWithTimeout(`/api/admin/shipments?${query.toString()}`, {
-                next: { revalidate: 0 }
-            });
+            // Build the query
+            let query = supabase
+                .from('shipment')
+                .select('*', { count: 'exact' });
 
-            if (!res.ok) throw new Error(`Failed to fetch shipments: ${res.status}`);
-
-            interface ApiShipment {
-                tracking_id: string;
-                status: string;
-                sender_name: string;
-                recipient_name: string;
-                recipient_phone?: string;
-                recipient_email?: string;
-                recipient_address?: string;
-                destination: string;
-                weight: number;
-                origin: string;
-                created_at: string;
-                scheduled_transit_time?: string;
-                outfordelivery_time?: string;
-                expected_delivery_time?: string;
+            // Apply status filter
+            if (params.status && params.status !== 'all') {
+                query = query.eq('status', params.status.toUpperCase());
             }
 
-            const json = flattenSqlc(await res.json()) as { data: ApiShipment[], pagination: Pagination };
-            const shipments = json.data.map((s: ApiShipment) => ({
+            // Apply search filter (ilike on tracking_id, sender_name, recipient_name)
+            if (params.search) {
+                query = query.or(
+                    `tracking_id.ilike.%${params.search}%,sender_name.ilike.%${params.search}%,recipient_name.ilike.%${params.search}%`
+                );
+            }
+
+            // Apply pagination and ordering
+            const { data: apiShipments, count, error } = await query
+                .order('created_at', { ascending: false })
+                .range(offset, offset + limit - 1);
+
+            if (error) throw new Error(`Supabase fetch error: ${error.message}`);
+
+            const shipments = (apiShipments || []).map(s => ({
                 id: s.tracking_id,
                 trackingNumber: s.tracking_id,
                 status: normalizeStatus(s.status) as ShipmentStatus,
@@ -399,16 +393,24 @@ export class ShipmentService {
                 scheduledTransitTime: s.scheduled_transit_time,
                 outfordeliveryTime: s.outfordelivery_time,
                 expectedDeliveryTime: s.expected_delivery_time,
-                isArchived: s.status === 'delivered',
+                isArchived: typeof s.status === 'string' && s.status.toLowerCase() === 'delivered',
                 events: [],
                 timeline: [],
             }));
+
+            const totalCount = count || 0;
+            const pagination: Pagination = {
+                page,
+                limit,
+                total: totalCount,
+                totalPages: Math.ceil(totalCount / limit),
+            };
 
             return {
                 success: true,
                 data: {
                     data: shipments,
-                    pagination: json.pagination
+                    pagination,
                 }
             };
         } catch (error) {
@@ -422,35 +424,18 @@ export class ShipmentService {
      */
     static async getDashboardData(): Promise<ServiceResult<{ shipments: ShipmentData[], stats: DashboardStats }>> {
         try {
-            // Fetch Recent List (Fixed to use new API response structure)
-            const listRes = await fetchWithTimeout(`/api/admin/shipments?limit=10`, {
-                next: { revalidate: 0 }
-            });
+            const supabase = createAdminClient();
 
-            if (!listRes.ok) {
-                throw new Error(`Failed to fetch shipments: ${listRes.status}`);
-            }
+            // Fetch Recent List
+            const { data: apiShipments, error: listError } = await supabase
+                .from('shipment')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(10);
 
-            interface ApiShipment {
-                tracking_id: string;
-                status: string;
-                sender_name: string;
-                recipient_name: string;
-                recipient_phone?: string;
-                recipient_email?: string;
-                recipient_address?: string;
-                destination: string;
-                weight: number;
-                origin: string;
-                created_at: string;
-                scheduled_transit_time?: string;
-                outfordelivery_time?: string;
-                expected_delivery_time?: string;
-            }
+            if (listError) throw new Error(`Supabase fetch error: ${listError.message}`);
 
-            const json = flattenSqlc(await listRes.json()) as { data: ApiShipment[] };
-            const apiShipments = json.data;
-            const shipments = apiShipments.map((s: ApiShipment) => ({
+            const shipments = (apiShipments || []).map(s => ({
                 id: s.tracking_id,
                 trackingNumber: s.tracking_id,
                 status: normalizeStatus(s.status) as ShipmentStatus,
@@ -466,28 +451,28 @@ export class ShipmentService {
                 scheduledTransitTime: s.scheduled_transit_time,
                 outfordeliveryTime: s.outfordelivery_time,
                 expectedDeliveryTime: s.expected_delivery_time,
-                isArchived: s.status === 'delivered',
+                isArchived: typeof s.status === 'string' && s.status.toLowerCase() === 'delivered',
             }));
 
-            // Fetch Stats
-            const statsRes = await fetchWithTimeout(`/api/admin/stats`, {
-                next: { revalidate: 0 }
-            });
-
-            if (!statsRes.ok) {
-                throw new Error(`Failed to fetch stats: ${statsRes.status}`);
-            }
-
-            const apiStats = flattenSqlc(await statsRes.json()) as Record<string, string>;
-
-            const stats = {
-                total: parseInt(apiStats.total || '0'),
-                inTransit: parseInt(apiStats.intransit || '0'),
-                outForDelivery: parseInt(apiStats.outfordelivery || '0'),
-                delivered: parseInt(apiStats.delivered || '0'),
-                pending: parseInt(apiStats.pending || '0'),
-                canceled: parseInt(apiStats.canceled || '0'),
+            // Fetch Stats using concurrent count queries
+            const countQuery = async (statusFilter?: string) => {
+                let q = supabase.from('shipment').select('*', { count: 'exact', head: true });
+                if (statusFilter) q = q.eq('status', statusFilter);
+                const { count, error } = await q;
+                if (error) throw new Error(`Supabase count error: ${error.message}`);
+                return count || 0;
             };
+
+            const [total, inTransit, outForDelivery, delivered, pending, canceled] = await Promise.all([
+                countQuery(),
+                countQuery('IN_TRANSIT'),
+                countQuery('OUT_FOR_DELIVERY'),
+                countQuery('DELIVERED'),
+                countQuery('PENDING'),
+                countQuery('CANCELED'),
+            ]);
+
+            const stats = { total, inTransit, outForDelivery, delivered, pending, canceled };
 
             return { success: true, data: { shipments: shipments as ShipmentData[], stats } };
         } catch (error) {
@@ -601,17 +586,38 @@ export class ShipmentService {
      */
     static async getTelemetry(): Promise<ServiceResult<{ stats: unknown[]; recent: unknown[] }>> {
         try {
-            const response = await fetchWithTimeout(`/api/admin/telemetry`, {
-                next: { revalidate: 0 }
-            });
+            const supabase = createAdminClient();
 
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ error: response.statusText }));
-                throw new Error(errorData.error || `Server error: ${response.status}`);
-            }
+            // Fetch recent telemetry events
+            const { data: recent, error: recentError } = await supabase
+                .from('telemetry')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(50);
 
-            const data = await response.json();
-            return { success: true, data };
+            if (recentError) throw new Error(`Supabase telemetry error: ${recentError.message}`);
+
+            // Aggregate stats by event_type
+            const { data: stats, error: statsError } = await supabase
+                .from('telemetry')
+                .select('event_type')
+                .order('created_at', { ascending: false });
+
+            if (statsError) throw new Error(`Supabase stats error: ${statsError.message}`);
+
+            // Group by event_type for counts
+            const grouped = (stats || []).reduce<Record<string, number>>((acc, row) => {
+                const key = typeof row.event_type === 'string' ? row.event_type : 'unknown';
+                acc[key] = (acc[key] || 0) + 1;
+                return acc;
+            }, {});
+
+            const statsSummary = Object.entries(grouped).map(([event_type, count]) => ({
+                event_type,
+                count,
+            }));
+
+            return { success: true, data: { stats: statsSummary, recent: recent || [] } };
         } catch (error) {
             const apiError = handleApiError(error, 'Fetch telemetry');
             return { success: false, error: apiError.userMessage };

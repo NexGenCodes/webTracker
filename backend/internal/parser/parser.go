@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -49,24 +50,24 @@ type uncompiledLabelMap struct {
 
 func GetLabelMappings() []uncompiledLabelMap {
 	return []uncompiledLabelMap{
-		{"ReceiverName", `(?i)\b(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|consignee|destinatario|destinatário|dirección|empfänger|destinataire|namen?)[s']*\b[\s\-:]+name\b[\s\-:]*`, 2},
-		{"ReceiverName", `(?i)\b(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|consignee|destinatario|destinatário|empfänger|destinataire)\b[\s\-:]*`, 2},
-		{"ReceiverName", `(?i)\bname\b[\s\-:]*`, 1},
-		{"ReceiverPhone", `(?i)\b(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee|destinatario|destinatário|empfänger)[s']*\b[\s\-:]+\b(?:phone|mobile|tel|num|contact|telephone|mobil|number|ph|cell|whatsapp|telefone|teléfono|telephon|handy|nr)\b[\s\-:]*`, 2},
-		{"ReceiverPhone", `(?i)\b(?:phone|mobile|tel|num|contact|telephone|mobil|number|ph|cell|whatsapp|telefone|teléfono|telephon|handy|nr)\b[\s\-:]*`, 1},
-		{"ReceiverAddress", `(?i)\b(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee|destinatario|destinatário|empfänger)[s']*\b[\s\-:]+\b(?:address|addr|street|location|addres|addrs|dir|direction|dirección|morada|adresse|straße|strasse)\b[\s\-:]*`, 2},
+		{"ReceiverName", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|rcvr|consignee|destinatario|destinatário|dirección|empfänger|destinataire|namen?)[s']*\b(?:\s+is)?[\s\-:]+name\b[\s\-:]*`, 2},
+		{"ReceiverName", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|rcvr|consignee|destinatario|destinatário|empfänger|destinataire|to)\b(?:\s+is)?[\s\-:]*`, 2},
+		{"ReceiverName", `(?i)\bname\b(?:\s+is)?[\s\-:]*`, 1},
+		{"ReceiverPhone", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee|destinatario|destinatário|empfänger)[s']*\b[\s\-:]+\b(?:phone|mobile|teléfono|telephon|telefone|tel|num|contact|telephone|mobil|number|ph|cell|whatsapp|handy|nr)\b[\s\-:]*`, 2},
+		{"ReceiverPhone", `(?i)\b(?:phone|mobile|teléfono|telephon|telefone|tel|num|contact|telephone|mobil|number|ph|cell|whatsapp|handy|nr)\b[\s\-:]*`, 1},
+		{"ReceiverAddress", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee|destinatario|destinatário|empfänger)[s']*\b[\s\-:]+\b(?:address|addr|street|location|addres|addrs|dir|direction|dirección|morada|adresse|straße|strasse)\b[\s\-:]*`, 2},
 		{"ReceiverAddress", `(?i)\b(?:address|addr|street|location|addres|addrs|dir|direction|dirección|morada|adresse|straße|strasse)\b[\s\-:]*`, 1},
-		{"ReceiverCountry", `(?i)\b(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee|destinatario|destinatário|empfänger)[s']*\b[\s\-:]+\b(?:country|nation|state|city|pais|land|dest|destination|país|stadt|land|ort)\b[\s\-:]*`, 2},
-		{"ReceiverCountry", `(?i)\b(?:country|nation|state|city|pais|land|dest|destination|to|país|stadt|land|ort)\b[\s\-:]*`, 2},
+		{"ReceiverCountry", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee|destinatario|destinatário|empfänger)[s']*\b[\s\-:]+\b(?:country|nation|state|city|pais|land|dest|destination|país|stadt|land|ort)\b[\s\-:]*`, 2},
+		{"ReceiverCountry", `(?i)\b(?:country|nation|state|city|pais|land|dest|destination|país|stadt|land|ort)\b[\s\-:]*`, 2},
 		{"ReceiverID", `(?i)\b(?:id|passport|passport\s*num|id\s*num|identity|identification|tin|nin|ssn|dni|passaporte|ausweis)\b[\s\-:]*`, 1},
-		{"ReceiverID", `(?i)\b(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee)[s']*\b[\s\-:]+\b(?:id|passport|passport\s*num|id\s*num|identity|identification|tin|nin|ssn)\b[\s\-:]*`, 2},
-		{"ReceiverEmail", `(?i)\b(?:receiver|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee)[s']*\b[\s\-:]+\b(?:email|mail|e-mail)\b[\s\-:]*`, 2},
+		{"ReceiverID", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee)[s']*\b[\s\-:]+\b(?:id|passport|passport\s*num|id\s*num|identity|identification|tin|nin|ssn)\b[\s\-:]*`, 2},
+		{"ReceiverEmail", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee)[s']*\b[\s\-:]+\b(?:email|mail|e-mail)\b[\s\-:]*`, 2},
 		{"ReceiverEmail", `(?i)\b(?:email|mail|e-mail)\b[\s\-:]*`, 1},
-		{"SenderName", `(?i)\b(?:sender|sendr|origin|from|shippr|shipper|sent by|remetente|remitente|absender)[s']*\b[\s\-:]+name\b[\s\-:]*`, 2},
-		{"SenderName", `(?i)\b(?:sender|sendr|origin|from|shippr|shipper|sent by|remetente|remitente|absender)\b[\s\-:]*`, 2},
-		{"SenderCountry", `(?i)\b(?:sender|sendr|origin|from|shippr|shipper|sent by)[s']*\b[\s\-:]+\b(?:country|nation|state|city|pais|land|dest|destination)\b[\s\-:]*`, 2},
-		{"CargoType", `(?i)\b(?:item|content|cargo|description|type|package|commodity|conteúdo|contenido|inhalt|ware|consignment)\b[\s\-:]*`, 1},
-		{"Weight", `(?i)\b(?:weight|wgt|mass|gross\s*weight|peso|gewicht|poids)\b[\s\-:]*`, 1},
+		{"SenderName", `(?i)\b(?:sender|sendr|from|shippr|shipper|sent by|remetente|remitente|absender)[s']*\b[\s\-:]+name\b[\s\-:]*`, 2},
+		{"SenderName", `(?i)\b(?:sender|sendr|from|shippr|shipper|sent by|remetente|remitente|absender)\b[\s\-:]*`, 2},
+		{"SenderCountry", `(?i)\b(?:origin|sender\s*country|sender\s*nation)\b[\s\-:]*`, 2},
+		{"CargoType", `(?i)\b(?:item|content|cargo|description|type|package|commodity|conteúdo|contenido|inhalt|ware|consignment)\b(?:\s+weight)?[\s\-:]*`, 1},
+		{"Weight", `(?i)\b(?:weight|wgt|mass|gross\s*weight|peso|gewicht|poids)\b[\s\-:]*`, 2},
 		{"scheduled_transit_time", `(?i)\b(?:departure|transit\s*time|depart|sent\s*date|start\s*date|transit|partida|salida|abfahrt)\b[\s\-:]*`, 2},
 		{"expected_delivery_time", `(?i)\b(?:arrival|delivery\s*time|arrive|expect|delivery\s*date|delivered\s*on|delivery|chegada|entrega|ankunft|zustellung)\b[\s\-:]*`, 2},
 	}
@@ -79,7 +80,7 @@ var (
 )
 
 func init() {
-	footerRe = regexp.MustCompile(`(?im)^[\s\-_*]{3,}$|(?i)\b(?:thank\s*you|regards|best|sincerely|kind\s*regards|thanks|saludos)\b`)
+	footerRe = regexp.MustCompile(`(?im)^[\s_*]{3,}$|(?i)\b(?:thank\s*you|regards|best|sincerely|kind\s*regards|thanks|saludos)\b`)
 	senderLabels = regexp.MustCompile(`(?i)\b(?:sender|sendr|origin|from|shippr|shipper|sent by)\b`)
 
 	// Pre-compile all regex maps to save CPU on the VPS
@@ -126,7 +127,9 @@ func ParseRegex(text string) models.Manifest {
 		cleanWeight = strings.ReplaceAll(cleanWeight, " ", "")
 		re := regexp.MustCompile(`([\d.]+)`)
 		if match := re.FindString(cleanWeight); match != "" {
-			fmt.Sscanf(match, "%f", &m.Weight)
+			if w, err := strconv.ParseFloat(match, 64); err == nil {
+				m.Weight = w
+			}
 		}
 	}
 
@@ -142,11 +145,13 @@ func ParseRegex(text string) models.Manifest {
 		m.ReceiverEmail = extractEntity(text, `([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})`)
 	}
 	if m.Weight == 0 {
-		weightStr := extractEntity(text, `(?i)(?:weight|wgt|mass|gross\s*weight|peso|poids)[^0-9]*?([\d., ]+)\s*(?:kg|kgs|kilos|kg's)?`)
+		weightStr := extractEntity(text, `(?i)(?:weight|wgt|mass|gross\s*weight|peso|poids)[^0-9]*([\d]+[\d., ]*)\s*(?:kg|kgs|kilos|kg's)?`)
 		if weightStr != "" {
 			cleanWeight := strings.ReplaceAll(weightStr, ",", ".")
 			cleanWeight = strings.ReplaceAll(cleanWeight, " ", "")
-			fmt.Sscanf(cleanWeight, "%f", &m.Weight)
+			if w, err := strconv.ParseFloat(cleanWeight, 64); err == nil {
+				m.Weight = w
+			}
 		}
 	}
 
@@ -166,16 +171,32 @@ func ParseRegex(text string) models.Manifest {
 		}
 
 		if m.ReceiverName == "" && len(cleanLines) > 0 {
-			if len(cleanLines[0]) < 40 && !regexp.MustCompile(`(?i)`+stopLabels).MatchString(cleanLines[0]) {
-				m.ReceiverName = cleanLines[0]
+			for _, cl := range cleanLines {
+				if len(cl) < 40 && !regexp.MustCompile(`(?i)`+stopLabels).MatchString(cl) && !regexp.MustCompile(`^(?i)express\s*logistics|shipping|document`).MatchString(cl) && !regexp.MustCompile(`^[\-]+$`).MatchString(cl) {
+					m.ReceiverName = cl
+					break
+				}
 			}
 		}
 		if m.ReceiverPhone == "" {
 			phoneRe := regexp.MustCompile(`(?i)(?:\+?\d[\d\s\-\(\)]{7,}\d)`)
-			for i := 0; i < len(cleanLines) && i < 4; i++ {
-				if match := phoneRe.FindString(cleanLines[i]); match != "" {
+			for _, cl := range cleanLines {
+				if match := phoneRe.FindString(cl); match != "" {
 					m.ReceiverPhone = match
 					break
+				}
+			}
+		}
+		if m.Weight == 0 {
+			weightRe := regexp.MustCompile(`(?i)(?:^|\s)([\d.,]+)\s*(?:kg|kgs|kilos|kg's)\b`)
+			for _, cl := range cleanLines {
+				if match := weightRe.FindStringSubmatch(cl); len(match) > 1 {
+					cleanWeight := strings.ReplaceAll(match[1], ",", ".")
+					cleanWeight = strings.ReplaceAll(cleanWeight, " ", "")
+					if w, err := strconv.ParseFloat(cleanWeight, 64); err == nil {
+						m.Weight = w
+						break
+					}
 				}
 			}
 		}

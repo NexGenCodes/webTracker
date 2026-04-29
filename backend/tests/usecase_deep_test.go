@@ -9,9 +9,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"webtracker-bot/internal/adapter/db"
-	"webtracker-bot/internal/usecase"
-)
+	"webtracker-bot/internal/database/db"
+	"webtracker-bot/internal/shipment"
+	"webtracker-bot/internal/config"
+	)
 
 // MockQuerier is a manually implementation of db.Querier using testify/mock
 type MockQuerier struct {
@@ -165,6 +166,36 @@ func (m *MockQuerier) UpdateShipmentFieldSenderName(ctx context.Context, arg db.
 func (m *MockQuerier) UpdateShipmentFieldSenderPhone(ctx context.Context, arg db.UpdateShipmentFieldSenderPhoneParams) error {
 	return nil
 }
+func (m *MockQuerier) CreateCompany(ctx context.Context, arg db.CreateCompanyParams) (db.Company, error) {
+	return db.Company{}, nil
+}
+func (m *MockQuerier) GetCompanyByEmail(ctx context.Context, adminEmail string) (db.Company, error) {
+	return db.Company{}, nil
+}
+func (m *MockQuerier) GetAllActiveCompanies(ctx context.Context) ([]db.Company, error) {
+	return nil, nil
+}
+func (m *MockQuerier) GetCompanyBySetupToken(ctx context.Context, setupToken sql.NullString) (db.Company, error) {
+	return db.Company{}, nil
+}
+func (m *MockQuerier) RegenerateSetupToken(ctx context.Context, arg db.RegenerateSetupTokenParams) error {
+	return nil
+}
+func (m *MockQuerier) UpdateCompanyAuthStatus(ctx context.Context, arg db.UpdateCompanyAuthStatusParams) error {
+	return nil
+}
+func (m *MockQuerier) UpdateCompanySettings(ctx context.Context, arg db.UpdateCompanySettingsParams) error {
+	return nil
+}
+func (m *MockQuerier) UpdateCompanySubscriptionStatus(ctx context.Context, arg db.UpdateCompanySubscriptionStatusParams) error {
+	return nil
+}
+func (m *MockQuerier) SetCompanyPassword(ctx context.Context, arg db.SetCompanyPasswordParams) error {
+	return nil
+}
+func (m *MockQuerier) UpdateCompanyOnboarding(ctx context.Context, arg db.UpdateCompanyOnboardingParams) error {
+	return nil
+}
 
 // Test Company ID for all tests
 var testCompanyID = uuid.MustParse("00000000-0000-0000-0000-000000000001")
@@ -172,7 +203,7 @@ var testCompanyID = uuid.MustParse("00000000-0000-0000-0000-000000000001")
 func TestShipmentUsecase_Deep(t *testing.T) {
 	ctx := context.Background()
 	repo := new(MockQuerier)
-	uc := usecase.NewShipmentUsecase(repo, nil)
+	uc := shipment.NewUsecase(repo, nil)
 
 	t.Run("Track_Success", func(t *testing.T) {
 		getParams := db.GetShipmentParams{
@@ -227,7 +258,7 @@ func TestShipmentUsecase_Deep(t *testing.T) {
 func TestConfigUsecase_Deep(t *testing.T) {
 	ctx := context.Background()
 	repo := new(MockQuerier)
-	uc := usecase.NewConfigUsecase(repo, nil)
+	uc := config.NewUsecase(repo, nil)
 
 	t.Run("RBAC_AuthorityCheck", func(t *testing.T) {
 		authParams := db.GetGroupAuthorityParams{CompanyID: testCompanyID, Jid: "group1"}
@@ -248,3 +279,5 @@ func TestConfigUsecase_Deep(t *testing.T) {
 		repo.AssertExpectations(t)
 	})
 }
+
+

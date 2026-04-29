@@ -3,8 +3,7 @@
 import { ParseResult } from '@/types/shipment';
 import { logger } from '@/lib/logger';
 import { ShipmentService } from '@/services/shipment.service';
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getServerSession } from '@/lib/auth';
 
 export async function parseShipmentAI(text: string): Promise<ParseResult> {
     if (!text || text.trim().length < 5) {
@@ -12,8 +11,8 @@ export async function parseShipmentAI(text: string): Promise<ParseResult> {
     }
     
     // Protect this route
-    const session = await getServerSession(authOptions);
-    if (!session) return { success: false, error: 'Unauthorized' };
+    const { authenticated } = await getServerSession();
+    if (!authenticated) return { success: false, error: 'Unauthorized' };
 
     try {
         const result = await ShipmentService.parseText(text);

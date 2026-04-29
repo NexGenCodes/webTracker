@@ -4,7 +4,12 @@ import { ShipmentData } from '@/types/shipment';
 export function useShipmentProgress(shipment: ShipmentData | null): number {
   const [now, setNow] = useState<number | null>(null);
 
+  const status = shipment?.status;
+  const needsTimer = status === 'IN_TRANSIT' || status === 'OUT_FOR_DELIVERY';
+
   useEffect(() => {
+    if (!needsTimer) return;
+
     const update = () => setNow(Date.now());
     const initialSync = setTimeout(update, 0);
     const timer = setInterval(update, 10000);
@@ -12,11 +17,9 @@ export function useShipmentProgress(shipment: ShipmentData | null): number {
       clearTimeout(initialSync);
       clearInterval(timer);
     };
-  }, []);
+  }, [needsTimer]);
 
   if (!shipment) return 0;
-  
-  const status = shipment.status;
 
   if (status === 'CANCELED') return 0;
   if (status === 'PENDING') return 0;
