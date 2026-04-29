@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { jwtVerify } from 'jose'
+import { jwtVerify } from 'jose/jwt/verify'
 
 const JWT_SECRET_RAW = process.env.JWT_SECRET;
 if (!JWT_SECRET_RAW) {
