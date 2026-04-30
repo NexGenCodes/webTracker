@@ -62,7 +62,7 @@ export const Header: React.FC<HeaderProps> = ({ showNav = true, className }) => 
     ] : [
         { href: '/', label: 'Home' },
         { href: '/track', label: 'Track' },
-        { href: '/#pricing', label: 'Pricing' },
+        { href: '/pricing', label: 'Pricing' },
         { href: '/about', label: dict.common.about },
     ];
 
