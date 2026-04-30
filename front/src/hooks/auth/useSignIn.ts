@@ -35,6 +35,10 @@ export function useSignIn(setError: (msg: string | null) => void) {
                 setLoading(false);
                 return;
             }
+            const resData = await res.json();
+            if (resData.token) {
+                document.cookie = `jwt=${resData.token}; path=/; max-age=604800; samesite=lax`;
+            }
 
             const redirectUrl = searchParams.get('redirect') || searchParams.get('callbackUrl') || searchParams.get('returnUrl') || '/dashboard';
             router.push(redirectUrl);

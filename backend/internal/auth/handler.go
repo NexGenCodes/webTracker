@@ -113,7 +113,7 @@ func (h *Handler) verifyOTP(c *fiber.Ctx) error {
 	// Clear OTP token and set Session token
 	c.Cookie(&fiber.Cookie{Name: "otp_token", Value: "", Expires: time.Now().Add(-1 * time.Hour), HTTPOnly: true, Path: "/"})
 	h.setJWTCookie(c, sessionToken)
-
+	resp.Token = sessionToken
 	return c.Status(fiber.StatusOK).JSON(resp)
 }
 
@@ -135,6 +135,7 @@ func (h *Handler) setupCompany(c *fiber.Ctx) error {
 	}
 
 	h.setJWTCookie(c, sessionToken)
+	resp.Token = sessionToken
 	return c.Status(fiber.StatusOK).JSON(resp)
 }
 
@@ -155,6 +156,7 @@ func (h *Handler) login(c *fiber.Ctx) error {
 	}
 
 	h.setJWTCookie(c, tokenString)
+	resp.Token = tokenString
 	return c.Status(fiber.StatusOK).JSON(resp)
 }
 
