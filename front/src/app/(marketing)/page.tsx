@@ -1,14 +1,14 @@
 "use client";
 
 import { Suspense, useEffect, useState } from 'react';
-import { ShieldCheck, Globe, Zap, MessageSquare, Cpu, Palette } from 'lucide-react';
+import { MessageSquare, Cpu, Palette } from 'lucide-react';
 import { useI18n } from '@/components/providers/I18nContext';
 import { Footer } from '@/components/layout/Footer';
 import { FeatureCard } from '@/components/landing/FeatureCard';
 import { HeroSection } from '@/components/landing/HeroSection';
 import { TrustMetricsSection } from '@/components/landing/TrustMetricsSection';
 import { HowItWorksSection } from '@/components/landing/HowItWorksSection';
-import { PricingSection } from '@/components/landing/PricingSection';
+
 import { GetStartedSection } from '@/components/landing/GetStartedSection';
 
 function HomeContent() {
@@ -79,8 +79,7 @@ function HomeContent() {
         {/* 4. How It Works — 3-step pipeline */}
         <HowItWorksSection />
 
-        {/* 5. Pricing — Monthly/Yearly toggle */}
-        <PricingSection />
+
 
         {/* 6. CTA — Get Started */}
         <GetStartedSection />
