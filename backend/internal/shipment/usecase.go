@@ -279,6 +279,18 @@ func parseFlexibleTime(value string) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("unsupported date format: %s", value)
 }
 
+// CountCreatedSince counts total shipments created since a given time
+func (u *Usecase) CountCreatedSince(ctx context.Context, companyID uuid.UUID, since time.Time) (int64, error) {
+	count, err := u.repo.CountCreatedSince(ctx, db.CountCreatedSinceParams{
+		CompanyID: toNullUUID(companyID),
+		CreatedAt: toNullTime(since),
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to count created: %w", err)
+	}
+	return count, nil
+}
+
 func (u *Usecase) CountDailyStats(ctx context.Context, companyID uuid.UUID, since time.Time) (created int64, delivered int64, err error) {
 	created, err = u.repo.CountCreatedSince(ctx, db.CountCreatedSinceParams{CompanyID: toNullUUID(companyID), CreatedAt: toNullTime(since)})
 	if err != nil {

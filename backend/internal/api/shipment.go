@@ -26,15 +26,17 @@ import (
 
 type ShipmentHandler struct {
 	shipmentUC *shipment.Usecase
+	configUC   *config.Usecase
 	validate   *validator.Validate
 	cfg        *config.Config
 	bots       whatsapp.BotProvider
 }
 
 // NewShipmentHandler injects the Usecase
-func NewShipmentHandler(shipmentUC *shipment.Usecase, cfg *config.Config, bots whatsapp.BotProvider) *ShipmentHandler {
+func NewShipmentHandler(shipmentUC *shipment.Usecase, configUC *config.Usecase, cfg *config.Config, bots whatsapp.BotProvider) *ShipmentHandler {
 	return &ShipmentHandler{
 		shipmentUC: shipmentUC,
+		configUC:   configUC,
 		validate:   validator.New(),
 		cfg:        cfg,
 		bots:       bots,
@@ -110,6 +112,22 @@ func (h *ShipmentHandler) Create(c *fiber.Ctx) error {
 	companyID := getCompanyID(c)
 	if companyID == uuid.Nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing or invalid company_id"})
+	}
+
+	// Enforce shipment cap
+	company, err := h.configUC.GetCompanyByID(c.Context(), companyID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to look up company"})
+	}
+	remaining, err := CheckShipmentCap(c.Context(), h.cfg, h.shipmentUC, companyID, company.PlanType.String)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to check shipment cap"})
+	}
+	if remaining == 0 {
+		return c.Status(fiber.StatusPaymentRequired).JSON(fiber.Map{
+			"error":   "Monthly shipment limit reached. Please upgrade your plan.",
+			"upgrade": true,
+		})
 	}
 
 	var req CreateRequest
@@ -309,6 +327,22 @@ func (h *ShipmentHandler) BulkCreateCSV(c *fiber.Ctx) error {
 	companyID := getCompanyID(c)
 	if companyID == uuid.Nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing or invalid company_id"})
+	}
+
+	// Enforce shipment cap for bulk uploads too
+	company, err := h.configUC.GetCompanyByID(c.Context(), companyID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to look up company"})
+	}
+	remaining, err := CheckShipmentCap(c.Context(), h.cfg, h.shipmentUC, companyID, company.PlanType.String)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to check shipment cap"})
+	}
+	if remaining == 0 {
+		return c.Status(fiber.StatusPaymentRequired).JSON(fiber.Map{
+			"error":   "Monthly shipment limit reached. Please upgrade your plan.",
+			"upgrade": true,
+		})
 	}
 
 	var req ParseRequest
