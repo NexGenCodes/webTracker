@@ -1,7 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useI18n } from '@/components/providers/I18nContext';
-import { Package, Lock, Mail, Loader2, ChevronLeft } from 'lucide-react';
+import { Package, Lock, Mail, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { AuthMode } from '@/lib/validations/auth';
 import { useSignIn } from '@/hooks/auth/useSignIn';
@@ -102,9 +102,6 @@ interface SignInViewProps {
                 <button type="button" onClick={() => switchMode('register')} className="text-accent hover:text-accent/80 text-xs font-black uppercase tracking-widest transition-colors">
                     {dict.auth?.noAccount || "Don't have an account? Register"}
                 </button>
-                <Link href="/" className="flex items-center gap-2 text-text-muted hover:text-accent transition-colors text-xs font-black uppercase tracking-widest">
-                    <ChevronLeft size={16} /> {dict.common?.backToHome || 'Back to Home'}
-                </Link>
             </div>
         </motion.form>
     );

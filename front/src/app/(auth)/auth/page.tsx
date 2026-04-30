@@ -12,6 +12,9 @@ import { AuthBrandingPanel } from '@/components/auth/AuthBrandingPanel';
 import { AnimatePresence, motion } from 'framer-motion';
 import { LanguageToggle } from '@/components/shared/LanguageToggle';
 import { ThemeToggle } from '@/components/shared/ThemeToggle';
+import Link from 'next/link';
+import { ChevronLeft } from 'lucide-react';
+import { useI18n } from '@/components/providers/I18nContext';
 
 function AuthForms() {
     const searchParams = useSearchParams();
@@ -112,6 +115,8 @@ function AuthForms() {
 }
 
 export default function AuthPage() {
+    const { dict } = useI18n();
+
     return (
         <main className="min-h-screen flex relative overflow-hidden">
             {/* Left Panel — Branding (desktop only) */}
@@ -132,10 +137,15 @@ export default function AuthPage() {
                     <div className="absolute inset-0 bg-topography opacity-[0.15]" />
                 </div>
 
-                {/* Top bar — Theme/Language toggles */}
-                <div className="relative z-10 flex items-center justify-end gap-3 p-6">
-                    <LanguageToggle />
-                    <ThemeToggle />
+                {/* Top bar — Navigation & Toggles */}
+                <div className="relative z-10 flex items-center justify-between gap-3 p-6">
+                    <Link href="/" className="flex items-center gap-2 text-text-muted hover:text-text-main transition-colors text-xs font-black uppercase tracking-widest bg-surface-muted/50 px-3 py-2 rounded-xl backdrop-blur-sm">
+                        <ChevronLeft size={16} /> <span className="hidden sm:inline">{dict.common?.backToHome || 'Back to Home'}</span>
+                    </Link>
+                    <div className="flex items-center gap-3">
+                        <LanguageToggle />
+                        <ThemeToggle />
+                    </div>
                 </div>
 
                 {/* Centered form */}
