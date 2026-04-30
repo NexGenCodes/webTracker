@@ -217,15 +217,27 @@ func (h *CompanyHandler) subscribe(c *fiber.Ctx) error {
 
 	var req struct {
 		CallbackURL string `json:"callback_url"`
+		Plan        string `json:"plan"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
-	// ₦25,000 in kobo = 2500000
-	amount := 2500000
+	var amount int
+	switch req.Plan {
+	case "starter":
+		amount = 1490000 // ₦14,900 in kobo
+	case "enterprise", "scale":
+		amount = 22500000 // ₦225,000 in kobo
+	default:
+		// Default to Pro
+		amount = 5990000 // ₦59,900 in kobo
+		req.Plan = "pro"
+	}
+
 	metadata := map[string]interface{}{
 		"company_id": companyID.String(),
+		"plan":       req.Plan,
 	}
 
 	authURL, err := h.paystack.InitializeTransaction(company.AdminEmail, amount, req.CallbackURL, metadata)
