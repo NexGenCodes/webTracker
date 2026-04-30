@@ -21,7 +21,7 @@ jobs:
       - name: Build Binary
         run: |
           cd backend
-          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o bot ./cmd/bot/main.go
+          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o bot ./cmd/server/main.go
 
       - name: Upload Binary and Service File
         uses: appleboy/scp-action@v0.1.7
