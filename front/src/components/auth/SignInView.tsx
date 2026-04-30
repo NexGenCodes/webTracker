@@ -1,5 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
+import { useI18n } from '@/components/providers/I18nContext';
 import { Package, Lock, Mail, Loader2, ChevronLeft } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { AuthMode } from '@/lib/validations/auth';
@@ -16,6 +17,7 @@ interface SignInViewProps {
 
     export function SignInView({ switchMode, error, setError, successMessage }: SignInViewProps) {
     const { form, onSubmit, loading, handleGoogleSignIn } = useSignIn(setError);
+    const { dict } = useI18n();
 
     return (
         <motion.form
@@ -31,10 +33,10 @@ interface SignInViewProps {
                     <Package className="text-white" size={32} />
                 </div>
                 <h1 className="text-3xl font-black text-text-main tracking-tighter uppercase mb-2">
-                    Welcome Back
+                    {dict.auth?.welcomeBack || 'Welcome Back'}
                 </h1>
                 <p className="text-text-muted font-bold text-sm uppercase tracking-widest opacity-70">
-                    Sign in to your account
+                    {dict.auth?.signInSubtitle || 'Sign in to your account'}
                 </p>
             </div>
             
@@ -54,18 +56,18 @@ interface SignInViewProps {
                     <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
                 </svg>
                 <span className="text-xs font-black uppercase tracking-widest text-text-main">
-                    Continue with Google
+                    {dict.auth?.continueGoogle || 'Continue with Google'}
                 </span>
             </button>
 
             <div className="flex items-center gap-4 w-full">
                 <div className="flex-1 h-px bg-border" />
-                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-text-muted/50">or</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-text-muted/50">{dict.common?.or || 'or'}</span>
                 <div className="flex-1 h-px bg-border" />
             </div>
 
             <AuthInput
-                label="Email Address"
+                label={dict.auth?.emailLabel || 'Email Address'}
                 icon={Mail}
                 type="email"
                 placeholder="you@company.com"
@@ -74,34 +76,34 @@ interface SignInViewProps {
             />
 
             <AuthInput
-                label="Password"
+                label={dict.auth?.passwordLabel || 'Password'}
                 icon={Lock}
                 type="password"
                 placeholder="••••••••"
                 registration={form.register('password')}
                 error={form.formState.errors.password?.message}
-                actionLabel="Forgot?"
+                actionLabel={dict.auth?.forgot || 'Forgot?'}
                 onActionClick={() => switchMode('forgot-password')}
             />
 
             <button type="submit" disabled={loading} className="btn-primary w-full py-4 text-base flex items-center justify-center gap-3 active:scale-95 disabled:opacity-50 transition-all duration-200">
-                {loading ? <Loader2 className="animate-spin" size={20} /> : "Sign In"}
+                {loading ? <Loader2 className="animate-spin" size={20} /> : (dict.auth?.signIn || 'Sign In')}
             </button>
 
             {/* Terms & Privacy */}
             <p className="text-center text-[10px] text-text-muted/60 font-medium leading-relaxed">
-                By signing in, you agree to our{' '}
-                <Link href="/terms" className="text-accent hover:underline font-bold">Terms of Service</Link>
-                {' '}and{' '}
-                <Link href="/privacy" className="text-accent hover:underline font-bold">Privacy Policy</Link>
+                {dict.auth?.termsAgreeSignIn || 'By signing in, you agree to our'}{' '}
+                <Link href="/terms" className="text-accent hover:underline font-bold">{dict.common?.terms || 'Terms of Service'}</Link>
+                {' '}{dict.auth?.and || 'and'}{' '}
+                <Link href="/privacy" className="text-accent hover:underline font-bold">{dict.common?.privacy || 'Privacy Policy'}</Link>
             </p>
 
             <div className="mt-6 pt-6 border-t border-border flex flex-col items-center gap-4">
                 <button type="button" onClick={() => switchMode('register')} className="text-accent hover:text-accent/80 text-xs font-black uppercase tracking-widest transition-colors">
-                    Don&apos;t have an account? Register
+                    {dict.auth?.noAccount || "Don't have an account? Register"}
                 </button>
                 <Link href="/" className="flex items-center gap-2 text-text-muted hover:text-accent transition-colors text-xs font-black uppercase tracking-widest">
-                    <ChevronLeft size={16} /> Back to Home
+                    <ChevronLeft size={16} /> {dict.common?.backToHome || 'Back to Home'}
                 </Link>
             </div>
         </motion.form>

@@ -12,7 +12,7 @@ export type Locale = (typeof SUPPORTED_LOCALES)[number];
 
 /**
  * Lazy loaders – each locale is its own webpack chunk so the full
- * 79 KB dictionary is never serialised as a single cache string.
+ * dictionary is never serialised as a single cache string.
  */
 const loaders: Record<Locale, () => Promise<{ default: Record<string, unknown> }>> = {
   en: () => import('./en.json'),

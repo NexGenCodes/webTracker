@@ -38,7 +38,7 @@ export function HeroSection() {
             <ArrowRight size={18} />
           </Link>
           <Link
-            href="#pricing"
+            href="/pricing"
             className="px-8 py-4 bg-surface-muted text-text-main border border-border rounded-[14px] font-black uppercase tracking-widest text-sm md:text-base transition-all hover:bg-surface active:scale-95 flex items-center justify-center gap-2 w-full sm:w-auto"
           >
             {dict.marketing?.hero?.ctaPricing || 'View Pricing'}
