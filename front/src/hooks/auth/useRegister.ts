@@ -52,6 +52,11 @@ export function useRegister(
                 return;
             }
 
+            const resData = await res.json();
+            if (resData.otp_token) {
+                sessionStorage.setItem('otp_token', resData.otp_token);
+            }
+
             setEmailCache(data.email);
             setOtpTimer(600);
             setRegisterStep('otp');
@@ -71,9 +76,13 @@ export function useRegister(
 
         setLoading(true);
         try {
+            const otpToken = sessionStorage.getItem('otp_token') || '';
             const res = await fetch(`${API_URL}/api/auth/verify-otp`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-OTP-Token': otpToken
+                },
                 credentials: 'include',
                 body: JSON.stringify({ otp: code }),
             });

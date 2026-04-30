@@ -175,7 +175,14 @@ export function RegisterView({
             {/* Step 2: OTP */}
             {registerStep === 'otp' && (
                 <form onSubmit={handleVerifyRegisterOTP} className="space-y-8">
-                    <div className="flex flex-col items-center mb-8 text-center">
+                    <div className="flex flex-col items-center mb-8 text-center relative">
+                        <button 
+                            type="button" 
+                            onClick={() => setRegisterStep('credentials')}
+                            className="absolute left-0 top-0 p-2 text-text-muted hover:text-text-main transition-colors"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                        </button>
                         <div className="bg-accent p-3 rounded-2xl shadow-lg shadow-accent/20 mb-6"><ShieldCheck className="text-white" size={32} /></div>
                         <h1 className="text-3xl font-black text-text-main tracking-tighter uppercase mb-2">{dict.auth?.verifyEmail || 'Verify Email'}</h1>
                         <p className="text-text-muted font-bold text-sm tracking-wide opacity-70">{dict.auth?.otpSent || 'We sent a 6-digit code to'}</p>
