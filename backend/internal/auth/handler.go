@@ -20,8 +20,8 @@ type Handler struct {
 func NewHandler(service *Service) *Handler {
 	isSecure := !strings.HasPrefix(service.cfg.FrontendURL, "http://localhost")
 	sameSite := "Lax"
-	if !isSecure {
-		sameSite = "Lax"
+	if isSecure {
+		sameSite = "None"
 	}
 	return &Handler{
 		service:  service,
@@ -82,7 +82,7 @@ func (h *Handler) registerIntent(c *fiber.Ctx) error {
 		Path:     "/",
 	})
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "OTP sent to email"})
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "OTP sent to email", "otp_token": otpToken})
 }
 
 func (h *Handler) verifyOTP(c *fiber.Ctx) error {
@@ -96,6 +96,10 @@ func (h *Handler) verifyOTP(c *fiber.Ctx) error {
 	}
 
 	otpToken := c.Cookies("otp_token")
+	if otpToken == "" {
+		otpToken = c.Get("X-OTP-Token")
+	}
+	
 	if otpToken == "" {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "OTP session expired or missing"})
 	}
