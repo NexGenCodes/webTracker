@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useMultiTenant } from '@/components/providers/MultiTenantProvider';
-import { useI18n } from '@/components/providers/I18nContext';
 import { CheckCircle2, Zap, ArrowRight, ShieldCheck, HelpCircle } from 'lucide-react';
 import { LayoutHeader } from '@/components/layout/LayoutHeader';
 import { Footer } from '@/components/layout/Footer';
@@ -10,7 +9,6 @@ import { Footer } from '@/components/layout/Footer';
 import { BILLING_PLANS } from '@/constants';
 export default function BillingPage() {
     const { user } = useMultiTenant();
-    const { dict } = useI18n();
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'annually'>('monthly');
 
     return (
@@ -105,7 +103,7 @@ export default function BillingPage() {
                             </div>
 
                             <div className="p-8 flex-1 bg-surface/50 rounded-b-3xl">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-text-muted mb-6">What's included</p>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-text-muted mb-6">What&apos;s included</p>
                                 <ul className="space-y-4">
                                     {plan.features.map((feature, i) => (
                                         <li key={i} className="flex items-start gap-3">

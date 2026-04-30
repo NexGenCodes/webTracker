@@ -5,7 +5,7 @@ import { Package, Globe, Shield, Clock } from 'lucide-react';
 
 import { useI18n } from '@/components/providers/I18nContext';
 
-function getStats(dict: any) {
+function getStats(dict: Record<string, Record<string, Record<string, string>>>) {
   return [
     { icon: Package, value: "100+", label: dict.marketing?.trust?.shipments || "Shipments Tracked", target: 100 },
     { icon: Globe, value: "3+", label: dict.marketing?.trust?.countries || "Countries", target: 3 },
