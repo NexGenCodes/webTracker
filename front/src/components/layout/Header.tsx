@@ -7,7 +7,7 @@ import { LanguageToggle } from '@/components/shared/LanguageToggle';
 import { ThemeToggle } from '@/components/shared/ThemeToggle';
 import { useI18n } from '@/components/providers/I18nContext';
 import { cn } from '@/lib/utils';
-import { Menu, X, User, LogOut } from 'lucide-react';
+import { Menu, X, LogOut } from 'lucide-react';
 import { motion, AnimatePresence, useScroll, useSpring } from 'framer-motion';
 import { useState, useEffect } from 'react';
 import { useMultiTenant } from '@/components/providers/MultiTenantProvider';
@@ -68,7 +68,7 @@ export const Header: React.FC<HeaderProps> = ({ showNav = true, className }) => 
 
     return (
         <header className={cn(
-            "fixed top-0 left-0 right-0 z-[1000] transition-all duration-500",
+            "sticky top-0 z-[1000] transition-all duration-500",
             scrolled || mobileMenuOpen ? "py-4 bg-surface/80 backdrop-blur-xl border-b border-border shadow-md" : "py-6 md:py-8 bg-transparent",
             className
         )}>
@@ -110,7 +110,7 @@ export const Header: React.FC<HeaderProps> = ({ showNav = true, className }) => 
                     <div className="flex items-center gap-4">
                         <LanguageToggle />
                         <ThemeToggle />
-                        
+
                         {user && (
                             <Link href="/auth/signout" className="hidden lg:flex items-center justify-center w-8 h-8 rounded-full bg-surface-muted text-text-muted hover:text-accent hover:bg-accent/10 transition-all border border-border">
                                 <LogOut size={14} />
