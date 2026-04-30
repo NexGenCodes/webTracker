@@ -2,7 +2,7 @@ export const BILLING_PLANS = [
     {
         id: 'starter',
         nameKey: 'starterName',
-        price: '₦10,000',
+        price: '₦14,900',
         intervalKey: 'monthlyInterval',
         descKey: 'starterDesc',
         trialKey: 'sevenDayTrial',
@@ -19,7 +19,7 @@ export const BILLING_PLANS = [
     {
         id: 'pro',
         nameKey: 'proName',
-        price: '₦25,000',
+        price: '₦59,900',
         intervalKey: 'monthlyInterval',
         descKey: 'proDesc',
         trial: null,
@@ -37,7 +37,7 @@ export const BILLING_PLANS = [
     {
         id: 'enterprise',
         nameKey: 'scaleName',
-        price: '₦50,000',
+        price: '₦225,000',
         intervalKey: 'monthlyInterval',
         descKey: 'scaleDesc',
         trial: null,
