@@ -11,12 +11,14 @@ import (
 func JWTAuth(secret string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		path := c.Path()
-		// Allow health checks, public tracking, auth routes, and webhooks without JWT
+		// Allow health checks, public tracking, and specific auth/webhook routes without JWT
 		if path == "/health" ||
 			strings.HasPrefix(path, "/api/track/") ||
-			strings.HasPrefix(path, "/api/auth/") ||
+			path == "/api/auth/register-intent" ||
+			path == "/api/auth/verify-otp" ||
+			path == "/api/auth/login" ||
+			path == "/api/auth/logout" ||
 			strings.HasPrefix(path, "/api/webhooks/") ||
-			strings.HasPrefix(path, "/api/company/setup/") ||
 			strings.HasPrefix(path, "/api/company/onboard") {
 			return c.Next()
 		}
