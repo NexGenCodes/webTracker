@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
         const input = await request.json();
         const res = await fetch(`${getBackendUrl()}/api/admin/shipments`, {
             method: 'POST',
-            headers: backendHeaders(),
+            headers: await backendHeaders(),
             body: JSON.stringify(input)
         });
         

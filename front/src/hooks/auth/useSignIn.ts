@@ -45,9 +45,5 @@ export function useSignIn(setError: (msg: string | null) => void) {
         }
     };
 
-    const handleGoogleSignIn = async () => {
-        setError('Google sign-in is coming soon.');
-    };
-
-    return { form, onSubmit, loading, handleGoogleSignIn };
+    return { form, onSubmit, loading };
 }

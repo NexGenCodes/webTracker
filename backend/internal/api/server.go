@@ -8,9 +8,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/logger"
 
 	"database/sql"
-	"strings"
 	"time"
-	"webtracker-bot/internal/api/middleware"
 	"webtracker-bot/internal/auth"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/database/db"
@@ -45,22 +43,18 @@ func NewServer(cfg *config.Config, shipmentUC *shipment.Usecase, configUC *confi
 	// Global Middlewares
 	app.Use(logger.New())
 
-	// Dynamic CORS Origins based on Config (Production URL + Localhost)
-	allowOrigins := cfg.TrackingBaseURL
-	if !strings.Contains(allowOrigins, "localhost") {
-		allowOrigins += ", http://localhost:3000"
-	}
-
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     allowOrigins,
-		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-API-Key, X-Company-ID",
+		AllowOriginsFunc: func(origin string) bool {
+			return true
+		},
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-Company-ID",
 		AllowMethods:     "GET, POST, PATCH, DELETE, OPTIONS",
 		AllowCredentials: true,
 	}))
 
-	// API Key Authentication (skip if no key is configured, e.g. local dev)
-	if cfg.APISecretKey != "" {
-		app.Use(middleware.APIKeyAuth(cfg.APISecretKey))
+	// Global JWT Authentication (Zero-Trust Token Relay)
+	if cfg.JWTSecret != "" {
+		app.Use(auth.JWTAuth(cfg.JWTSecret))
 	}
 
 	return &Server{

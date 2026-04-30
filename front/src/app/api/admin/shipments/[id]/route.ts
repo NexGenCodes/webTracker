@@ -16,7 +16,7 @@ export async function PATCH(
         const input = await request.json();
         const res = await fetch(`${getBackendUrl()}/api/admin/shipments/${id}`, {
             method: 'PATCH',
-            headers: backendHeaders(),
+            headers: await backendHeaders(),
             body: JSON.stringify(input)
         });
         
@@ -42,7 +42,7 @@ export async function DELETE(
         const endpoint = id === 'cleanup' ? 'cleanup' : id;
         const res = await fetch(`${getBackendUrl()}/api/admin/shipments/${endpoint}`, {
             method: 'DELETE',
-            headers: backendHeaders(),
+            headers: await backendHeaders(),
         });
         
         if (!res.ok) throw new Error('Backend error');

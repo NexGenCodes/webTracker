@@ -8,7 +8,7 @@ import (
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/notif"
 	"webtracker-bot/internal/payment"
-		"webtracker-bot/internal/whatsapp"
+	"webtracker-bot/internal/whatsapp"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -205,14 +205,9 @@ func (h *CompanyHandler) resendSetupLink(c *fiber.Ctx) error {
 
 // subscribe initializes a Paystack transaction for the company
 func (h *CompanyHandler) subscribe(c *fiber.Ctx) error {
-	companyIDStr := c.Get("X-Company-ID")
-	if companyIDStr == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing X-Company-ID"})
-	}
-
-	companyID, err := uuid.Parse(companyIDStr)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid Company ID"})
+	companyID := getCompanyID(c)
+	if companyID == uuid.Nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing or invalid company_id"})
 	}
 
 	company, err := h.configUC.GetCompanyByID(c.Context(), companyID)

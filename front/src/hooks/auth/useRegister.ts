@@ -94,9 +94,5 @@ export function useRegister(
         }
     };
 
-    const handleGoogleSignIn = async () => {
-        setError('Google sign-in is coming soon.');
-    };
-
-    return { form, onRegisterIntent, verifyOtp, loading, otpTimer, setOtpTimer, handleGoogleSignIn };
+    return { form, onRegisterIntent, verifyOtp, loading, otpTimer, setOtpTimer };
 }

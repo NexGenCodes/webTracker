@@ -138,7 +138,7 @@ export default function AuthPage() {
                 </div>
 
                 {/* Top bar — Navigation & Toggles */}
-                <div className="relative z-10 flex items-center justify-between gap-3 p-6">
+                <div className="relative z-50 flex items-center justify-between gap-3 p-6">
                     <Link href="/" className="flex items-center gap-2 text-text-muted hover:text-text-main transition-colors text-xs font-black uppercase tracking-widest bg-surface-muted/50 px-3 py-2 rounded-xl backdrop-blur-sm">
                         <ChevronLeft size={16} /> <span className="hidden sm:inline">{dict.common?.backToHome || 'Back to Home'}</span>
                     </Link>

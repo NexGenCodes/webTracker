@@ -127,8 +127,5 @@ export function isValidTrackingNumber(id: string): boolean {
  * Uses localhost:8080 during local development, and the .env URL in production.
  */
 export function getApiUrl(): string {
-    if (process.env.NODE_ENV === 'development') {
-        return 'http://localhost:8080';
-    }
     return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 }

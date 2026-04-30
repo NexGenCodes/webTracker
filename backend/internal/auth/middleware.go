@@ -10,6 +10,17 @@ import (
 // JWTAuth returns a middleware that validates a JWT token from cookies or Authorization header
 func JWTAuth(secret string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		path := c.Path()
+		// Allow health checks, public tracking, auth routes, and webhooks without JWT
+		if path == "/health" ||
+			strings.HasPrefix(path, "/api/track/") ||
+			strings.HasPrefix(path, "/api/auth/") ||
+			strings.HasPrefix(path, "/api/webhooks/") ||
+			strings.HasPrefix(path, "/api/company/setup/") ||
+			strings.HasPrefix(path, "/api/company/onboard") {
+			return c.Next()
+		}
+
 		// First try cookie
 		tokenString := c.Cookies("jwt")
 

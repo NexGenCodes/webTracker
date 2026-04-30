@@ -31,7 +31,7 @@ export function RegisterView({
     setError,
     successMessage
 }: RegisterViewProps) {
-    const { form, onRegisterIntent, verifyOtp, loading, otpTimer, handleGoogleSignIn } = useRegister(setError, setEmailCache, setRegisterStep, registerStep);
+    const { form, onRegisterIntent, verifyOtp, loading, otpTimer } = useRegister(setError, setEmailCache, setRegisterStep, registerStep);
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const { dict } = useI18n();
 
@@ -95,10 +95,10 @@ export function RegisterView({
                         <p className="text-text-muted font-bold text-sm uppercase tracking-widest opacity-70">{dict.auth?.createAccount || 'Create your account'}</p>
                     </div>
 
-                    {/* Google OAuth */}
+                    {/* Google OAuth - Hidden for now
                     <button
                         type="button"
-                        onClick={handleGoogleSignIn}
+                        onClick={() => {}}
                         disabled={loading}
                         className="w-full flex items-center justify-center gap-3 py-3.5 px-6 rounded-2xl border-2 border-border bg-surface hover:bg-surface-muted transition-all duration-200 active:scale-[0.98] disabled:opacity-50"
                     >
@@ -112,6 +112,7 @@ export function RegisterView({
                             {dict.auth?.continueGoogle || 'Continue with Google'}
                         </span>
                     </button>
+                    */}
 
                     <div className="flex items-center gap-4 w-full">
                         <div className="flex-1 h-px bg-border" />

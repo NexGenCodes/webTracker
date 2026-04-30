@@ -16,7 +16,7 @@ interface SignInViewProps {
 }
 
     export function SignInView({ switchMode, error, setError, successMessage }: SignInViewProps) {
-    const { form, onSubmit, loading, handleGoogleSignIn } = useSignIn(setError);
+    const { form, onSubmit, loading } = useSignIn(setError);
     const { dict } = useI18n();
 
     return (
@@ -42,10 +42,10 @@ interface SignInViewProps {
             
             <AuthBanner error={error} successMessage={successMessage} />
 
-            {/* Google OAuth */}
+            {/* Google OAuth - Hidden for now
             <button
                 type="button"
-                onClick={handleGoogleSignIn}
+                onClick={() => {}}
                 disabled={loading}
                 className="w-full flex items-center justify-center gap-3 py-3.5 px-6 rounded-2xl border-2 border-border bg-surface hover:bg-surface-muted transition-all duration-200 active:scale-[0.98] group disabled:opacity-50"
             >
@@ -59,6 +59,7 @@ interface SignInViewProps {
                     {dict.auth?.continueGoogle || 'Continue with Google'}
                 </span>
             </button>
+            */}
 
             <div className="flex items-center gap-4 w-full">
                 <div className="flex-1 h-px bg-border" />
