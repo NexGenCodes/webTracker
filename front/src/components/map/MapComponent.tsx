@@ -36,7 +36,7 @@ function MapUpdater({ origin, destination }: { origin: [number, number]; destina
   return null;
 }
 
-export default function MapComponent({ origin, destination, progress = 0, shipment, dict }: MapProps) {
+export default function MapComponent({ origin, destination, progress = 0 }: MapProps) {
   // Quadratic Bezier Curve calculation for flight path
   const { curvePoints, currentLocation, planeRotation } = useMemo(() => {
     const getCurvePoint = (t: number, p0: [number, number], p1: [number, number], p2: [number, number]): [number, number] => {

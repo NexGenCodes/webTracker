@@ -45,14 +45,17 @@ export function HeroSection() {
           </Link>
         </div>
 
-        {/* Secondary CTA */}
-        <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-in">
+        {/* Company CTA */}
+        <div className="mt-4 flex flex-col items-center gap-3 animate-fade-in">
           <Link
             href="/auth"
-            className="text-accent hover:text-accent/80 text-xs font-black uppercase tracking-[0.2em] transition-colors flex items-center gap-2"
+            className="px-8 py-4 bg-transparent text-accent border-2 border-accent/30 rounded-[14px] font-black uppercase tracking-widest text-sm md:text-base transition-all hover:bg-accent/10 hover:border-accent/50 active:scale-95 flex items-center justify-center gap-2 w-full sm:w-auto"
           >
-            {dict.marketing?.hero?.ctaCreate || 'Create Free Account'} <ArrowRight size={14} />
+            {dict.marketing?.hero?.ctaCreate || 'Create Free Account'} <ArrowRight size={18} />
           </Link>
+          <p className="text-text-muted/50 text-[10px] font-black uppercase tracking-[0.2em]">
+            {dict.marketing?.hero?.ctaCompanyNote || 'For logistics companies & dispatch riders'}
+          </p>
         </div>
       </div>
     </section>

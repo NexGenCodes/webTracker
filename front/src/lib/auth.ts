@@ -36,7 +36,7 @@ export async function getServerSession(): Promise<{ authenticated: boolean; user
                 auth_status: payload.auth_status as string,
             }
         };
-    } catch (error) {
+    } catch {
         return { authenticated: false };
     }
 }

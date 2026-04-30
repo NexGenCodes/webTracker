@@ -19,7 +19,7 @@ export async function middleware(request: NextRequest) {
     try {
       await jwtVerify(jwt, JWT_SECRET)
       isValid = true
-    } catch (e) {
+    } catch {
       // Invalid JWT
       isValid = false
     }

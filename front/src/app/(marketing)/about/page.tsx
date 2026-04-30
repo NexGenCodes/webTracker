@@ -1,7 +1,7 @@
 "use client";
 
 import { useI18n } from '@/components/providers/I18nContext';
-import { Header } from '@/components/layout/Header';
+
 import { Footer } from '@/components/layout/Footer';
 import { FeatureCard } from '@/components/landing/FeatureCard';
 import { Shield, Activity, ArrowLeft, ArrowRight } from "lucide-react";

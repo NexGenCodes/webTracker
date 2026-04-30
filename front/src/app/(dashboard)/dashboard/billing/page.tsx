@@ -66,8 +66,8 @@ export default function BillingPage() {
 
                 {/* Pricing Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-                    {BILLING_PLANS.map((plan: any, index: number) => {
-                        const plansDict = (dict.marketing?.pricing?.plans as any) || {};
+                    {BILLING_PLANS.map((plan, index) => {
+                        const plansDict = (dict.marketing?.pricing?.plans as Record<string, string>) || {};
                         return (
                         <div
                             key={plan.id}

@@ -1,6 +1,6 @@
 import { CreateShipmentDto, ShipmentData, ServiceResult, ShipmentStatus, DashboardStats, PaginatedResult, Pagination } from '@/types/shipment';
 import { logger } from '@/lib/logger';
-import { createClient } from '@/lib/supabase/server';
+
 import { createAdminClient } from '@/lib/supabase/admin';
 
 function getNextJsBaseUrl() {
@@ -218,7 +218,7 @@ export class ShipmentService {
                 throw new Error(`Supabase error: ${error?.message}`);
             }
 
-            const now = new Date();
+
             const timelineStr = (val: unknown) => typeof val === 'string' ? val : '';
             const statusStr = typeof data.status === 'string' ? data.status.toLowerCase() : '';
             const scheduledTransit = timelineStr(data.scheduled_transit_time);

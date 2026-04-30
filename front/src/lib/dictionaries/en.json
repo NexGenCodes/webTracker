@@ -6,7 +6,8 @@
       "subtitle": "Track shipments in real-time across borders. AI-powered parsing, WhatsApp alerts, and enterprise-grade security.",
       "ctaTrack": "Track a Shipment",
       "ctaPricing": "View Pricing",
-      "ctaCreate": "Create Free Account"
+      "ctaCreate": "Create Free Account",
+      "ctaCompanyNote": "For logistics companies & dispatch riders"
     },
     "pricing": {
       "badge": "Pricing",

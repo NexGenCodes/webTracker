@@ -31,7 +31,7 @@ interface RegisterViewProps {
     setError, 
     successMessage 
 }: RegisterViewProps) {
-    const { form, onRegisterIntent, verifyOtp, loading, otpTimer, setOtpTimer, handleGoogleSignIn } = useRegister(setError, setEmailCache, setRegisterStep, registerStep);
+    const { form, onRegisterIntent, verifyOtp, loading, otpTimer, handleGoogleSignIn } = useRegister(setError, setEmailCache, setRegisterStep, registerStep);
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const { dict } = useI18n();
 

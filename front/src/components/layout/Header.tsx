@@ -7,7 +7,7 @@ import { LanguageToggle } from '@/components/shared/LanguageToggle';
 import { ThemeToggle } from '@/components/shared/ThemeToggle';
 import { useI18n } from '@/components/providers/I18nContext';
 import { cn } from '@/lib/utils';
-import { Menu, X, LogOut } from 'lucide-react';
+import { Menu, X, LogOut, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence, useScroll, useSpring } from 'framer-motion';
 import { useState, useEffect } from 'react';
 import { useMultiTenant } from '@/components/providers/MultiTenantProvider';
@@ -20,7 +20,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ showNav = true, className }) => {
     const { dict } = useI18n();
     const pathname = usePathname();
-    const { user, loading } = useMultiTenant();
+    const { user } = useMultiTenant();
     const [scrolled, setScrolled] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -111,9 +111,17 @@ export const Header: React.FC<HeaderProps> = ({ showNav = true, className }) => 
                         <LanguageToggle />
                         <ThemeToggle />
 
-                        {user && (
+                        {user ? (
                             <Link href="/auth/signout" className="hidden lg:flex items-center justify-center w-8 h-8 rounded-full bg-surface-muted text-text-muted hover:text-accent hover:bg-accent/10 transition-all border border-border">
                                 <LogOut size={14} />
+                            </Link>
+                        ) : (
+                            <Link
+                                href="/auth"
+                                className="hidden lg:flex items-center gap-2 px-5 py-2.5 bg-accent text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all hover:bg-accent/90 active:scale-95 shadow-lg shadow-accent/20"
+                            >
+                                {dict.auth?.getStarted || 'Get Started'}
+                                <ArrowRight size={14} />
                             </Link>
                         )}
                     </div>
@@ -174,6 +182,25 @@ export const Header: React.FC<HeaderProps> = ({ showNav = true, className }) => 
                                 );
                             })}
                         </nav>
+
+                        {/* Mobile CTA for unauthenticated users */}
+                        {!user && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.3 }}
+                                className="mt-8"
+                            >
+                                <Link
+                                    href="/auth"
+                                    onClick={() => setMobileMenuOpen(false)}
+                                    className="flex items-center justify-center gap-3 w-full py-5 bg-accent text-white rounded-2xl font-black uppercase tracking-widest text-base transition-all active:scale-95 shadow-xl shadow-accent/20"
+                                >
+                                    {dict.auth?.getStarted || 'Get Started'}
+                                    <ArrowRight size={18} />
+                                </Link>
+                            </motion.div>
+                        )}
 
                         <motion.div
                             initial={{ opacity: 0 }}

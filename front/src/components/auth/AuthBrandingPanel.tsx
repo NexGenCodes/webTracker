@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { Package, Truck, Globe, ShieldCheck, Zap, MessageSquare } from 'lucide-react';
+import { Package, Truck, ShieldCheck, Zap, MessageSquare } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { PLATFORM_NAME } from '@/constants';
 import { useI18n } from '@/components/providers/I18nContext';
@@ -22,7 +22,7 @@ export function AuthBrandingPanel() {
         { value: "99.9%", label: dict.auth?.statUptime || 'Uptime' },
     ];
     return (
-        <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-primary">
+        <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #0f0f14 0%, #18181b 50%, #1a1a2e 100%)' }}>
             {/* Gradient mesh background */}
             <div className="absolute inset-0">
                 <div className="absolute inset-0 bg-gradient-to-br from-accent/20 via-transparent to-accent-deep/30" />
