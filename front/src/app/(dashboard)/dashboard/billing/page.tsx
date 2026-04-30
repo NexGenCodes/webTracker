@@ -13,6 +13,33 @@ export default function BillingPage() {
     const { user } = useMultiTenant();
     const { dict } = useI18n();
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'annually'>('monthly');
+    const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+
+    const handleSubscribe = async (planId: string) => {
+        setLoadingPlan(planId);
+        try {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/company/subscribe`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
+                    callback_url: window.location.href,
+                    plan: planId
+                })
+            });
+            const data = await res.json();
+            if (data.authorization_url) {
+                window.location.href = data.authorization_url;
+            } else {
+                alert(data.error || 'Failed to start subscription');
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Network error. Please try again.');
+        } finally {
+            setLoadingPlan(null);
+        }
+    };
 
     return (
         <main className="min-h-screen bg-bg selection:bg-accent/20">
@@ -101,9 +128,13 @@ export default function BillingPage() {
                                     <div className="h-[24px] mb-6"></div> // Spacer
                                 )}
 
-                                <button className={`w-full py-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${plan.popular ? 'bg-accent text-white hover:bg-accent-hover shadow-lg shadow-accent/20' : 'bg-surface-muted text-text-main hover:bg-border border border-border'}`}>
-                                    {plansDict[plan.btnKey]}
-                                    <ArrowRight size={14} />
+                                <button 
+                                    onClick={() => handleSubscribe(plan.id)}
+                                    disabled={loadingPlan === plan.id}
+                                    className={`w-full py-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${plan.popular ? 'bg-accent text-white hover:bg-accent-hover shadow-lg shadow-accent/20' : 'bg-surface-muted text-text-main hover:bg-border border border-border'} disabled:opacity-50`}
+                                >
+                                    {loadingPlan === plan.id ? 'Please wait...' : plansDict[plan.btnKey]}
+                                    {loadingPlan !== plan.id && <ArrowRight size={14} />}
                                 </button>
                             </div>
 
