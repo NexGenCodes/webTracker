@@ -1,54 +1,54 @@
 export const BILLING_PLANS = [
     {
         id: 'starter',
-        name: 'Starter',
+        nameKey: 'starterName',
         price: '₦10,000',
-        interval: '/ mo',
-        description: 'Perfect for independent dispatch riders and small couriers.',
-        trial: '7 Days Free Trial',
+        intervalKey: 'monthlyInterval',
+        descKey: 'starterDesc',
+        trialKey: 'sevenDayTrial',
         features: [
-            '50 Shipments per month',
-            'WhatsApp Bot Automation',
-            'Web Tracking Portal',
-            'Manual Shipment Entry',
-            'Community Support'
+            'feat_50_shipments',
+            'feat_whatsapp',
+            'feat_web_portal',
+            'feat_manual_entry',
+            'feat_community'
         ],
-        buttonText: 'Start Free Trial',
+        btnKey: 'btnStartTrial',
         popular: false,
     },
     {
         id: 'pro',
-        name: 'Pro',
+        nameKey: 'proName',
         price: '₦25,000',
-        interval: '/ mo',
-        description: 'For growing logistics companies that need to save time.',
+        intervalKey: 'monthlyInterval',
+        descKey: 'proDesc',
         trial: null,
         features: [
-            '250 Shipments per month',
-            'WhatsApp Bot Automation',
-            'AI PDF/Text Parser (Waybills)',
-            'Bulk CSV Uploads',
-            'Custom Branding (Logo & Colors)',
-            'Priority Email Support'
+            'feat_250_shipments',
+            'feat_whatsapp',
+            'feat_ai_parser',
+            'feat_csv_upload',
+            'feat_custom_branding',
+            'feat_priority_support'
         ],
-        buttonText: 'Upgrade to Pro',
+        btnKey: 'btnUpgradePro',
         popular: true,
     },
     {
         id: 'enterprise',
-        name: 'Scale',
+        nameKey: 'scaleName',
         price: '₦50,000',
-        interval: '/ mo',
-        description: 'High volume capacity for established freight forwarders.',
+        intervalKey: 'monthlyInterval',
+        descKey: 'scaleDesc',
         trial: null,
         features: [
-            '1,000 Shipments per month',
-            'Everything in Pro',
-            'API & Webhook Access',
-            'Dedicated WhatsApp Number',
-            '24/7 Phone & Engineering Support'
+            'feat_1000_shipments',
+            'feat_all_pro',
+            'feat_api_webhook',
+            'feat_dedicated_whatsapp',
+            'feat_247_support'
         ],
-        buttonText: 'Contact Sales',
+        btnKey: 'btnContactSales',
         popular: false,
     }
 ];

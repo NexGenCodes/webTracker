@@ -55,14 +55,14 @@ export const Header: React.FC<HeaderProps> = ({ showNav = true, className }) => 
     });
 
     const navLinks = user ? [
-        { href: '/dashboard', label: 'Dashboard' },
-        { href: '/track', label: 'Track' },
-        { href: '/dashboard/settings', label: 'Settings' },
-        { href: '/dashboard/billing', label: 'Billing' },
+        { href: '/dashboard', label: dict.common.dashboard || 'Dashboard' },
+        { href: '/track', label: dict.common.track || 'Track' },
+        { href: '/dashboard/settings', label: dict.common.settings || 'Settings' },
+        { href: '/dashboard/billing', label: dict.common.billing || 'Billing' },
     ] : [
-        { href: '/', label: 'Home' },
-        { href: '/track', label: 'Track' },
-        { href: '/pricing', label: 'Pricing' },
+        { href: '/', label: dict.common.home || 'Home' },
+        { href: '/track', label: dict.common.track || 'Track' },
+        { href: '/pricing', label: dict.common.pricing || 'Pricing' },
         { href: '/about', label: dict.common.about },
     ];
 

@@ -58,8 +58,9 @@ export function PricingSection() {
 
         {/* Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
-          {BILLING_PLANS.map((plan, i) => {
+          {BILLING_PLANS.map((plan: any, i: number) => {
             const isCustom = plan.price === 'Custom';
+            const plansDict = (dict.marketing?.pricing?.plans as any) || {};
             
             let priceDisplay = plan.price;
             let yearlyBilled = '';
@@ -93,8 +94,8 @@ export function PricingSection() {
                 )}
 
                 {/* Plan name */}
-                <h3 className="text-xl font-black uppercase tracking-tight mb-2">{plan.name}</h3>
-                <p className="text-sm text-text-muted font-bold mb-6 min-h-[48px]">{plan.description}</p>
+                <h3 className="text-xl font-black uppercase tracking-tight mb-2">{plansDict[plan.nameKey]}</h3>
+                <p className="text-sm text-text-muted font-bold mb-6 min-h-[48px]">{plansDict[plan.descKey]}</p>
 
                 {/* Price */}
                 <div className="mb-2">
@@ -103,7 +104,7 @@ export function PricingSection() {
                   ) : (
                     <>
                       <span className="text-4xl md:text-5xl font-black">{priceDisplay}</span>
-                      <span className="text-text-muted font-bold">{dict.marketing?.pricing?.perMonth || '/mo'}</span>
+                      <span className="text-text-muted font-bold">{plansDict[plan.intervalKey]}</span>
                       {isYearly && (
                         <div className="text-xs text-text-muted font-bold mt-1">
                           {dict.marketing?.pricing?.billed || 'Billed'} {yearlyBilled}{dict.marketing?.pricing?.perYear || '/year'}
@@ -113,18 +114,18 @@ export function PricingSection() {
                   )}
                 </div>
 
-                {plan.trial ? (
-                    <p className="text-accent text-xs font-black uppercase tracking-widest mb-6">+{plan.trial}</p>
+                {plan.trialKey ? (
+                    <p className="text-accent text-xs font-black uppercase tracking-widest mb-6">+{plansDict[plan.trialKey]}</p>
                 ) : (
                     <div className="h-[24px] mb-6"></div>
                 )}
 
                 {/* Features */}
                 <ul className="space-y-3 mb-8 flex-1">
-                  {plan.features.map((feature, idx) => (
+                  {plan.features.map((feature: string, idx: number) => (
                     <li key={idx} className="flex items-center gap-3">
                       <CheckCircle size={16} className="text-accent shrink-0" />
-                      <span className="text-sm font-bold text-text-main/80">{feature}</span>
+                      <span className="text-sm font-bold text-text-main/80">{plansDict[feature]}</span>
                     </li>
                   ))}
                 </ul>
@@ -139,7 +140,7 @@ export function PricingSection() {
                       : "bg-surface-muted text-text-main hover:bg-surface border border-border hover:border-accent/30"
                   )}
                 >
-                  {plan.buttonText}
+                  {plansDict[plan.btnKey]}
                   <ArrowRight size={14} />
                 </Link>
               </div>

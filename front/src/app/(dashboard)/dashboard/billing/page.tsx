@@ -7,14 +7,17 @@ import { LayoutHeader } from '@/components/layout/LayoutHeader';
 import { Footer } from '@/components/layout/Footer';
 
 import { BILLING_PLANS } from '@/constants';
+import { useI18n } from '@/components/providers/I18nContext';
+
 export default function BillingPage() {
     const { user } = useMultiTenant();
+    const { dict } = useI18n();
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'annually'>('monthly');
 
     return (
         <main className="min-h-screen bg-bg selection:bg-accent/20">
             <LayoutHeader />
-            
+
             <div className="pt-32 pb-24 px-6 relative z-10 max-w-7xl mx-auto">
                 {/* Header Section */}
                 <div className="text-center max-w-3xl mx-auto mb-16 animate-fade-in">
@@ -27,13 +30,13 @@ export default function BillingPage() {
 
                     {/* Toggle */}
                     <div className="inline-flex items-center bg-surface p-1 rounded-2xl border border-border">
-                        <button 
+                        <button
                             onClick={() => setBillingCycle('monthly')}
                             className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${billingCycle === 'monthly' ? 'bg-accent text-white shadow-lg shadow-accent/20' : 'text-text-muted hover:text-text-main'}`}
                         >
                             Monthly
                         </button>
-                        <button 
+                        <button
                             onClick={() => setBillingCycle('annually')}
                             className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${billingCycle === 'annually' ? 'bg-accent text-white shadow-lg shadow-accent/20' : 'text-text-muted hover:text-text-main'}`}
                         >
@@ -63,8 +66,10 @@ export default function BillingPage() {
 
                 {/* Pricing Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-                    {BILLING_PLANS.map((plan, index) => (
-                        <div 
+                    {BILLING_PLANS.map((plan: any, index: number) => {
+                        const plansDict = (dict.marketing?.pricing?.plans as any) || {};
+                        return (
+                        <div
                             key={plan.id}
                             className={`relative bg-surface rounded-3xl border transition-all duration-300 hover:scale-[1.02] flex flex-col ${plan.popular ? 'border-accent shadow-2xl shadow-accent/10' : 'border-border'}`}
                             style={{ animationDelay: `${0.2 + (index * 0.1)}s` }}
@@ -72,32 +77,32 @@ export default function BillingPage() {
                             {plan.popular && (
                                 <div className="absolute -top-4 left-0 right-0 flex justify-center">
                                     <div className="bg-accent text-white text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full flex items-center gap-1 shadow-lg shadow-accent/30">
-                                        <Zap size={12} className="fill-white" /> Most Popular
+                                        <Zap size={12} className="fill-white" /> {dict.marketing?.pricing?.mostPopular || 'Most Popular'}
                                     </div>
                                 </div>
                             )}
 
                             <div className="p-8 border-b border-border">
-                                <h3 className="text-lg font-black uppercase tracking-widest text-text-main mb-2">{plan.name}</h3>
-                                <p className="text-text-muted text-sm min-h-[40px] mb-6">{plan.description}</p>
-                                
+                                <h3 className="text-lg font-black uppercase tracking-widest text-text-main mb-2">{plansDict[plan.nameKey]}</h3>
+                                <p className="text-text-muted text-sm min-h-[40px] mb-6">{plansDict[plan.descKey]}</p>
+
                                 <div className="mb-2">
                                     <span className="text-4xl font-black text-text-main tracking-tighter">
-                                        {billingCycle === 'annually' && plan.price !== 'Custom' 
-                                            ? `₦${(parseInt(plan.price.replace(/\D/g,'')) * 0.85).toLocaleString()}` 
+                                        {billingCycle === 'annually' && plan.price !== 'Custom'
+                                            ? `₦${(parseInt(plan.price.replace(/\D/g, '')) * 0.85).toLocaleString()}`
                                             : plan.price}
                                     </span>
-                                    <span className="text-text-muted text-sm font-bold ml-1">{plan.interval}</span>
+                                    <span className="text-text-muted text-sm font-bold ml-1">{plansDict[plan.intervalKey]}</span>
                                 </div>
-                                
-                                {plan.trial ? (
-                                    <p className="text-accent text-xs font-black uppercase tracking-widest mb-6">+{plan.trial}</p>
+
+                                {plan.trialKey ? (
+                                    <p className="text-accent text-xs font-black uppercase tracking-widest mb-6">+{plansDict[plan.trialKey]}</p>
                                 ) : (
                                     <div className="h-[24px] mb-6"></div> // Spacer
                                 )}
 
                                 <button className={`w-full py-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${plan.popular ? 'bg-accent text-white hover:bg-accent-hover shadow-lg shadow-accent/20' : 'bg-surface-muted text-text-main hover:bg-border border border-border'}`}>
-                                    {plan.buttonText}
+                                    {plansDict[plan.btnKey]}
                                     <ArrowRight size={14} />
                                 </button>
                             </div>
@@ -105,16 +110,16 @@ export default function BillingPage() {
                             <div className="p-8 flex-1 bg-surface/50 rounded-b-3xl">
                                 <p className="text-[10px] font-black uppercase tracking-widest text-text-muted mb-6">What&apos;s included</p>
                                 <ul className="space-y-4">
-                                    {plan.features.map((feature, i) => (
+                                    {plan.features.map((feature: string, i: number) => (
                                         <li key={i} className="flex items-start gap-3">
                                             <CheckCircle2 size={16} className="text-accent shrink-0 mt-0.5" />
-                                            <span className="text-sm text-text-main font-medium">{feature}</span>
+                                            <span className="text-sm text-text-main font-medium">{plansDict[feature]}</span>
                                         </li>
                                     ))}
                                 </ul>
                             </div>
                         </div>
-                    ))}
+                    )})}
                 </div>
 
                 {/* FAQ or Trust Section */}
