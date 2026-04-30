@@ -36,6 +36,7 @@ export function usePasswordReset(
             const res = await fetch(`${API_URL}/api/auth/forgot-password`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
                 body: JSON.stringify({ email: data.email }),
             });
 
@@ -76,6 +77,7 @@ export function usePasswordReset(
                     'Content-Type': 'application/json',
                     'X-Reset-Token': resetToken
                 },
+                credentials: 'include',
                 body: JSON.stringify({ email: emailCache, otp: code, new_password: data.password }),
             });
 
