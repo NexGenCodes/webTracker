@@ -1,4 +1,5 @@
 import React from 'react';
+import { useI18n } from '@/components/providers/I18nContext';
 import { Key, Mail, Loader2, ChevronLeft } from 'lucide-react';
 import { AuthMode } from '@/lib/validations/auth';
 import { usePasswordReset } from '@/hooks/auth/usePasswordReset';
@@ -31,6 +32,7 @@ export function ForgotPasswordView({
         switchMode,
         emailCache
     );
+    const { dict } = useI18n();
 
     return (
         <form onSubmit={forgotPasswordForm.handleSubmit(onForgotPassword)} className="space-y-6 animate-fade-in w-full">
@@ -39,17 +41,17 @@ export function ForgotPasswordView({
                     <Key className="text-white" size={32} />
                 </div>
                 <h1 className="text-3xl font-black text-text-main tracking-tighter uppercase mb-2">
-                    Reset Password
+                    {dict.auth?.resetPassword || 'Reset Password'}
                 </h1>
                 <p className="text-text-muted font-bold text-sm uppercase tracking-widest opacity-70">
-                    Enter email to receive code
+                    {dict.auth?.enterEmail || 'Enter email to receive code'}
                 </p>
             </div>
 
             <AuthBanner error={error} successMessage={successMessage} />
 
             <AuthInput
-                label="Email Address"
+                label={dict.auth?.emailLabel || 'Email Address'}
                 icon={Mail}
                 type="email"
                 placeholder="you@company.com"
@@ -58,12 +60,12 @@ export function ForgotPasswordView({
             />
 
             <button type="submit" disabled={loading} className="btn-primary w-full py-4 text-base flex items-center justify-center gap-3 active:scale-95 disabled:opacity-50 transition-all duration-200 mt-6">
-                {loading ? <Loader2 className="animate-spin" size={20} /> : "Send Reset Code"}
+                {loading ? <Loader2 className="animate-spin" size={20} /> : (dict.auth?.sendResetCode || 'Send Reset Code')}
             </button>
 
             <div className="mt-8 pt-8 border-t border-border flex flex-col items-center gap-4">
                 <button type="button" onClick={() => switchMode('signin')} className="text-text-muted hover:text-accent text-xs font-black uppercase tracking-widest transition-colors flex items-center gap-2">
-                    <ChevronLeft size={16} /> Back to Sign In
+                    <ChevronLeft size={16} /> {dict.auth?.backToSignIn || 'Back to Sign In'}
                 </button>
             </div>
         </form>

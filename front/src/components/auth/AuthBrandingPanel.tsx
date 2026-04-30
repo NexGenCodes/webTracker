@@ -4,21 +4,23 @@ import React from 'react';
 import { Package, Truck, Globe, ShieldCheck, Zap, MessageSquare } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { PLATFORM_NAME } from '@/constants';
-
-const features = [
-    { icon: Truck, label: "Real-Time Tracking", desc: "Live GPS shipment visibility" },
-    { icon: MessageSquare, label: "WhatsApp Alerts", desc: "Automated customer notifications" },
-    { icon: ShieldCheck, label: "Enterprise Security", desc: "End-to-end encrypted data" },
-    { icon: Zap, label: "AI-Powered Parsing", desc: "Instant manifest extraction" },
-];
-
-const stats = [
-    { value: "2,400+", label: "Companies" },
-    { value: "1.2M", label: "Shipments Tracked" },
-    { value: "99.9%", label: "Uptime" },
-];
+import { useI18n } from '@/components/providers/I18nContext';
 
 export function AuthBrandingPanel() {
+    const { dict } = useI18n();
+
+    const features = [
+        { icon: Truck, label: dict.auth?.featTracking || 'Real-Time Tracking', desc: dict.auth?.featTrackingDesc || 'Live GPS shipment visibility' },
+        { icon: MessageSquare, label: dict.auth?.featWhatsApp || 'WhatsApp Alerts', desc: dict.auth?.featWhatsAppDesc || 'Automated customer notifications' },
+        { icon: ShieldCheck, label: dict.auth?.featSecurity || 'Enterprise Security', desc: dict.auth?.featSecurityDesc || 'End-to-end encrypted data' },
+        { icon: Zap, label: dict.auth?.featAI || 'AI-Powered Parsing', desc: dict.auth?.featAIDesc || 'Instant manifest extraction' },
+    ];
+
+    const stats = [
+        { value: "2,400+", label: dict.auth?.statCompanies || 'Companies' },
+        { value: "1.2M", label: dict.auth?.statShipments || 'Shipments Tracked' },
+        { value: "99.9%", label: dict.auth?.statUptime || 'Uptime' },
+    ];
     return (
         <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-primary">
             {/* Gradient mesh background */}
@@ -59,7 +61,7 @@ export function AuthBrandingPanel() {
                     </div>
                     <div>
                         <h2 className="text-white font-black text-2xl tracking-tighter uppercase">{PLATFORM_NAME}</h2>
-                        <p className="text-white/40 text-[9px] font-black uppercase tracking-[0.4em]">Premium Logistics</p>
+                        <p className="text-white/40 text-[9px] font-black uppercase tracking-[0.4em]">{dict.auth?.premiumLogistics || 'Premium Logistics'}</p>
                     </div>
                 </motion.div>
 
@@ -71,12 +73,11 @@ export function AuthBrandingPanel() {
                         transition={{ duration: 0.6, delay: 0.2 }}
                     >
                         <h1 className="text-white font-black text-4xl xl:text-5xl tracking-tighter uppercase leading-[0.95] mb-4">
-                            Ship Smarter.<br />
-                            <span className="text-accent">Track Everything.</span>
+                            {dict.auth?.brandHeadline || 'Ship Smarter.'}<br />
+                            <span className="text-accent">{dict.auth?.brandHighlight || 'Track Everything.'}</span>
                         </h1>
                         <p className="text-white/50 text-sm font-medium max-w-md leading-relaxed mb-12">
-                            The all-in-one logistics platform trusted by thousands of businesses to automate shipment tracking, 
-                            customer notifications, and delivery management.
+                            {dict.auth?.brandDesc || 'The all-in-one logistics platform trusted by thousands of businesses to automate shipment tracking, customer notifications, and delivery management.'}
                         </p>
                     </motion.div>
 
