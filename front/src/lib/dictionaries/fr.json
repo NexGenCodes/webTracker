@@ -206,7 +206,8 @@
       "subtitle": "Suivez les expéditions en temps réel au-delà des frontières.",
       "ctaTrack": "Suivre une Expédition",
       "ctaPricing": "Voir les Prix",
-      "ctaCreate": "Créer un Compte Gratuit"
+      "ctaCreate": "Créer un Compte Gratuit",
+      "ctaCompanyNote": "Pour les entreprises de logistique et les coursiers"
     },
     "pricing": {
       "badge": "Tarifs",

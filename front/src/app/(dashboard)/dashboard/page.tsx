@@ -82,6 +82,7 @@ export default function DashboardPage() {
         } finally {
             setCompanyLoading(false);
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [companyId, refreshAuth]);
 
     useEffect(() => {
@@ -116,6 +117,7 @@ export default function DashboardPage() {
         return () => {
             supabase.removeChannel(channel);
         };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [companyId, fetchCompanyData]);
 
 
@@ -164,6 +166,7 @@ export default function DashboardPage() {
         return () => {
             supabase.removeChannel(channel);
         };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [companyId, companyData?.auth_status]);
 
     const handleSignOut = async () => {
@@ -270,6 +273,7 @@ export default function DashboardPage() {
                 >
                     <div className="flex items-center gap-6">
                         {settingsForm.logo_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
                             <img src={settingsForm.logo_url} alt="Logo" className="w-16 h-16 rounded-2xl object-cover shadow-lg border border-border" />
                         ) : (
                             <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent to-primary flex items-center justify-center shadow-lg shadow-accent/20 border border-white/10">

@@ -206,7 +206,8 @@
       "subtitle": "实时跨国追踪货件。人工智能解析，WhatsApp 提醒。",
       "ctaTrack": "追踪货件",
       "ctaPricing": "查看价格",
-      "ctaCreate": "免费创建账户"
+      "ctaCreate": "免费创建账户",
+      "ctaCompanyNote": "面向物流公司和配送员"
     },
     "pricing": {
       "badge": "定价",

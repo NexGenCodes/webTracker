@@ -206,7 +206,8 @@
       "subtitle": "Traccia le spedizioni in tempo reale oltre confine.",
       "ctaTrack": "Traccia Spedizione",
       "ctaPricing": "Vedi Prezzi",
-      "ctaCreate": "Crea Account Gratis"
+      "ctaCreate": "Crea Account Gratis",
+      "ctaCompanyNote": "Per aziende di logistica e corrieri"
     },
     "pricing": {
       "badge": "Prezzi",

@@ -58,9 +58,9 @@ export function PricingSection() {
 
         {/* Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
-          {BILLING_PLANS.map((plan: any, i: number) => {
+          {BILLING_PLANS.map((plan, i) => {
             const isCustom = plan.price === 'Custom';
-            const plansDict = (dict.marketing?.pricing?.plans as any) || {};
+            const plansDict = (dict.marketing?.pricing?.plans as Record<string, string>) || {};
             
             let priceDisplay = plan.price;
             let yearlyBilled = '';
