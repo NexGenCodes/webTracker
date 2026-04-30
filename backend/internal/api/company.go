@@ -63,6 +63,11 @@ func (h *CompanyHandler) getCompanyBySetupToken(c *fiber.Ctx) error {
 }
 
 func (h *CompanyHandler) checkSubscription(ctx *fiber.Ctx, companyID uuid.UUID) error {
+	// Super admin bypasses all billing checks
+	if IsSuperAdmin(h.cfg, companyID) {
+		return nil
+	}
+
 	company, err := h.configUC.GetCompanyByID(ctx.Context(), companyID)
 	if err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "Failed to verify subscription status")

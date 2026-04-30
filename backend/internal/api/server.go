@@ -75,7 +75,7 @@ func (s *Server) SetupRoutes() {
 	authHandler := auth.NewHandler(authService)
 	authHandler.RegisterRoutes(s.app)
 
-	shipmentHandler := NewShipmentHandler(s.shipmentUC, s.cfg, s.bots)
+	shipmentHandler := NewShipmentHandler(s.shipmentUC, s.configUC, s.cfg, s.bots)
 	shipmentHandler.RegisterRoutes(s.app)
 
 	companyHandler := NewCompanyHandler(s.cfg, s.configUC, s.bots)

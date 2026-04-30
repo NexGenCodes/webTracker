@@ -57,6 +57,9 @@ type Config struct {
 
 	// Frontend URL for magic links
 	FrontendURL string `env:"FRONTEND_URL" env-default:"http://localhost:3000"`
+
+	// Super Admin — bypasses all billing, unlimited shipments
+	SuperAdminCompanyID string `env:"SUPERADMIN_COMPANY_ID"`
 }
 
 func GetWorkDir() string {
