@@ -5,12 +5,28 @@ import { Package, Globe, Shield, Clock } from 'lucide-react';
 
 import { useI18n } from '@/components/providers/I18nContext';
 
-function getStats(dict: Record<string, Record<string, Record<string, string>>>) {
+type DictValue = string | string[] | { [key: string]: DictValue };
+type Dict = Record<string, DictValue>;
+
+function getDictString(dict: Dict, path: string, fallback: string): string {
+  const keys = path.split('.');
+  let current: DictValue | undefined = dict;
+  for (const key of keys) {
+    if (current && typeof current === 'object' && !Array.isArray(current)) {
+      current = (current as Record<string, DictValue>)[key];
+    } else {
+      return fallback;
+    }
+  }
+  return typeof current === 'string' ? current : fallback;
+}
+
+function getStats(dict: Dict) {
   return [
-    { icon: Package, value: "100+", label: dict.marketing?.trust?.shipments || "Shipments Tracked", target: 100 },
-    { icon: Globe, value: "3+", label: dict.marketing?.trust?.countries || "Countries", target: 3 },
-    { icon: Shield, value: "99.9%", label: dict.marketing?.trust?.uptime || "Uptime", target: 99.9 },
-    { icon: Clock, value: "24/7", label: dict.marketing?.trust?.live || "Live Monitoring", target: 0 },
+    { icon: Package, value: "100+", label: getDictString(dict, "marketing.trust.shipments", "Shipments Tracked"), target: 100 },
+    { icon: Globe, value: "3+", label: getDictString(dict, "marketing.trust.countries", "Countries"), target: 3 },
+    { icon: Shield, value: "99.9%", label: getDictString(dict, "marketing.trust.uptime", "Uptime"), target: 99.9 },
+    { icon: Clock, value: "24/7", label: getDictString(dict, "marketing.trust.live", "Live Monitoring"), target: 0 },
   ];
 }
 
