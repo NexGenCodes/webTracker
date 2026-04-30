@@ -92,6 +92,7 @@ func (s *Service) VerifyOTP(ctx context.Context, otp string, otpToken string) (*
 	}
 
 	// Verify OTP
+	logger.Info().Int("len", len(otp)).Msg("Comparing OTP")
 	err = bcrypt.CompareHashAndPassword([]byte(claims.HashedOTP), []byte(otp))
 	if err != nil {
 		return nil, "", errors.New("incorrect OTP code")
@@ -251,7 +252,9 @@ func (s *Service) CompletePasswordReset(ctx context.Context, req ResetPasswordRe
 	}
 
 	// Verify OTP
-	err = bcrypt.CompareHashAndPassword([]byte(claims.HashedOTP), []byte(req.OTP))
+	otpCode := strings.TrimSpace(req.OTP)
+	logger.Info().Int("len", len(otpCode)).Msg("Comparing Reset OTP")
+	err = bcrypt.CompareHashAndPassword([]byte(claims.HashedOTP), []byte(otpCode))
 	if err != nil {
 		return errors.New("incorrect reset code")
 	}

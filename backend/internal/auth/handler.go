@@ -84,9 +84,9 @@ func (h *Handler) resetPassword(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	resetToken := c.Cookies("reset_token")
+	resetToken := c.Get("X-Reset-Token")
 	if resetToken == "" {
-		resetToken = c.Get("X-Reset-Token")
+		resetToken = c.Cookies("reset_token")
 	}
 
 	if resetToken == "" {
@@ -156,16 +156,17 @@ func (h *Handler) verifyOTP(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	otpToken := c.Cookies("otp_token")
+	otpToken := c.Get("X-OTP-Token")
 	if otpToken == "" {
-		otpToken = c.Get("X-OTP-Token")
+		otpToken = c.Cookies("otp_token")
 	}
 	
 	if otpToken == "" {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "OTP session expired or missing"})
 	}
 
-	resp, sessionToken, err := h.service.VerifyOTP(c.Context(), req.OTP, otpToken)
+	otpCode := strings.TrimSpace(req.OTP)
+	resp, sessionToken, err := h.service.VerifyOTP(c.Context(), otpCode, otpToken)
 	if err != nil {
 		logger.Error().Err(err).Msg("OTP Verification failed")
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
