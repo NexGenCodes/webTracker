@@ -38,10 +38,10 @@ export const Footer: React.FC<FooterProps> = ({ minimal = false, className }) =>
                 </div>
 
                 <div>
-                    <h4 className="font-black uppercase text-xs tracking-[0.2em] mb-8 text-text-main opacity-60">Product</h4>
+                    <h4 className="font-black uppercase text-xs tracking-[0.2em] mb-8 text-text-main opacity-60">{dict.common.product || "Product"}</h4>
                     <ul className="space-y-5 text-sm text-text-muted font-bold">
-                        <li><Link href="/track" className="hover:text-accent transition-colors">Track Shipment</Link></li>
-                        <li><Link href="/pricing" className="hover:text-accent transition-colors">Pricing</Link></li>
+                        <li><Link href="/track" className="hover:text-accent transition-colors">{dict.common.trackShipment || "Track Shipment"}</Link></li>
+                        <li><Link href="/pricing" className="hover:text-accent transition-colors">{dict.common.pricing || "Pricing"}</Link></li>
                     </ul>
                 </div>
 

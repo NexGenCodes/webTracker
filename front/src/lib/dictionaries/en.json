@@ -19,7 +19,35 @@
       "custom": "Custom",
       "perMonth": "/mo",
       "billed": "Billed",
-      "perYear": "/year"
+      "perYear": "/year",
+      "plans": {
+        "starterName": "Starter",
+        "proName": "Pro",
+        "scaleName": "Scale",
+        "monthlyInterval": "/ mo",
+        "starterDesc": "Perfect for independent dispatch riders and small couriers.",
+        "proDesc": "For growing logistics companies that need to save time.",
+        "scaleDesc": "High volume capacity for established freight forwarders.",
+        "sevenDayTrial": "7 Days Free Trial",
+        "btnStartTrial": "Start Free Trial",
+        "btnUpgradePro": "Upgrade to Pro",
+        "btnContactSales": "Contact Sales",
+        "feat_50_shipments": "50 Shipments per month",
+        "feat_250_shipments": "250 Shipments per month",
+        "feat_1000_shipments": "1,000 Shipments per month",
+        "feat_whatsapp": "WhatsApp Bot Automation",
+        "feat_web_portal": "Web Tracking Portal",
+        "feat_manual_entry": "Manual Shipment Entry",
+        "feat_community": "Community Support",
+        "feat_ai_parser": "AI PDF/Text Parser (Waybills)",
+        "feat_csv_upload": "Bulk CSV Uploads",
+        "feat_custom_branding": "Custom Branding (Logo & Colors)",
+        "feat_priority_support": "Priority Email Support",
+        "feat_all_pro": "Everything in Pro",
+        "feat_api_webhook": "API & Webhook Access",
+        "feat_dedicated_whatsapp": "Dedicated WhatsApp Number",
+        "feat_247_support": "24/7 Phone & Engineering Support"
+      }
     },
     "howItWorks": {
       "badge": "How It Works",
@@ -96,7 +124,14 @@
     "enterprise": "Enterprise Tracking",
     "api": "API Integration",
     "analytics": "Logistics Analytics",
-    "corp": "Logistics Corp."
+    "corp": "Logistics Corp.",
+    "trackShipment": "Track Shipment",
+    "pricing": "Pricing",
+    "dashboard": "Dashboard",
+    "settings": "Settings",
+    "billing": "Billing",
+    "track": "Track",
+    "product": "Product"
   },
   "shipment": {
     "status": "Current Status",
