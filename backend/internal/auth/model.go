@@ -29,13 +29,13 @@ type SetupCompanyRequest struct {
 	TrackingPrefix string `json:"tracking_prefix" validate:"omitempty,max=5"`
 }
 
-// AuthResponse payload returned on successful login or setup
 type AuthResponse struct {
 	CompanyID   uuid.UUID `json:"company_id"`
 	CompanyName string    `json:"company_name"`
 	Email       string    `json:"email"`
 	PlanType    string    `json:"plan_type"`
 	AuthStatus  string    `json:"auth_status"`
+	Token       string    `json:"token,omitempty"`
 }
 
 // JWTClaims custom claims for our main JWT tokens
