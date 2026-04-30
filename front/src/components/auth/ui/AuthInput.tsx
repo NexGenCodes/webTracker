@@ -11,15 +11,15 @@ interface AuthInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
     onActionClick?: () => void;
 }
 
-export function AuthInput({ 
-    label, 
-    icon: Icon, 
-    registration, 
-    error, 
-    actionLabel, 
-    onActionClick, 
+export function AuthInput({
+    label,
+    icon: Icon,
+    registration,
+    error,
+    actionLabel,
+    onActionClick,
     type = 'text',
-    ...props 
+    ...props
 }: AuthInputProps) {
     const [showPassword, setShowPassword] = useState(false);
     const isPassword = type === 'password';
@@ -32,8 +32,8 @@ export function AuthInput({
                     {label}
                 </label>
                 {actionLabel && onActionClick && (
-                    <button 
-                        type="button" 
+                    <button
+                        type="button"
                         onClick={onActionClick}
                         className="text-[10px] font-bold text-text-muted hover:text-accent uppercase tracking-widest transition-colors"
                     >
@@ -42,12 +42,12 @@ export function AuthInput({
                 )}
             </div>
             <div className="relative group w-full">
-                <Icon className="absolute left-5 top-1/2 -translate-y-1/2 text-text-muted group-focus-within:text-accent transition-colors" size={20} />
+                <Icon className="absolute left-5 top-1/2 -translate-y-1/2 text-text-muted group-focus-within:text-accent transition-colors pointer-events-none" size={20} />
                 <input
                     {...registration}
                     {...props}
                     type={currentType}
-                    className={`input-premium pl-12! ${isPassword ? 'pr-12!' : ''} w-full ${error ? 'border-error' : ''}`}
+                    className={`input-premium !pl-12 ${isPassword ? '!pr-12' : ''} w-full ${error ? 'border-error' : ''}`}
                 />
                 {isPassword && (
                     <button
@@ -56,7 +56,7 @@ export function AuthInput({
                         className="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-accent transition-colors rounded-lg hover:bg-accent/10"
                         tabIndex={-1}
                     >
-                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        {showPassword ? <Eye size={18} /> : <EyeOff size={18} />}
                     </button>
                 )}
             </div>

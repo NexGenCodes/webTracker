@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
         }
 
         const res = await fetch(`${getBackendUrl()}/api/company/setup/${token}`, {
-            headers: backendHeaders(),
+            headers: await backendHeaders(),
             cache: 'no-store'
         });
 

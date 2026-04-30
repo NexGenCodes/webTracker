@@ -44,6 +44,15 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 setLocaleState(browserLocale);
             }
         }
+
+        // Sync language across tabs/windows
+        const handleStorage = (e: StorageEvent) => {
+            if (e.key === 'locale' && e.newValue && isValidLocale(e.newValue)) {
+                setLocaleState(e.newValue);
+            }
+        };
+        window.addEventListener('storage', handleStorage);
+        return () => window.removeEventListener('storage', handleStorage);
     }, []);
 
     // Apply RTL direction to document

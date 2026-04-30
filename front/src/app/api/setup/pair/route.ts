@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
 
         const res = await fetch(`${getBackendUrl()}/api/company/pair`, {
             method: 'POST',
-            headers: backendHeaders({
+            headers: await backendHeaders({
                 'X-Company-ID': company_id
             }),
             body: JSON.stringify({ phone })

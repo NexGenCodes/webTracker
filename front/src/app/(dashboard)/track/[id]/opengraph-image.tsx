@@ -15,7 +15,6 @@ export const contentType = 'image/png';
 async function fetchTrackingData(id: string) {
   const baseUrl = process.env.BACKEND_URL || 'http://localhost:5000';
   const headers: Record<string, string> = {};
-  if (process.env.API_SECRET_KEY) headers['X-API-Key'] = process.env.API_SECRET_KEY;
 
   try {
     const res = await fetch(`${baseUrl}/api/track/${id}`, {

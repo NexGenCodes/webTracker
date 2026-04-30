@@ -12,6 +12,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
+	"webtracker-bot/internal/auth"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/database/db"
 	"webtracker-bot/internal/database/dbutil"
@@ -41,6 +42,14 @@ func NewShipmentHandler(shipmentUC *shipment.Usecase, cfg *config.Config, bots w
 }
 
 func getCompanyID(c *fiber.Ctx) uuid.UUID {
+	// Securely extract company_id from the validated JWT token
+	if user, ok := c.Locals("user").(*auth.JWTClaims); ok && user != nil {
+		if user.CompanyID != uuid.Nil {
+			return user.CompanyID
+		}
+	}
+
+	// Fallback for edge cases (e.g., internal testing or unprotected routes, if any)
 	idStr := c.Get("X-Company-ID")
 	if idStr == "" {
 		idStr = c.Query("company_id")
@@ -53,11 +62,6 @@ func getCompanyID(c *fiber.Ctx) uuid.UUID {
 }
 
 func (h *ShipmentHandler) RegisterRoutes(router fiber.Router) {
-	// NOTE: All read operations (Track, List, GetStats, GetTelemetry) have been
-	// migrated to direct Supabase queries in the Next.js frontend.
-	// Only write endpoints remain here because Go handles side-effects
-	// (WhatsApp notifications, telemetry recording, etc).
-
 	// Admin Routes (Next.js protects these via Supabase Auth before calling Go)
 	admin := router.Group("/api/admin")
 
@@ -72,10 +76,6 @@ func (h *ShipmentHandler) RegisterRoutes(router fiber.Router) {
 	shipments.Patch("/:id", h.UpdateStatus)
 	shipments.Delete("/:id", h.Delete)
 }
-
-// Track - REMOVED: Now served directly from Supabase via Next.js frontend.
-// The RLS policy "Public can read shipments by tracking_id" allows
-// the anon key to read shipment rows without going through Go.
 
 // CreateRequest matches Next.js CreateShipmentDto
 type CreateRequest struct {
@@ -183,10 +183,6 @@ func (h *ShipmentHandler) Create(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"tracking_id": trackingID})
 }
 
-// List - REMOVED: Now served directly from Supabase via Next.js frontend.
-// ShipmentService.getShipments() queries Supabase with service_role key,
-// supporting pagination, search (ilike), and status filtering.
-
 // UpdateStatusRequest for Patch
 type UpdateStatusRequest struct {
 	Status      string `json:"status" validate:"required"`
@@ -262,10 +258,6 @@ func (h *ShipmentHandler) DeleteDelivered(c *fiber.Ctx) error {
 	}
 	return c.JSON(fiber.Map{"success": true})
 }
-
-// GetStats - REMOVED: Now served directly from Supabase via Next.js frontend.
-// ShipmentService.getDashboardData() runs 6 concurrent count queries
-// against Supabase with service_role key.
 
 // ParseRequest for ParseText endpoint
 type ParseRequest struct {
@@ -387,9 +379,6 @@ func (h *ShipmentHandler) BulkCreateCSV(c *fiber.Ctx) error {
 	})
 }
 
-// GetTelemetry - REMOVED: Now served directly from Supabase via Next.js frontend.
-// ShipmentService.getTelemetry() queries the telemetry table with service_role key.
-
 // BulkUpdateStatusRequest for BulkUpdateStatus endpoint
 type BulkUpdateStatusRequest struct {
 	IDs    []string `json:"ids" validate:"required,min=1"`
@@ -458,6 +447,3 @@ func (h *ShipmentHandler) BulkDelete(c *fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{"success": true, "deleted": len(req.IDs)})
 }
-
-
-

@@ -61,7 +61,7 @@ const LanguageToggleComponent = memo(() => {
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 10, scale: 0.95 }}
                         transition={{ duration: 0.2, ease: "easeOut" }}
-                        className="absolute right-0 mt-2 w-48 bg-surface/90 border border-border rounded-2xl shadow-2xl z-100 overflow-hidden backdrop-blur-xl"
+                        className="absolute right-0 mt-2 w-48 bg-surface/90 border border-border rounded-2xl shadow-2xl z-50 overflow-hidden backdrop-blur-xl"
                     >
                         <div className="py-2 grid grid-cols-1 gap-1 px-2">
                             {languages.map((lang) => (
