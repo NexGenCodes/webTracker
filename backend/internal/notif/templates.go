@@ -156,3 +156,34 @@ func DeliveryEmail(to, recipientName, trackingID, companyName, arrivalDate strin
 		FromName: companyName,
 	}
 }
+
+// PasswordResetEmail builds the password reset OTP email.
+func PasswordResetEmail(to, otp string) Email {
+	companyName := "CargoHive"
+	html := fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px;">
+    <div style="max-width: 600px; margin: auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+        <h1 style="color: #dc3545; font-size: 24px; margin-bottom: 10px;">%s</h1>
+        <h2 style="color: #333; font-size: 18px; margin-bottom: 25px;">Password Reset Request</h2>
+        <p style="color: #555; line-height: 1.6;">We received a request to reset your password. Use the following code to proceed. This code is valid for <strong>15 minutes</strong>.</p>
+        <div style="text-align: center; margin: 35px 0; padding: 25px; background: #fff5f5; border-radius: 8px; border: 1px solid #feb2b2;">
+            <p style="margin: 0 0 10px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: #c53030;">Your Reset Code</p>
+            <div style="font-size: 42px; font-weight: bold; letter-spacing: 8px; color: #c53030; font-family: 'Courier New', Courier, monospace;">%s</div>
+        </div>
+        <p style="color: #555; font-size: 14px; text-align: center;">If you did not request a password reset, you can safely ignore this email.</p>
+        <p style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px; color: #888; font-size: 12px;">
+            &copy; 2026 %s. All rights reserved.
+        </p>
+    </div>
+</body>
+</html>`, companyName, otp, companyName)
+
+	return Email{
+		To:       to,
+		Subject:  "Reset Your Password",
+		HTMLBody: html,
+		FromName: companyName,
+	}
+}
+

@@ -197,6 +197,90 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (*AuthResponse, s
 	}, token, nil
 }
 
+// InitiatePasswordReset starts the password reset flow by sending an OTP
+func (s *Service) InitiatePasswordReset(ctx context.Context, email string) (string, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+
+	// Check if user exists
+	_, err := s.queries.GetCompanyByEmail(ctx, email)
+	if err != nil {
+		// We return a token even if user doesn't exist to prevent email enumeration, 
+		// but we don't send an email. Or better, just return error for this specific app.
+		return "", errors.New("no account found with this email")
+	}
+
+	// Generate 6 digit OTP
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	otp := fmt.Sprintf("%06d", r.Intn(1000000))
+	
+	logger.Info().Str("email", email).Msg("Sending password reset email")
+	s.mailer.SendAsync(notif.PasswordResetEmail(email, otp))
+
+	hashedOTP, err := bcrypt.GenerateFromPassword([]byte(otp), bcrypt.DefaultCost)
+	if err != nil {
+		return "", fmt.Errorf("failed to hash OTP: %w", err)
+	}
+
+	claims := ResetPasswordClaims{
+		Email:     email,
+		HashedOTP: string(hashedOTP),
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(15 * time.Minute)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			Issuer:    "webtracker-password-reset",
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(s.cfg.JWTSecret))
+}
+
+// CompletePasswordReset verifies the OTP and updates the password
+func (s *Service) CompletePasswordReset(ctx context.Context, req ResetPasswordRequest, resetToken string) error {
+	claims := &ResetPasswordClaims{}
+	token, err := jwt.ParseWithClaims(resetToken, claims, func(token *jwt.Token) (interface{}, error) {
+		return []byte(s.cfg.JWTSecret), nil
+	})
+
+	if err != nil || !token.Valid {
+		return errors.New("invalid or expired reset session")
+	}
+
+	if claims.Email != req.Email {
+		return errors.New("email mismatch")
+	}
+
+	// Verify OTP
+	err = bcrypt.CompareHashAndPassword([]byte(claims.HashedOTP), []byte(req.OTP))
+	if err != nil {
+		return errors.New("incorrect reset code")
+	}
+
+	// Get company
+	company, err := s.queries.GetCompanyByEmail(ctx, req.Email)
+	if err != nil {
+		return errors.New("account not found")
+	}
+
+	// Hash new password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	// Update password
+	err = s.queries.SetCompanyPassword(ctx, db.SetCompanyPasswordParams{
+		ID:                company.ID,
+		AdminPasswordHash: sql.NullString{String: string(hashedPassword), Valid: true},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update password: %w", err)
+	}
+
+	return nil
+}
+
+
 func (s *Service) generateJWT(companyID uuid.UUID, companyName, email, planType, authStatus string) (string, error) {
 	if s.cfg.JWTSecret == "" {
 		return "", errors.New("JWT_SECRET is not configured")
