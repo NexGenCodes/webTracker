@@ -45,6 +45,11 @@ export function usePasswordReset(
                 return;
             }
 
+            const resData = await res.json();
+            if (resData.reset_token) {
+                sessionStorage.setItem('reset_token', resData.reset_token);
+            }
+
             setEmailCache(data.email);
             setSuccessMessage("A 6-digit reset code has been sent to your email.");
             setTimeout(() => switchMode('reset-password'), 2000);
@@ -64,9 +69,13 @@ export function usePasswordReset(
 
         setLoading(true);
         try {
+            const resetToken = sessionStorage.getItem('reset_token') || '';
             const res = await fetch(`${API_URL}/api/auth/reset-password`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-Reset-Token': resetToken
+                },
                 body: JSON.stringify({ email: emailCache, otp: code, new_password: data.password }),
             });
 

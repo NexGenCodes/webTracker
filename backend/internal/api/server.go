@@ -47,7 +47,7 @@ func NewServer(cfg *config.Config, shipmentUC *shipment.Usecase, configUC *confi
 		AllowOriginsFunc: func(origin string) bool {
 			return true
 		},
-		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-Company-ID",
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-Company-ID, X-OTP-Token, X-Reset-Token",
 		AllowMethods:     "GET, POST, PATCH, DELETE, OPTIONS",
 		AllowCredentials: true,
 	}))

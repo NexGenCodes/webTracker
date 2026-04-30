@@ -38,11 +38,72 @@ func (h *Handler) RegisterRoutes(app *fiber.App) {
 	group.Post("/verify-otp", h.verifyOTP)
 	group.Post("/login", h.login)
 	group.Post("/logout", h.logout)
+	group.Post("/forgot-password", h.forgotPassword)
+	group.Post("/reset-password", h.resetPassword)
 	
 	// Protected routes
 	group.Get("/me", JWTAuth(h.service.cfg.JWTSecret), h.me)
 	group.Post("/setup", JWTAuth(h.service.cfg.JWTSecret), h.setupCompany)
 }
+
+func (h *Handler) forgotPassword(c *fiber.Ctx) error {
+	var req ForgotPasswordRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
+	}
+
+	if err := h.validate.Struct(req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	resetToken, err := h.service.InitiatePasswordReset(c.Context(), req.Email)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	c.Cookie(&fiber.Cookie{
+		Name:     "reset_token",
+		Value:    resetToken,
+		Expires:  time.Now().Add(15 * time.Minute),
+		HTTPOnly: true,
+		Secure:   h.isSecure,
+		SameSite: h.sameSite,
+		Path:     "/",
+	})
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Reset code sent", "reset_token": resetToken})
+}
+
+func (h *Handler) resetPassword(c *fiber.Ctx) error {
+	var req ResetPasswordRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
+	}
+
+	if err := h.validate.Struct(req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	resetToken := c.Cookies("reset_token")
+	if resetToken == "" {
+		resetToken = c.Get("X-Reset-Token")
+	}
+
+	if resetToken == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Reset session expired or missing"})
+	}
+
+	err := h.service.CompletePasswordReset(c.Context(), req, resetToken)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	// Clear reset token
+	c.Cookie(&fiber.Cookie{Name: "reset_token", Value: "", Expires: time.Now().Add(-1 * time.Hour), HTTPOnly: true, Path: "/"})
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Password reset successful"})
+}
+
 
 func (h *Handler) me(c *fiber.Ctx) error {
 	user := c.Locals("user").(*JWTClaims)
