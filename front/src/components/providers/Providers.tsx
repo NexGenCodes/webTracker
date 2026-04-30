@@ -24,7 +24,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <MultiTenantProvider>
       <QueryClientProvider client={queryClient}>
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <I18nProvider>
             {children}
             <SpeedInsights />
