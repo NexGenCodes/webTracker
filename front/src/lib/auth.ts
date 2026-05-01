@@ -7,7 +7,7 @@ if (!process.env.NEXT_PUBLIC_JWT_PUBLIC_KEY) {
 
 const JWT_PUBLIC_KEY_RAW = process.env.NEXT_PUBLIC_JWT_PUBLIC_KEY.replace(/\\n/g, '\n');
 
-let publicKey: any;
+let publicKey: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 async function getPublicKey() {
   if (!publicKey) {
     publicKey = await importSPKI(JWT_PUBLIC_KEY_RAW, 'ES256');

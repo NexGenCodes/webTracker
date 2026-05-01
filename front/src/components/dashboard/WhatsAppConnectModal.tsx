@@ -90,20 +90,7 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
         }, 2500);
     }, [pairStatus, onSuccess, onClose]);
 
-    // Reset state when opened
-    useEffect(() => {
-        if (isOpen) {
-            setPairingCode('');
-            setQrCodeData('');
-            setPairError('');
-            setPairStatus('idle');
-            setConnectMode('qr');
-            reset();
-            handleFetchQR();
-        }
-    }, [isOpen, reset]);
-
-    const handleFetchQR = () => {
+    const handleFetchQR = useCallback(() => {
         if (!companyId) return;
         startTransition(async () => {
             try {
@@ -124,7 +111,20 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
                 }
             }
         });
-    };
+    }, [companyId, handleConnected]);
+
+    // Reset state when opened
+    useEffect(() => {
+        if (isOpen) {
+            setPairingCode('');
+            setQrCodeData('');
+            setPairError('');
+            setPairStatus('idle');
+            setConnectMode('qr');
+            reset();
+            handleFetchQR();
+        }
+    }, [isOpen, reset, handleFetchQR]);
 
     // Auto-refresh QR code every 20 seconds while in QR mode and waiting
     useEffect(() => {
@@ -137,7 +137,7 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
         return () => {
             if (interval) clearInterval(interval);
         };
-    }, [isOpen, connectMode, pairStatus]);
+    }, [isOpen, connectMode, pairStatus, handleFetchQR]);
 
     // Handle pairing modal success state when auth_status changes to active (via Realtime)
     useEffect(() => {
