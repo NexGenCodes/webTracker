@@ -65,3 +65,33 @@ export async function disconnectWhatsApp(companyId: string): Promise<{ success: 
     await res.json();
     return { success: true };
 }
+
+export async function getWhatsAppQR(companyId: string): Promise<WhatsAppPairResponse> {
+    const { user } = await getServerSession();
+    if (!user || user.company_id !== companyId) {
+        throw new Error('Unauthorized');
+    }
+
+    if (!companyId) {
+        throw new Error('company_id is required');
+    }
+
+    const res = await fetch(`${getBackendUrl()}/api/company/qr`, {
+        method: 'POST',
+        headers: await backendHeaders({
+            'X-Company-ID': companyId
+        })
+    });
+    
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Backend error' }));
+        throw new Error(err.error || 'Backend error');
+    }
+    
+    const data = await res.json();
+    
+    return {
+        success: true,
+        pairingCode: data.code || data.data?.code
+    };
+}

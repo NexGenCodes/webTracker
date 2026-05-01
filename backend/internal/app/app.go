@@ -230,6 +230,24 @@ func (a *App) initBotForCompany(c db.Company) error {
 		a.handleWAEvent(bot, evt)
 	})
 
+	// Start listening to QR code if not logged in
+	if waClient.Store.ID == nil {
+		qrChan, _ := waClient.GetQRChannel(context.Background())
+		go func() {
+			for evt := range qrChan {
+				if evt.Event == "code" {
+					bot.QRMu.Lock()
+					bot.CurrentQR = evt.Code
+					bot.QRMu.Unlock()
+				} else {
+					bot.QRMu.Lock()
+					bot.CurrentQR = ""
+					bot.QRMu.Unlock()
+				}
+			}
+		}()
+	}
+
 	a.BotsMu.Lock()
 	a.Bots[c.ID] = bot
 	a.BotsMu.Unlock()
@@ -331,13 +349,59 @@ func (a *App) GeneratePairingCode(ctx context.Context, companyID uuid.UUID, phon
 		}
 	}
 
-	if err := bot.WA.Connect(); err != nil {
-		return "", fmt.Errorf("failed to connect to WhatsApp: %w", err)
+	if !bot.WA.IsConnected() {
+		if err := bot.WA.Connect(); err != nil {
+			return "", fmt.Errorf("failed to connect to WhatsApp: %w", err)
+		}
 	}
 
 	code, err := bot.WA.PairPhone(ctx, phone, true, whatsmeow.PairClientChrome, "Chrome (Windows)")
 	if err != nil {
 		return "", fmt.Errorf("failed to pair phone: %w", err)
+	}
+
+	return code, nil
+}
+
+// GetQR returns the current QR code string for pairing.
+func (a *App) GetQR(ctx context.Context, companyID uuid.UUID) (string, error) {
+	bot, err := a.GetBot(companyID)
+	if err != nil {
+		company, err := a.ConfigUC.GetCompanyByID(ctx, companyID)
+		if err != nil {
+			return "", fmt.Errorf("failed to get company: %w", err)
+		}
+		
+		if err := a.initBotForCompany(company); err != nil {
+			return "", fmt.Errorf("failed to init bot for company: %w", err)
+		}
+		
+		bot, err = a.GetBot(companyID)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	if !bot.WA.IsConnected() {
+		if err := bot.WA.Connect(); err != nil {
+			return "", fmt.Errorf("failed to connect to WhatsApp: %w", err)
+		}
+	}
+
+	bot.QRMu.RLock()
+	code := bot.CurrentQR
+	bot.QRMu.RUnlock()
+
+	if code == "" {
+		// Wait a short time for the first QR code to be generated
+		time.Sleep(2 * time.Second)
+		bot.QRMu.RLock()
+		code = bot.CurrentQR
+		bot.QRMu.RUnlock()
+	}
+
+	if code == "" {
+		return "", fmt.Errorf("QR code not yet available, please try again")
 	}
 
 	return code, nil
