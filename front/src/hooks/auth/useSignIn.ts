@@ -21,7 +21,6 @@ export function useSignIn(setError: (msg: string | null) => void) {
                 
                 const redirectUrl = searchParams.get('redirect') || searchParams.get('callbackUrl') || searchParams.get('returnUrl') || '/dashboard';
                 router.push(redirectUrl);
-                router.refresh();
             } catch (err: unknown) {
                 setError(err instanceof Error ? err.message : 'Network error. Please try again.');
             }

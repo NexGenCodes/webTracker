@@ -2,6 +2,7 @@ package whatsapp
 
 import (
 	"context"
+	"sync"
 
 	"github.com/google/uuid"
 	"go.mau.fi/whatsmeow"
@@ -14,6 +15,8 @@ type BotInstance struct {
 	Tier        string
 	WA          *whatsmeow.Client
 	Sender      *Sender
+	CurrentQR   string
+	QRMu        sync.RWMutex
 }
 
 type BotProvider interface {
@@ -22,5 +25,6 @@ type BotProvider interface {
 	ActivateBot(ctx context.Context, companyID uuid.UUID) error
 	DeactivateBot(companyID uuid.UUID) error
 	GeneratePairingCode(ctx context.Context, companyID uuid.UUID, phone string) (string, error)
+	GetQR(ctx context.Context, companyID uuid.UUID) (string, error)
 	LogoutBot(companyID uuid.UUID) error
 }

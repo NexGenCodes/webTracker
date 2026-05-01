@@ -38,6 +38,7 @@ func (h *CompanyHandler) RegisterRoutes(app *fiber.App) {
 	api.Post("/activate", h.activateBot)
 	api.Post("/deactivate", h.deactivateBot)
 	api.Post("/pair", h.pairBot)
+	api.Post("/qr", h.getQR)
 	api.Post("/logout", h.logoutBot)
 
 	api.Get("/setup/:token", h.getCompanyBySetupToken)
@@ -158,6 +159,24 @@ func (h *CompanyHandler) pairBot(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"success": true, "code": code})
 }
 
+func (h *CompanyHandler) getQR(c *fiber.Ctx) error {
+	companyID := getCompanyID(c)
+	if companyID == uuid.Nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing or invalid company_id"})
+	}
+
+	if err := h.checkSubscription(c, companyID); err != nil {
+		return err
+	}
+
+	code, err := h.bots.GetQR(c.Context(), companyID)
+	if err != nil {
+		logger.Error().Err(err).Str("company", companyID.String()).Msg("Failed to generate QR code")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.JSON(fiber.Map{"success": true, "code": code})
+}
 
 
 func generateToken() string {

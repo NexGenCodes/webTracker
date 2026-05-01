@@ -2,6 +2,7 @@
 
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { revalidatePath } from 'next/cache';
 import { getApiUrl } from '@/lib/utils';
 import { getServerSession } from '@/lib/auth';
 
@@ -44,6 +45,7 @@ export async function loginAction(data: LoginInput) {
             path: '/',
             maxAge: 7 * 24 * 60 * 60 // 7 days
         });
+        revalidatePath('/', 'layout');
     }
 
     return resData;
@@ -92,6 +94,7 @@ export async function verifyOtpAction(otp: string, otpToken: string) {
             path: '/',
             maxAge: 7 * 24 * 60 * 60
         });
+        revalidatePath('/', 'layout');
     }
 
     return resData;

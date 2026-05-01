@@ -4,8 +4,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { pairWhatsApp } from '@/app/actions/setup';
+import { pairWhatsApp, getWhatsAppQR } from '@/app/actions/setup';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
+import { QRCodeSVG } from 'qrcode.react';
 
 const formatLocalPhone = (countryCode: string, phone: string) => {
     let localPhone = phone.replace(/[\s\-()]/g, '');
@@ -57,9 +58,11 @@ interface WhatsAppConnectModalProps {
 
 export default function WhatsAppConnectModal({ isOpen, onClose, companyId, companyData, onSuccess }: WhatsAppConnectModalProps) {
     const [pairingCode, setPairingCode] = useState('');
+    const [qrCodeData, setQrCodeData] = useState('');
     const [pairError, setPairError] = useState('');
     const [codeCopied, setCodeCopied] = useState(false);
     const [pairStatus, setPairStatus] = useState<'idle' | 'waiting' | 'connected'>('idle');
+    const [connectMode, setConnectMode] = useState<'qr' | 'phone'>('qr');
     
     // React 19 / Next.js 15: useTransition for Server Action
     const [isPending, startTransition] = useTransition();
@@ -79,11 +82,44 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
     useEffect(() => {
         if (isOpen) {
             setPairingCode('');
+            setQrCodeData('');
             setPairError('');
             setPairStatus('idle');
+            setConnectMode('qr');
             reset();
+            handleFetchQR();
         }
     }, [isOpen, reset]);
+
+    const handleFetchQR = () => {
+        if (!companyId) return;
+        startTransition(async () => {
+            try {
+                const response = await getWhatsAppQR(companyId);
+                if (response.success && response.pairingCode) {
+                    setQrCodeData(response.pairingCode);
+                    setPairStatus('waiting');
+                } else {
+                    setPairError(response.error || 'Could not fetch QR code.');
+                }
+            } catch (err: unknown) {
+                setPairError(err instanceof Error ? err.message : 'An error occurred.');
+            }
+        });
+    };
+
+    // Auto-refresh QR code every 20 seconds while in QR mode and waiting
+    useEffect(() => {
+        let interval: NodeJS.Timeout;
+        if (isOpen && connectMode === 'qr' && pairStatus === 'waiting') {
+            interval = setInterval(() => {
+                handleFetchQR();
+            }, 20000); // 20 seconds
+        }
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    }, [isOpen, connectMode, pairStatus]);
 
     // Handle pairing modal success state when auth_status changes to active
     useEffect(() => {
@@ -201,7 +237,62 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
                                 </div>
                             )}
 
-                            {!pairingCode ? (
+                            {/* Mode Toggle */}
+                            {!pairingCode && pairStatus !== 'connected' && (
+                                <div className="flex bg-surface-muted p-1 rounded-xl mb-6">
+                                    <button
+                                        type="button"
+                                        onClick={() => { setConnectMode('qr'); handleFetchQR(); }}
+                                        className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${connectMode === 'qr' ? 'bg-surface shadow-sm text-text-main' : 'text-text-muted hover:text-text-main'}`}
+                                    >
+                                        QR Code
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setConnectMode('phone')}
+                                        className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${connectMode === 'phone' ? 'bg-surface shadow-sm text-text-main' : 'text-text-muted hover:text-text-main'}`}
+                                    >
+                                        Phone Number
+                                    </button>
+                                </div>
+                            )}
+
+                            {connectMode === 'qr' && !pairingCode ? (
+                                <div className="text-center space-y-6">
+                                    <div className="space-y-2">
+                                        <h4 className="text-lg font-black text-text-main">Scan QR Code</h4>
+                                        <p className="text-sm font-medium text-text-muted max-w-sm mx-auto">
+                                            Open WhatsApp {'>'} Linked Devices {'>'} Link a device
+                                        </p>
+                                    </div>
+
+                                    <div className="flex justify-center p-4 bg-white rounded-2xl mx-auto w-fit shadow-sm border border-border/50">
+                                        {qrCodeData ? (
+                                            <QRCodeSVG value={qrCodeData} size={200} />
+                                        ) : (
+                                            <div className="w-[200px] h-[200px] flex items-center justify-center bg-surface-muted rounded-xl">
+                                                <Loader2 className="animate-spin text-accent" size={32} />
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="p-4 rounded-xl bg-accent/5 border border-accent/10 flex items-center justify-center gap-3">
+                                        {pairStatus === 'connected' ? (
+                                            <>
+                                                <div className="w-8 h-8 rounded-full bg-success/20 flex items-center justify-center text-success">
+                                                    <Check size={16} />
+                                                </div>
+                                                <p className="text-sm font-black text-success uppercase tracking-widest">Connected!</p>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Loader2 size={16} className="animate-spin text-accent" />
+                                                <p className="text-sm font-bold text-text-muted">Waiting for scan...</p>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            ) : !pairingCode ? (
                                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
                                     <div className="space-y-2">
                                         <label className="text-xs font-black uppercase tracking-widest text-text-muted">Business Number</label>
