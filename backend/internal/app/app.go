@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -22,8 +23,9 @@ import (
 	"webtracker-bot/internal/whatsapp"
 	"webtracker-bot/internal/worker"
 
-	"github.com/google/uuid"
 	transport_http "webtracker-bot/internal/api"
+
+	"github.com/google/uuid"
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/store"
 	"go.mau.fi/whatsmeow/store/sqlstore"
@@ -351,11 +353,11 @@ func (a *App) GeneratePairingCode(ctx context.Context, companyID uuid.UUID, phon
 		if err != nil {
 			return "", fmt.Errorf("failed to get company: %w", err)
 		}
-		
+
 		if err := a.initBotForCompany(company); err != nil {
 			return "", fmt.Errorf("failed to init bot for company: %w", err)
 		}
-		
+
 		bot, err = a.GetBot(companyID)
 		if err != nil {
 			return "", err
@@ -373,6 +375,9 @@ func (a *App) GeneratePairingCode(ctx context.Context, companyID uuid.UUID, phon
 		return "", fmt.Errorf("failed to pair phone: %w", err)
 	}
 
+	// Remove any hyphens so the frontend can handle formatting
+	code = strings.ReplaceAll(code, "-", "")
+
 	return code, nil
 }
 
@@ -384,11 +389,11 @@ func (a *App) GetQR(ctx context.Context, companyID uuid.UUID) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("failed to get company: %w", err)
 		}
-		
+
 		if err := a.initBotForCompany(company); err != nil {
 			return "", fmt.Errorf("failed to init bot for company: %w", err)
 		}
-		
+
 		bot, err = a.GetBot(companyID)
 		if err != nil {
 			return "", err

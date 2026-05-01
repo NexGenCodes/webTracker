@@ -92,8 +92,10 @@ export default function SettingsPage() {
             if (!companyId) return;
             await deleteAccount(companyId);
             toast.success("Account deleted. Redirecting...");
-            // Clear session and redirect
+            
+            // Clear session and force full reload to auth
             await logoutAction();
+            window.location.href = '/auth';
         } catch {
             toast.error("Failed to delete account. Please try again.");
             setIsDeleting(false);
