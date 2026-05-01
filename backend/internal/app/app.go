@@ -102,9 +102,22 @@ func (a *App) LogoutBot(companyID uuid.UUID) error {
 		return err
 	}
 
+	// Make sure we're connected so the logout command reaches the server
+	if !bot.WA.IsConnected() {
+		_ = bot.WA.Connect()
+		time.Sleep(2 * time.Second) // Give it a moment to connect
+	}
+
 	err = bot.WA.Logout(context.Background())
 	if err != nil {
 		logger.Warn().Err(err).Str("company_id", companyID.String()).Msg("Failed to send logout to WhatsApp, device may already be disconnected")
+		// Forcefully delete the session from the database if Logout failed
+		if bot.WA.Store != nil {
+			errDelete := bot.WA.Store.Delete(context.Background())
+			if errDelete != nil {
+				logger.Error().Err(errDelete).Msg("Failed to forcefully delete store")
+			}
+		}
 	}
 
 	_ = a.ConfigUC.UpdateCompanyAuthStatus(context.Background(), companyID, "pending")

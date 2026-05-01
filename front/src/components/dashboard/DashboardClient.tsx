@@ -260,6 +260,8 @@ export default function DashboardClient({ initialCompanyData, initialStats, user
                             {activeTab === 'whatsapp' && (
                                 <WhatsAppTab
                                     whatsappConnected={whatsappConnected}
+                                    whatsappPhone={companyData?.whatsapp_phone}
+                                    companyId={companyId}
                                     onConnectClick={() => setIsConnectModalOpen(true)}
                                 />
                             )}

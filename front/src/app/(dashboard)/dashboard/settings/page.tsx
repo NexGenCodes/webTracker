@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Settings, Loader2, CheckCircle2, UserCircle2, AlertTriangle } from 'lucide-react';
+import { Settings, Loader2, CheckCircle2, UserCircle2, AlertTriangle, Trash2, Unplug } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useMultiTenant } from '@/components/providers/MultiTenantProvider';
 import { createClient } from '@/lib/supabase/client';
-import { disconnectWhatsApp } from '@/app/actions/setup';
+import { disconnectWhatsApp, deleteAccount } from '@/app/actions/setup';
+import { logoutAction } from '@/app/actions/auth';
 import toast from 'react-hot-toast';
 
 export default function SettingsPage() {
@@ -15,6 +16,9 @@ export default function SettingsPage() {
     const [isSaving, setIsSaving] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
     const [isDisconnecting, setIsDisconnecting] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [deleteConfirmText, setDeleteConfirmText] = useState('');
     const [companyLoading, setCompanyLoading] = useState(true);
 
     const supabase = createClient();
@@ -79,6 +83,20 @@ export default function SettingsPage() {
             toast.error("Failed to disconnect bot");
         } finally {
             setIsDisconnecting(false);
+        }
+    };
+
+    const handleDeleteAccount = async () => {
+        setIsDeleting(true);
+        try {
+            if (!companyId) return;
+            await deleteAccount(companyId);
+            toast.success("Account deleted. Redirecting...");
+            // Clear session and redirect
+            await logoutAction();
+        } catch {
+            toast.error("Failed to delete account. Please try again.");
+            setIsDeleting(false);
         }
     };
 
@@ -242,26 +260,92 @@ export default function SettingsPage() {
                     </div>
 
                     {/* Danger Zone */}
-                    <div className="glass-panel p-8 md:p-10 border-error/20 bg-error/5 relative overflow-hidden group">
+                    <div className="glass-panel p-8 md:p-10 border-error/20 bg-error/5 relative overflow-hidden space-y-8">
                         <div className="absolute top-0 left-0 w-1 h-full bg-error" />
-                        <div className="flex items-start justify-between flex-col sm:flex-row gap-6">
+
+                        <h3 className="text-sm font-black text-error uppercase tracking-[0.2em] flex items-center gap-2">
+                            <AlertTriangle size={16} /> Danger Zone
+                        </h3>
+
+                        {/* Disconnect WhatsApp */}
+                        <div className="flex items-start justify-between flex-col sm:flex-row gap-4 pb-8 border-b border-error/10">
                             <div>
-                                <h3 className="text-sm font-black text-error uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
-                                    <AlertTriangle size={16} /> Danger Zone
-                                </h3>
+                                <h4 className="text-xs font-black text-text-main uppercase tracking-widest mb-1 flex items-center gap-2">
+                                    <Unplug size={14} /> Disconnect WhatsApp
+                                </h4>
                                 <p className="text-sm font-medium text-text-muted leading-relaxed max-w-sm">
-                                    Disconnecting your WhatsApp bot stops all tracking instantly and deletes the connection.
+                                    Stops all tracking instantly and deletes the WhatsApp session.
                                 </p>
                             </div>
-                            <div className="flex flex-col gap-3">
-                                <button
-                                    onClick={handleDisconnectBot}
-                                    disabled={isDisconnecting}
-                                    className="px-6 py-3 bg-error/10 hover:bg-error text-error hover:text-white border border-error/20 rounded-xl font-black text-xs uppercase tracking-widest whitespace-nowrap shadow-sm transition-all active:scale-95 flex items-center gap-2"
-                                >
-                                    {isDisconnecting ? <Loader2 size={16} className="animate-spin" /> : "Disconnect Bot"}
-                                </button>
+                            <button
+                                id="settings-disconnect-bot"
+                                onClick={handleDisconnectBot}
+                                disabled={isDisconnecting}
+                                className="px-6 py-3 bg-error/10 hover:bg-error text-error hover:text-white border border-error/20 rounded-xl font-black text-xs uppercase tracking-widest whitespace-nowrap shadow-sm transition-all duration-200 active:scale-95 flex items-center gap-2 shrink-0"
+                            >
+                                {isDisconnecting ? <Loader2 size={16} className="animate-spin" /> : "Disconnect Bot"}
+                            </button>
+                        </div>
+
+                        {/* Delete Account */}
+                        <div className="space-y-4">
+                            <div className="flex items-start justify-between flex-col sm:flex-row gap-4">
+                                <div>
+                                    <h4 className="text-xs font-black text-error uppercase tracking-widest mb-1 flex items-center gap-2">
+                                        <Trash2 size={14} /> Delete Account
+                                    </h4>
+                                    <p className="text-sm font-medium text-text-muted leading-relaxed max-w-sm">
+                                        Permanently delete your company, all shipments, and data. This action is <strong className="text-error">irreversible</strong>.
+                                    </p>
+                                </div>
+                                {!showDeleteConfirm && (
+                                    <button
+                                        id="settings-delete-account-trigger"
+                                        onClick={() => setShowDeleteConfirm(true)}
+                                        className="px-6 py-3 bg-error/10 hover:bg-error text-error hover:text-white border border-error/20 rounded-xl font-black text-xs uppercase tracking-widest whitespace-nowrap shadow-sm transition-all duration-200 active:scale-95 flex items-center gap-2 shrink-0"
+                                    >
+                                        <Trash2 size={14} /> Delete Account
+                                    </button>
+                                )}
                             </div>
+
+                            {showDeleteConfirm && (
+                                <div className="p-6 bg-error/10 border border-error/20 rounded-2xl space-y-4">
+                                    <p className="text-sm font-bold text-text-main">
+                                        Type <span className="text-error font-black">{settingsForm.name || 'your company name'}</span> to confirm:
+                                    </p>
+                                    <input
+                                        id="delete-account-confirm-input"
+                                        type="text"
+                                        value={deleteConfirmText}
+                                        onChange={(e) => setDeleteConfirmText(e.target.value)}
+                                        placeholder="Type company name here..."
+                                        className="input-premium w-full !bg-surface/50 focus:!bg-surface !border-error/30 focus:!border-error"
+                                    />
+                                    <div className="flex items-center gap-3">
+                                        <button
+                                            id="delete-account-confirm"
+                                            onClick={handleDeleteAccount}
+                                            disabled={isDeleting || deleteConfirmText !== settingsForm.name}
+                                            className="px-6 py-3 bg-error hover:bg-error/90 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-error/20 transition-all duration-200 active:scale-95 flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                                        >
+                                            {isDeleting ? (
+                                                <><Loader2 size={14} className="animate-spin" /> Deleting…</>
+                                            ) : (
+                                                <><Trash2 size={14} /> Permanently Delete</>
+                                            )}
+                                        </button>
+                                        <button
+                                            id="delete-account-cancel"
+                                            onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); }}
+                                            disabled={isDeleting}
+                                            className="px-6 py-3 bg-surface hover:bg-surface-muted text-text-main border border-border rounded-xl font-black text-xs uppercase tracking-widest transition-all duration-200 active:scale-95"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </motion.div>

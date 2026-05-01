@@ -79,16 +79,19 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
 
     const watchPhone = watch('phone');
 
-    // Mark connected and auto-close after delay
+    // Handle connected logic
     const handleConnected = useCallback(() => {
-        if (pairStatus === 'connected') return; // guard against double-fire
-        setPairStatus('connected');
+        setPairStatus(prev => {
+            if (prev === 'connected') return prev;
+            // Execute side-effect
+            setTimeout(() => {
+                onSuccess();
+                onClose();
+            }, 2500);
+            return 'connected';
+        });
         setPairError('');
-        setTimeout(() => {
-            onSuccess();
-            onClose();
-        }, 2500);
-    }, [pairStatus, onSuccess, onClose]);
+    }, [onSuccess, onClose]);
 
     const handleFetchQR = useCallback(() => {
         if (!companyId) return;
@@ -97,13 +100,12 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
                 const response = await getWhatsAppQR(companyId);
                 if (response.success && response.pairingCode) {
                     setQrCodeData(response.pairingCode);
-                    setPairStatus('waiting');
+                    setPairStatus(prev => prev === 'idle' ? 'waiting' : prev);
                 } else {
                     setPairError(response.error || 'Could not fetch QR code.');
                 }
             } catch (err: unknown) {
                 const msg = err instanceof Error ? err.message : 'An error occurred.';
-                // If already connected, treat as success
                 if (msg.toLowerCase().includes('already connected')) {
                     handleConnected();
                 } else {
@@ -124,7 +126,8 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
             reset();
             handleFetchQR();
         }
-    }, [isOpen, reset, handleFetchQR]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen]);
 
     // Auto-refresh QR code every 20 seconds while in QR mode and waiting
     useEffect(() => {
@@ -291,7 +294,7 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
                                 <div className="flex bg-surface-muted p-1 rounded-xl mb-6">
                                     <button
                                         type="button"
-                                        onClick={() => { setConnectMode('qr'); handleFetchQR(); }}
+                                        onClick={() => { setConnectMode('qr'); if (!qrCodeData) handleFetchQR(); }}
                                         className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${connectMode === 'qr' ? 'bg-surface shadow-sm text-text-main' : 'text-text-muted hover:text-text-main'}`}
                                     >
                                         QR Code
