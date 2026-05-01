@@ -1,11 +1,18 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { jwtVerify } from 'jose/jwt/verify'
+import { jwtVerify, importSPKI } from 'jose'
 
-const JWT_SECRET_RAW = process.env.JWT_SECRET;
-if (!JWT_SECRET_RAW) {
-  console.error('CRITICAL: JWT_SECRET environment variable is not set. Auth will reject all tokens.');
+const JWT_PUBLIC_KEY_RAW = process.env.NEXT_PUBLIC_JWT_PUBLIC_KEY?.replace(/\\n/g, '\n');
+if (!JWT_PUBLIC_KEY_RAW) {
+  console.error('CRITICAL: NEXT_PUBLIC_JWT_PUBLIC_KEY environment variable is not set. Auth will reject all tokens.');
 }
-const JWT_SECRET = new TextEncoder().encode(JWT_SECRET_RAW || '');
+
+let publicKey: any;
+async function getPublicKey() {
+  if (!publicKey && JWT_PUBLIC_KEY_RAW) {
+    publicKey = await importSPKI(JWT_PUBLIC_KEY_RAW, 'ES256');
+  }
+  return publicKey;
+}
 
 export async function middleware(request: NextRequest) {
   const jwt = request.cookies.get('jwt')?.value
@@ -16,8 +23,11 @@ export async function middleware(request: NextRequest) {
   let isValid = false
   if (jwt) {
     try {
-      await jwtVerify(jwt, JWT_SECRET)
-      isValid = true
+      const key = await getPublicKey()
+      if (key) {
+        await jwtVerify(jwt, key)
+        isValid = true
+      }
     } catch {
       // Invalid JWT
       isValid = false

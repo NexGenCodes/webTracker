@@ -1,11 +1,19 @@
 import { cookies } from 'next/headers';
-import { jwtVerify } from 'jose';
+import { jwtVerify, importSPKI } from 'jose';
 
-if (!process.env.JWT_SECRET) {
-    throw new Error('FATAL: JWT_SECRET environment variable is not set.');
+if (!process.env.NEXT_PUBLIC_JWT_PUBLIC_KEY) {
+    throw new Error('FATAL: NEXT_PUBLIC_JWT_PUBLIC_KEY environment variable is not set.');
 }
 
-const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET);
+const JWT_PUBLIC_KEY_RAW = process.env.NEXT_PUBLIC_JWT_PUBLIC_KEY.replace(/\\n/g, '\n');
+
+let publicKey: any;
+async function getPublicKey() {
+  if (!publicKey) {
+    publicKey = await importSPKI(JWT_PUBLIC_KEY_RAW, 'ES256');
+  }
+  return publicKey;
+}
 
 export interface SessionUser {
     company_id: string;
@@ -28,7 +36,8 @@ export async function getServerSession(): Promise<{ authenticated: boolean; user
             return { authenticated: false };
         }
 
-        const { payload } = await jwtVerify(jwt, JWT_SECRET);
+        const key = await getPublicKey();
+        const { payload } = await jwtVerify(jwt, key);
         
         return { 
             authenticated: true,

@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { registerSchema, RegisterForm, RegisterStep } from '@/lib/validations/auth';
 import { registerIntentAction, verifyOtpAction } from '@/app/actions/auth';
+import { useMultiTenant } from '@/components/providers/MultiTenantProvider';
 
 export function useRegister(
     setError: (msg: string | null) => void,
@@ -14,6 +15,7 @@ export function useRegister(
     const router = useRouter();
     const searchParams = useSearchParams();
     const [isPending, startTransition] = useTransition();
+    const { refreshAuth } = useMultiTenant();
     const [otpTimer, setOtpTimer] = useState(600); // 10 minutes
 
     const form = useForm<RegisterForm>({ 
@@ -67,6 +69,7 @@ export function useRegister(
             try {
                 const otpToken = sessionStorage.getItem('otp_token') || '';
                 await verifyOtpAction(code, otpToken);
+                await refreshAuth();
 
                 const redirectUrl = searchParams.get('redirect') || searchParams.get('callbackUrl') || searchParams.get('returnUrl') || '/dashboard';
                 router.push(redirectUrl);

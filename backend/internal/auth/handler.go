@@ -42,8 +42,8 @@ func (h *Handler) RegisterRoutes(app *fiber.App) {
 	group.Post("/reset-password", h.resetPassword)
 	
 	// Protected routes
-	group.Get("/me", JWTAuth(h.service.cfg.JWTSecret), h.me)
-	group.Post("/setup", JWTAuth(h.service.cfg.JWTSecret), h.setupCompany)
+	group.Get("/me", JWTAuth(h.service.cfg.JWTPublicKeyPath), h.me)
+	group.Post("/setup", JWTAuth(h.service.cfg.JWTPublicKeyPath), h.setupCompany)
 }
 
 func (h *Handler) forgotPassword(c *fiber.Ctx) error {
