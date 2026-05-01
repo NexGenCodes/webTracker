@@ -89,7 +89,7 @@ export default function DashboardClient({ initialCompanyData, initialStats, user
             return data as CompanyData;
         },
         initialData: initialCompanyData,
-        staleTime: 1000 * 60 * 5, // 5 minutes
+        staleTime: 1000 * 5, // 5 seconds (was 5 minutes)
     });
 
     const { data: shipmentStats, isFetching: fetchingStats } = useQuery({
@@ -108,7 +108,7 @@ export default function DashboardClient({ initialCompanyData, initialStats, user
             return { total: data.length, active, delivered };
         },
         initialData: initialStats,
-        staleTime: 1000 * 60 * 5, // 5 minutes
+        staleTime: 1000 * 5, // 5 seconds (was 5 minutes)
     });
 
     // Handle Authorization Errors

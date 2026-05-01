@@ -33,6 +33,8 @@ export function LayoutHeader() {
 
     const handleSignOut = async () => {
         await logoutAction();
+        // Force a full router refresh to clear client-side caches
+        window.location.href = '/auth';
     };
 
     if (isAuth) {

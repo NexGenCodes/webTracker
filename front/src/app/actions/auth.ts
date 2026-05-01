@@ -46,6 +46,8 @@ export async function loginAction(data: LoginInput) {
             maxAge: 7 * 24 * 60 * 60 // 7 days
         });
         revalidatePath('/', 'layout');
+        revalidatePath('/dashboard');
+        revalidatePath('/auth');
     }
 
     return resData;
@@ -95,6 +97,8 @@ export async function verifyOtpAction(otp: string, otpToken: string) {
             maxAge: 7 * 24 * 60 * 60
         });
         revalidatePath('/', 'layout');
+        revalidatePath('/dashboard');
+        revalidatePath('/auth');
     }
 
     return resData;
@@ -134,10 +138,12 @@ export async function resetPasswordAction(email: string, otp: string, newPasswor
 }
 
 export async function logoutAction() {
-    // We clear the cookie by deleting it in the Next.js server environment
     const cookieStore = await cookies();
     cookieStore.delete('jwt');
 
-    // Redirect the user to the auth page
+    revalidatePath('/', 'layout');
+    revalidatePath('/dashboard');
+    revalidatePath('/auth');
+
     redirect('/auth');
 }
