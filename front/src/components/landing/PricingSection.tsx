@@ -6,9 +6,11 @@ import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { BILLING_PLANS } from '@/constants';
 import { useI18n } from '@/components/providers/I18nContext';
+import { useMultiTenant } from '@/components/providers/MultiTenantProvider';
 
 export function PricingSection() {
   const { dict } = useI18n();
+  const { user } = useMultiTenant();
   const [isYearly, setIsYearly] = useState(false);
 
   return (
@@ -132,7 +134,7 @@ export function PricingSection() {
 
                 {/* CTA */}
                 <Link
-                  href={isCustom ? "mailto:support@cargohive.com?subject=Enterprise%20Plan%20Inquiry" : "/auth"}
+                  href={isCustom ? "mailto:support@cargohive.com?subject=Enterprise%20Plan%20Inquiry" : (user ? "/dashboard/billing" : "/auth")}
                   className={cn(
                     "w-full py-4 rounded-xl font-black uppercase tracking-widest text-sm transition-all active:scale-95 flex items-center justify-center gap-2 mt-auto",
                     plan.popular
@@ -140,7 +142,7 @@ export function PricingSection() {
                       : "bg-surface-muted text-text-main hover:bg-surface border border-border hover:border-accent/30"
                   )}
                 >
-                  {plansDict[plan.btnKey]}
+                  {isCustom ? plansDict[plan.btnKey] : (user ? (dict.common?.dashboard ? `Go to ${dict.common.dashboard}` : "Go to Dashboard") : plansDict[plan.btnKey])}
                   <ArrowRight size={14} />
                 </Link>
               </div>
