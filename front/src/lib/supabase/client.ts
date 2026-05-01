@@ -9,7 +9,7 @@ export function createClient() {
     }
   }
 
-  const options: any = {};
+  const options: { global?: { headers: Record<string, string> } } = {};
   if (jwtValue) {
     options.global = {
       headers: {

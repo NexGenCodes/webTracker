@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { MobileNavOverlay } from './MobileNavOverlay';
-import { useRouter } from 'next/navigation';
+
 import { logoutAction } from '@/app/actions/auth';
 
 const dashboardNavLinks = [
