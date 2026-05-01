@@ -2,10 +2,11 @@ package auth
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"errors"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"strings"
 	"time"
 
@@ -45,9 +46,12 @@ func (s *Service) GenerateOTP(ctx context.Context, companyName, email, password 
 		return "", errors.New("a company with this email already exists")
 	}
 
-	// Generate 6 digit OTP
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	otp := fmt.Sprintf("%06d", r.Intn(1000000))
+	// Generate 6 digit OTP securely
+	n, err := rand.Int(rand.Reader, big.NewInt(1000000))
+	if err != nil {
+		return "", fmt.Errorf("failed to generate secure OTP: %w", err)
+	}
+	otp := fmt.Sprintf("%06d", n.Int64())
 	logger.Info().Str("email", email).Msg("Generated OTP, sending verification email")
 	s.mailer.SendAsync(notif.OTPEmail(email, otp))
 
@@ -205,15 +209,18 @@ func (s *Service) InitiatePasswordReset(ctx context.Context, email string) (stri
 	// Check if user exists
 	_, err := s.queries.GetCompanyByEmail(ctx, email)
 	if err != nil {
-		// We return a token even if user doesn't exist to prevent email enumeration, 
+		// We return a token even if user doesn't exist to prevent email enumeration,
 		// but we don't send an email. Or better, just return error for this specific app.
 		return "", errors.New("no account found with this email")
 	}
 
-	// Generate 6 digit OTP
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	otp := fmt.Sprintf("%06d", r.Intn(1000000))
-	
+	// Generate 6 digit OTP securely
+	n, err := rand.Int(rand.Reader, big.NewInt(1000000))
+	if err != nil {
+		return "", fmt.Errorf("failed to generate secure OTP: %w", err)
+	}
+	otp := fmt.Sprintf("%06d", n.Int64())
+
 	logger.Info().Str("email", email).Msg("Sending password reset email")
 	s.mailer.SendAsync(notif.PasswordResetEmail(email, otp))
 
@@ -282,7 +289,6 @@ func (s *Service) CompletePasswordReset(ctx context.Context, req ResetPasswordRe
 
 	return nil
 }
-
 
 func (s *Service) generateJWT(companyID uuid.UUID, companyName, email, planType, authStatus string) (string, error) {
 	if s.cfg.JWTSecret == "" {

@@ -24,6 +24,9 @@ func ExtractDocumentText(data []byte, mimeType string) (string, error) {
 
 		var textBuilder strings.Builder
 		numPages := pdfReader.NumPage()
+		if numPages > 10 {
+			numPages = 10 // Prevent OOM by capping massive PDFs
+		}
 		for i := 1; i <= numPages; i++ {
 			p := pdfReader.Page(i)
 			if p.V.IsNull() {

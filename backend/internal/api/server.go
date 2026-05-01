@@ -43,9 +43,13 @@ func NewServer(cfg *config.Config, shipmentUC *shipment.Usecase, configUC *confi
 	// Global Middlewares
 	app.Use(logger.New())
 
+	// Safely restrict CORS to the configured frontend URL and local development
 	app.Use(cors.New(cors.Config{
 		AllowOriginsFunc: func(origin string) bool {
-			return true
+			if origin == cfg.FrontendURL || origin == "http://localhost:3000" {
+				return true
+			}
+			return false
 		},
 		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-Requested-With, Cache-Control, Pragma, X-OTP-Token, X-Reset-Token, X-Company-ID",
 		AllowMethods:     "GET, POST, PATCH, DELETE, OPTIONS",
