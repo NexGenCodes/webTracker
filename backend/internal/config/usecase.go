@@ -147,4 +147,36 @@ func (u *Usecase) UpdateCompanyWhatsAppPhone(ctx context.Context, companyID uuid
 	return err
 }
 
+// DeleteCompany permanently removes a company and all its associated data.
+// Uses a transaction to ensure atomicity.
+func (u *Usecase) DeleteCompany(ctx context.Context, companyID uuid.UUID) error {
+	tx, err := u.pool.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Delete in dependency order (children first)
+	tables := []string{
+		"telemetry",
+		"systemconfig",
+		"userpreference",
+		"groupauthority",
+		"shipment",
+	}
+
+	for _, table := range tables {
+		if _, err := tx.ExecContext(ctx, fmt.Sprintf("DELETE FROM %s WHERE company_id = $1", table), companyID); err != nil {
+			return fmt.Errorf("failed to delete from %s: %w", table, err)
+		}
+	}
+
+	// Finally delete the company itself
+	if _, err := tx.ExecContext(ctx, "DELETE FROM companies WHERE id = $1", companyID); err != nil {
+		return fmt.Errorf("failed to delete company: %w", err)
+	}
+
+	return tx.Commit()
+}
+
 

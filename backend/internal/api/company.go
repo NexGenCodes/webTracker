@@ -40,6 +40,7 @@ func (h *CompanyHandler) RegisterRoutes(app *fiber.App) {
 	api.Post("/pair", h.pairBot)
 	api.Post("/qr", h.getQR)
 	api.Post("/logout", h.logoutBot)
+	api.Delete("/delete", h.deleteCompany)
 
 	api.Get("/setup/:token", h.getCompanyBySetupToken)
 	api.Post("/onboard", h.onboardCompany)
@@ -128,6 +129,25 @@ func (h *CompanyHandler) logoutBot(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{"success": true, "message": "Bot logged out successfully"})
+}
+
+func (h *CompanyHandler) deleteCompany(c *fiber.Ctx) error {
+	companyID := getCompanyID(c)
+	if companyID == uuid.Nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing or invalid company_id"})
+	}
+
+	// Try to logout the bot first (best-effort, ignore errors)
+	_ = h.bots.LogoutBot(companyID)
+
+	// Delete all company data
+	if err := h.configUC.DeleteCompany(c.Context(), companyID); err != nil {
+		logger.Error().Err(err).Str("company", companyID.String()).Msg("Failed to delete company")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete account. Please try again."})
+	}
+
+	logger.Info().Str("company_id", companyID.String()).Msg("Company account permanently deleted")
+	return c.JSON(fiber.Map{"success": true, "message": "Account permanently deleted"})
 }
 
 func (h *CompanyHandler) pairBot(c *fiber.Ctx) error {
