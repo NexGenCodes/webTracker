@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { useMultiTenant } from '@/components/providers/MultiTenantProvider';
 import { CheckCircle2, Zap, ArrowRight, ShieldCheck, HelpCircle } from 'lucide-react';
-import { LayoutHeader } from '@/components/layout/LayoutHeader';
 import { subscribeAction } from '@/app/actions/billing';
 
 import { BILLING_PLANS } from '@/constants';
@@ -33,10 +32,8 @@ export default function BillingPage() {
     };
 
     return (
-        <main className="min-h-screen bg-bg selection:bg-accent/20">
-            <LayoutHeader />
-
-            <div className="pt-32 pb-24 px-6 relative z-10 max-w-7xl mx-auto">
+        <main className="min-h-screen bg-transparent selection:bg-accent/20">
+            <div className="pt-12 pb-24 px-6 relative z-10 max-w-7xl mx-auto">
                 {/* Header Section */}
                 <div className="text-center max-w-3xl mx-auto mb-16 animate-fade-in">
                     <h1 className="text-3xl md:text-5xl font-black uppercase tracking-tighter mb-4 text-text-main">
