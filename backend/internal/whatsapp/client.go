@@ -65,15 +65,18 @@ var (
 		botLID   string
 	}
 	cacheLastClear time.Time
+	cacheMu        sync.Mutex
 )
 
 const maxCacheAge = 1 * time.Hour
 
 func checkCacheCleanup() {
+	cacheMu.Lock()
+	defer cacheMu.Unlock()
 	if time.Since(cacheLastClear) > maxCacheAge {
 		logger.Info().Msg("[RBAC] Clearing participant and authority caches (TTL reached)")
-		authCache = sync.Map{}
-		participantsCache = sync.Map{}
+		authCache.Clear()
+		participantsCache.Clear()
 		cacheLastClear = time.Now()
 	}
 }
