@@ -3,9 +3,11 @@
 import { ArrowRight, ShieldCheck, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { useI18n } from '@/components/providers/I18nContext';
+import { useMultiTenant } from '@/components/providers/MultiTenantProvider';
 
 export function GetStartedSection() {
   const { dict } = useI18n();
+  const { user } = useMultiTenant();
   return (
     <section className="py-24 md:py-32 relative z-10 w-full">
       <div className="max-w-5xl mx-auto px-4 md:px-6">
@@ -29,12 +31,21 @@ export function GetStartedSection() {
             </p>
 
             <div className="flex items-center justify-center max-w-lg mx-auto">
-              <Link
-                href="/auth"
-                className="w-full sm:w-auto px-10 py-5 bg-accent text-white rounded-xl font-black uppercase tracking-widest text-sm md:text-base transition-all hover:bg-accent/90 shadow-xl shadow-accent/20 active:scale-95 flex items-center justify-center gap-3"
-              >
-                {dict.marketing?.getStarted?.ctaAccount || 'Create Free Account'} <ArrowRight size={18} />
-              </Link>
+              {user ? (
+                <Link
+                  href="/dashboard"
+                  className="w-full sm:w-auto px-10 py-5 bg-accent text-white rounded-xl font-black uppercase tracking-widest text-sm md:text-base transition-all hover:bg-accent/90 shadow-xl shadow-accent/20 active:scale-95 flex items-center justify-center gap-3"
+                >
+                  {dict.common?.dashboard || 'Dashboard'} <ArrowRight size={18} />
+                </Link>
+              ) : (
+                <Link
+                  href="/auth"
+                  className="w-full sm:w-auto px-10 py-5 bg-accent text-white rounded-xl font-black uppercase tracking-widest text-sm md:text-base transition-all hover:bg-accent/90 shadow-xl shadow-accent/20 active:scale-95 flex items-center justify-center gap-3"
+                >
+                  {dict.marketing?.getStarted?.ctaAccount || 'Create Free Account'} <ArrowRight size={18} />
+                </Link>
+              )}
             </div>
 
             {/* Trust line */}

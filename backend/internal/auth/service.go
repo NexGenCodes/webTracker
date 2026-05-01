@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"strings"
 	"time"
+	"os"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -291,8 +292,18 @@ func (s *Service) CompletePasswordReset(ctx context.Context, req ResetPasswordRe
 }
 
 func (s *Service) generateJWT(companyID uuid.UUID, companyName, email, planType, authStatus string) (string, error) {
-	if s.cfg.JWTSecret == "" {
-		return "", errors.New("JWT_SECRET is not configured")
+	if s.cfg.JWTPrivateKeyPath == "" {
+		return "", errors.New("JWT_PRIVATE_KEY_PATH is not configured")
+	}
+
+	keyBytes, err := os.ReadFile(s.cfg.JWTPrivateKeyPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read private key from %s: %w", s.cfg.JWTPrivateKeyPath, err)
+	}
+
+	privateKey, err := jwt.ParseECPrivateKeyFromPEM(keyBytes)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse private key: %w", err)
 	}
 
 	claims := JWTClaims{
@@ -301,13 +312,17 @@ func (s *Service) generateJWT(companyID uuid.UUID, companyName, email, planType,
 		Email:       email,
 		PlanType:    planType,
 		AuthStatus:  authStatus,
+		Role:        "authenticated",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(7 * 24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Issuer:    "webtracker-auth",
+			Subject:   companyID.String(),
+			Audience:  jwt.ClaimStrings{"authenticated"},
 		},
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(s.cfg.JWTSecret))
+	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+	token.Header["kid"] = "3ac00c7e-2058-4c54-8cf1-54ebca7a67f1"
+	return token.SignedString(privateKey)
 }

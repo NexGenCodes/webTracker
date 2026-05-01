@@ -57,8 +57,8 @@ func NewServer(cfg *config.Config, shipmentUC *shipment.Usecase, configUC *confi
 	}))
 
 	// Global JWT Authentication (Zero-Trust Token Relay)
-	if cfg.JWTSecret != "" {
-		app.Use(auth.JWTAuth(cfg.JWTSecret))
+	if cfg.JWTPublicKeyPath != "" {
+		app.Use(auth.JWTAuth(cfg.JWTPublicKeyPath))
 	}
 
 	return &Server{

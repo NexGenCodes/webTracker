@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useTransition } from 'react';
+import React, { useState, useEffect, useTransition, useCallback } from 'react';
 import { Smartphone, Copy, Check, Loader2, XCircle, ChevronRight, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { z } from 'zod';
@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { pairWhatsApp, getWhatsAppQR } from '@/app/actions/setup';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
 import { QRCodeSVG } from 'qrcode.react';
+import { createClient } from '@/lib/supabase/client';
 
 const formatLocalPhone = (countryCode: string, phone: string) => {
     let localPhone = phone.replace(/[\s\-()]/g, '');
@@ -78,6 +79,17 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
 
     const watchPhone = watch('phone');
 
+    // Mark connected and auto-close after delay
+    const handleConnected = useCallback(() => {
+        if (pairStatus === 'connected') return; // guard against double-fire
+        setPairStatus('connected');
+        setPairError('');
+        setTimeout(() => {
+            onSuccess();
+            onClose();
+        }, 2500);
+    }, [pairStatus, onSuccess, onClose]);
+
     // Reset state when opened
     useEffect(() => {
         if (isOpen) {
@@ -103,7 +115,13 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
                     setPairError(response.error || 'Could not fetch QR code.');
                 }
             } catch (err: unknown) {
-                setPairError(err instanceof Error ? err.message : 'An error occurred.');
+                const msg = err instanceof Error ? err.message : 'An error occurred.';
+                // If already connected, treat as success
+                if (msg.toLowerCase().includes('already connected')) {
+                    handleConnected();
+                } else {
+                    setPairError(msg);
+                }
             }
         });
     };
@@ -121,20 +139,46 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
         };
     }, [isOpen, connectMode, pairStatus]);
 
-    // Handle pairing modal success state when auth_status changes to active
+    // Handle pairing modal success state when auth_status changes to active (via Realtime)
     useEffect(() => {
-        let timer: NodeJS.Timeout;
-        if (isOpen && companyData?.auth_status === 'active' && pairStatus === 'waiting') {
-            setPairStatus('connected');
-            timer = setTimeout(() => {
-                onSuccess();
-                onClose();
-            }, 2500);
+        if (!isOpen || !companyId) return;
+
+        // Fallback: check if already active via props (e.g. from React Query)
+        if (companyData?.auth_status === 'active' && pairStatus === 'waiting') {
+            handleConnected();
         }
+
+        // Initialize Supabase Realtime
+        const supabase = createClient();
+        const channel = supabase
+            .channel(`company_status_${companyId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'companies',
+                    filter: `id=eq.${companyId}`,
+                },
+                (payload) => {
+                    console.log('[Realtime] Received company update:', payload.new);
+                    if (payload.new.auth_status === 'active' && pairStatus === 'waiting') {
+                        handleConnected();
+                    }
+                }
+            )
+            .subscribe((status) => {
+                if (status === 'SUBSCRIBED') {
+                    console.log('[Realtime] Subscribed to company status changes successfully.');
+                } else if (status === 'CHANNEL_ERROR') {
+                    console.error('[Realtime] Subscription failed. Check RLS or JWT config.');
+                }
+            });
+
         return () => {
-            if (timer) clearTimeout(timer);
+            supabase.removeChannel(channel);
         };
-    }, [companyData?.auth_status, isOpen, pairStatus, onClose, onSuccess]);
+    }, [companyId, companyData?.auth_status, isOpen, pairStatus, handleConnected]);
 
     useEffect(() => {
         let copyTimer: NodeJS.Timeout;
@@ -191,7 +235,12 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
                     setPairError(response.error || 'Code not received. Check phone format.');
                 }
             } catch (err: unknown) {
-                setPairError(err instanceof Error ? err.message : 'An error occurred during pairing.');
+                const msg = err instanceof Error ? err.message : 'An error occurred during pairing.';
+                if (msg.toLowerCase().includes('already connected')) {
+                    handleConnected();
+                } else {
+                    setPairError(msg);
+                }
             }
         });
     };

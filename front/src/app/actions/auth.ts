@@ -39,7 +39,7 @@ export async function loginAction(data: LoginInput) {
     if (resData.token) {
         const cookieStore = await cookies();
         cookieStore.set('jwt', resData.token, {
-            httpOnly: true,
+            httpOnly: false, // Must be false for Supabase Realtime client to read it
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
             path: '/',
@@ -73,7 +73,7 @@ export async function registerIntentAction(data: RegisterInput) {
 export async function verifyOtpAction(otp: string, otpToken: string) {
     const res = await fetch(`${getApiUrl()}/api/auth/verify-otp`, {
         method: 'POST',
-        headers: { 
+        headers: {
             'Content-Type': 'application/json',
             'X-OTP-Token': otpToken
         },
@@ -88,7 +88,7 @@ export async function verifyOtpAction(otp: string, otpToken: string) {
     if (resData.token) {
         const cookieStore = await cookies();
         cookieStore.set('jwt', resData.token, {
-            httpOnly: true,
+            httpOnly: false, // Must be false for Supabase Realtime client to read it
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
             path: '/',
@@ -118,7 +118,7 @@ export async function forgotPasswordAction(email: string) {
 export async function resetPasswordAction(email: string, otp: string, newPassword: string, resetToken: string) {
     const res = await fetch(`${getApiUrl()}/api/auth/reset-password`, {
         method: 'POST',
-        headers: { 
+        headers: {
             'Content-Type': 'application/json',
             'X-Reset-Token': resetToken
         },
@@ -137,7 +137,7 @@ export async function logoutAction() {
     // We clear the cookie by deleting it in the Next.js server environment
     const cookieStore = await cookies();
     cookieStore.delete('jwt');
-    
+
     // Redirect the user to the auth page
     redirect('/auth');
 }

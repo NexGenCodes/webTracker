@@ -3,9 +3,11 @@
 import { ArrowRight, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { useI18n } from '@/components/providers/I18nContext';
+import { useMultiTenant } from '@/components/providers/MultiTenantProvider';
 
 export function HeroSection() {
   const { dict } = useI18n();
+  const { user } = useMultiTenant();
 
   return (
     <section className="py-16 md:py-32 lg:py-40 relative z-10 w-full">
@@ -47,12 +49,21 @@ export function HeroSection() {
 
         {/* Company CTA */}
         <div className="mt-4 flex flex-col items-center gap-3 animate-fade-in">
-          <Link
-            href="/auth"
-            className="px-8 py-4 bg-transparent text-accent border-2 border-accent/30 rounded-[14px] font-black uppercase tracking-widest text-sm md:text-base transition-all hover:bg-accent/10 hover:border-accent/50 active:scale-95 flex items-center justify-center gap-2 w-full sm:w-auto"
-          >
-            {dict.marketing?.hero?.ctaCreate || 'Create Free Account'} <ArrowRight size={18} />
-          </Link>
+          {user ? (
+            <Link
+              href="/dashboard"
+              className="px-8 py-4 bg-transparent text-accent border-2 border-accent/30 rounded-[14px] font-black uppercase tracking-widest text-sm md:text-base transition-all hover:bg-accent/10 hover:border-accent/50 active:scale-95 flex items-center justify-center gap-2 w-full sm:w-auto"
+            >
+              {dict.common?.dashboard || 'Dashboard'} <ArrowRight size={18} />
+            </Link>
+          ) : (
+            <Link
+              href="/auth"
+              className="px-8 py-4 bg-transparent text-accent border-2 border-accent/30 rounded-[14px] font-black uppercase tracking-widest text-sm md:text-base transition-all hover:bg-accent/10 hover:border-accent/50 active:scale-95 flex items-center justify-center gap-2 w-full sm:w-auto"
+            >
+              {dict.marketing?.hero?.ctaCreate || 'Create Free Account'} <ArrowRight size={18} />
+            </Link>
+          )}
           <p className="text-text-muted/50 text-[10px] font-black uppercase tracking-[0.2em]">
             {dict.marketing?.hero?.ctaCompanyNote || 'For logistics companies & dispatch riders'}
           </p>

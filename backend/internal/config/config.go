@@ -44,7 +44,9 @@ type Config struct {
 	PaystackSecretKey string `env:"PAYSTACK_SECRET_KEY"`
 
 	// JWT Authentication
-	JWTSecret string `env:"JWT_SECRET"`
+	JWTSecret         string `env:"JWT_SECRET"`
+	JWTPrivateKeyPath string `env:"JWT_PRIVATE_KEY_PATH" env-default:"jwt_private.pem"`
+	JWTPublicKeyPath  string `env:"JWT_PUBLIC_KEY_PATH" env-default:"jwt_public.pem"`
 
 	// Frontend URL for magic links
 	FrontendURL string `env:"FRONTEND_URL" env-default:"http://localhost:3000"`

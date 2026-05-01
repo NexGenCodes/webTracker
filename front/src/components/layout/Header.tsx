@@ -98,7 +98,7 @@ export const Header: React.FC<HeaderProps> = ({ showNav = true, className }) => 
                         {user ? (
                             <Link
                                 href="/dashboard"
-                                className="hidden lg:flex items-center gap-2 px-5 py-2.5 bg-surface text-text-main border border-border hover:border-accent hover:text-accent rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95"
+                                className="hidden lg:flex items-center gap-2 px-5 py-2.5 bg-accent text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all hover:bg-accent/90 active:scale-95 shadow-lg shadow-accent/20"
                             >
                                 {dict.common?.dashboard || 'Dashboard'}
                                 <ArrowRight size={14} />
@@ -164,7 +164,7 @@ export const Header: React.FC<HeaderProps> = ({ showNav = true, className }) => 
                         <Link
                             href="/dashboard"
                             onClick={() => setMobileMenuOpen(false)}
-                            className="flex items-center justify-center gap-3 w-full py-5 bg-surface text-text-main border border-border rounded-2xl font-black uppercase tracking-widest text-base transition-all active:scale-95 shadow-lg"
+                            className="flex items-center justify-center gap-3 w-full py-5 bg-accent text-white rounded-2xl font-black uppercase tracking-widest text-base transition-all active:scale-95 shadow-xl shadow-accent/20"
                         >
                             {dict.common?.dashboard || 'Dashboard'}
                             <ArrowRight size={18} />

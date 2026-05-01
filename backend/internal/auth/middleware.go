@@ -2,13 +2,23 @@ package auth
 
 import (
 	"strings"
+	"os"
+	"fmt"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
 )
 
 // JWTAuth returns a middleware that validates a JWT token from cookies or Authorization header
-func JWTAuth(secret string) fiber.Handler {
+func JWTAuth(publicKeyPath string) fiber.Handler {
+	// Read public key once (or lazily)
+	var publicKey interface{}
+	if keyBytes, err := os.ReadFile(publicKeyPath); err == nil {
+		if key, err := jwt.ParseECPublicKeyFromPEM(keyBytes); err == nil {
+			publicKey = key
+		}
+	}
+
 	return func(c *fiber.Ctx) error {
 		path := c.Path()
 		// Allow health checks, public tracking, and specific auth/webhook routes without JWT
@@ -42,7 +52,21 @@ func JWTAuth(secret string) fiber.Handler {
 
 		claims := &JWTClaims{}
 		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			return []byte(secret), nil
+			if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			}
+			if publicKey == nil {
+				// Try reloading just in case
+				if keyBytes, err := os.ReadFile(publicKeyPath); err == nil {
+					if key, err := jwt.ParseECPublicKeyFromPEM(keyBytes); err == nil {
+						publicKey = key
+					}
+				}
+			}
+			if publicKey == nil {
+				return nil, fmt.Errorf("public key not loaded")
+			}
+			return publicKey, nil
 		})
 
 		if err != nil || !token.Valid {
