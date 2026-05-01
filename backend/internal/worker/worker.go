@@ -251,7 +251,7 @@ func (w *Worker) process(job models.Job) {
 		baseURL = os.Getenv("FRONTEND_URL")
 	}
 
-	trackingMsg := fmt.Sprintf("📦 *SHIPMENT INFORMATION CREATED*\n\n━━━━━━━━━━━━━━━━━━━━━━━\nTracking ID: *%s*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n📌 *Track your package:*\n%s?id=%s", trackingID, baseURL, trackingID)
+	trackingMsg := fmt.Sprintf("📦 *SHIPMENT INFORMATION CREATED*\n\n━━━━━━━━━━━━━━━━━━━━━━━\nTracking ID: *%s*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n📌 *Track your package:*\n%s/track/%s", trackingID, baseURL, trackingID)
 	if m.IsAI {
 		trackingMsg += "\n\n_✨ Parsed by AI_"
 	}

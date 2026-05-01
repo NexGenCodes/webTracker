@@ -2,6 +2,7 @@
 
 import { getBackendUrl, backendHeaders } from '@/lib/backend';
 import { getServerSession } from '@/lib/auth';
+import { revalidatePath } from 'next/cache';
 
 export async function subscribeAction(plan: string, callback_url: string) {
     const { user } = await getServerSession();
@@ -29,6 +30,7 @@ export async function subscribeAction(plan: string, callback_url: string) {
         const err = await res.json().catch(() => ({ error: 'Backend error' }));
         throw new Error(err.error || 'Backend error');
     }
-    
-    return await res.json();
+    const data = await res.json();
+    revalidatePath('/dashboard');
+    return data;
 }

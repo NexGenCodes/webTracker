@@ -2,6 +2,7 @@
 
 import { getBackendUrl, backendHeaders } from '@/lib/backend';
 import { getServerSession } from '@/lib/auth';
+import { revalidatePath } from 'next/cache';
 
 export interface WhatsAppPairResponse {
     success: boolean;
@@ -34,6 +35,7 @@ export async function pairWhatsApp(companyId: string, phone: string): Promise<Wh
     
     const data = await res.json();
     
+    revalidatePath('/dashboard');
     return {
         success: true,
         pairingCode: data.pairing_code || data.code || data.data?.pairing_code || data.data?.code || data.pairingCode || data.data?.pairingCode
@@ -63,6 +65,7 @@ export async function disconnectWhatsApp(companyId: string): Promise<{ success: 
     }
     
     await res.json();
+    revalidatePath('/dashboard');
     return { success: true };
 }
 
@@ -119,5 +122,6 @@ export async function deleteAccount(companyId: string): Promise<{ success: boole
     }
 
     await res.json();
+    revalidatePath('/dashboard');
     return { success: true };
 }
