@@ -64,8 +64,8 @@ func GetLabelMappings() []uncompiledLabelMap {
 		{"ReceiverEmail", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee)[s']*\b[\s\-:]+\b(?:email|mail|e-mail)\b[\s\-:]*`, 2},
 		{"ReceiverEmail", `(?i)\b(?:email|mail|e-mail)\b[\s\-:]*`, 1},
 		{"SenderName", `(?i)\b(?:sender|sendr|from|shippr|shipper|sent by|remetente|remitente|absender)[s']*\b[\s\-:]+name\b[\s\-:]*`, 2},
-		{"SenderName", `(?i)\b(?:sender|sendr|from|shippr|shipper|sent by|remetente|remitente|absender)\b[\s\-:]*`, 2},
-		{"SenderCountry", `(?i)\b(?:origin|sender\s*country|sender\s*nation)\b[\s\-:]*`, 2},
+		{"SenderName", `(?i)\b(?:sender|sendr|from|shippr|shipper|sent by|remetente|remitente|absender)[s']*\b[\s\-:]*`, 2},
+		{"SenderCountry", `(?i)\b(?:origin|sender[s']*\s*country|sender[s']*\s*nation)\b[\s\-:]*`, 2},
 		{"CargoType", `(?i)\b(?:item|content|cargo|description|type|package|commodity|conteúdo|contenido|inhalt|ware|consignment)\b(?:\s+weight)?[\s\-:]*`, 1},
 		{"Weight", `(?i)\b(?:weight|wgt|mass|gross\s*weight|peso|gewicht|poids)\b[\s\-:]*`, 2},
 		{"scheduled_transit_time", `(?i)\b(?:departure|transit\s*time|depart|sent\s*date|start\s*date|transit|partida|salida|abfahrt)\b[\s\-:]*`, 2},
@@ -81,7 +81,7 @@ var (
 
 func init() {
 	footerRe = regexp.MustCompile(`(?im)^[\s_*]{3,}$|(?i)\b(?:thank\s*you|regards|best|sincerely|kind\s*regards|thanks|saludos)\b`)
-	senderLabels = regexp.MustCompile(`(?i)\b(?:sender|sendr|origin|from|shippr|shipper|sent by)\b`)
+	senderLabels = regexp.MustCompile(`(?i)\b(?:sender[s']*|sendr|origin|from|shippr|shipper|sent by)\b`)
 
 	// Pre-compile all regex maps to save CPU on the VPS
 	rawMaps := GetLabelMappings()
