@@ -38,6 +38,7 @@ func (h *CompanyHandler) RegisterRoutes(app *fiber.App) {
 	api.Post("/activate", h.activateBot)
 	api.Post("/deactivate", h.deactivateBot)
 	api.Post("/pair", h.pairBot)
+	api.Post("/logout", h.logoutBot)
 
 	api.Get("/setup/:token", h.getCompanyBySetupToken)
 	api.Post("/onboard", h.onboardCompany)
@@ -112,6 +113,20 @@ func (h *CompanyHandler) deactivateBot(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 	return c.JSON(fiber.Map{"success": true, "message": "Bot deactivated successfully"})
+}
+
+func (h *CompanyHandler) logoutBot(c *fiber.Ctx) error {
+	companyID := getCompanyID(c)
+	if companyID == uuid.Nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing or invalid company_id"})
+	}
+
+	if err := h.bots.LogoutBot(companyID); err != nil {
+		logger.Error().Err(err).Str("company", companyID.String()).Msg("Failed to logout bot")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.JSON(fiber.Map{"success": true, "message": "Bot logged out successfully"})
 }
 
 func (h *CompanyHandler) pairBot(c *fiber.Ctx) error {

@@ -4,21 +4,22 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
 
-	"webtracker-bot/internal/database/db"
 	"webtracker-bot/internal/commands"
 	"webtracker-bot/internal/config"
+	"webtracker-bot/internal/database/db"
 	"webtracker-bot/internal/i18n"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/parser"
 	"webtracker-bot/internal/receipt"
 	"webtracker-bot/internal/shipment"
-		"webtracker-bot/internal/whatsapp"
+	"webtracker-bot/internal/whatsapp"
 )
 
 type Worker struct {
@@ -29,7 +30,7 @@ type Worker struct {
 	Jobs            <-chan models.Job
 	WG              *sync.WaitGroup
 	Cfg             *config.Config
-	TrackingBaseURL string
+	FrontendURL     string
 	ShipmentService shipment.Service
 }
 
@@ -74,7 +75,12 @@ func (w *Worker) process(job models.Job) {
 	ctx = context.WithValue(ctx, "message_id", job.MessageID)
 	ctx = context.WithValue(ctx, "text", job.Text)
 
-	dispatcher := commands.NewDispatcher(w.Cfg, w.ShipmentUC, w.ConfigUC, bot.Sender, bot.Prefix, bot.CompanyName, w.Cfg.PairingPhone, w.Cfg.AdminTimezone, bot.Tier)
+	botPhone := ""
+	if bot.WA != nil && bot.WA.Store != nil && bot.WA.Store.ID != nil {
+		botPhone = whatsapp.GetBarePhone(bot.WA.Store.ID.User)
+	}
+
+	dispatcher := commands.NewDispatcher(w.Cfg, w.ShipmentUC, w.ConfigUC, bot.Sender, bot.Prefix, bot.CompanyName, botPhone, w.Cfg.AdminTimezone, bot.Tier)
 	if res, ok := dispatcher.Dispatch(ctx, job.CompanyID, job.Text); ok {
 		if len(res.Image) > 0 {
 			bot.Sender.SendImage(job.ChatJID, job.SenderJID, res.Image, res.Message, job.MessageID, job.Text)
@@ -240,9 +246,9 @@ func (w *Worker) process(job models.Job) {
 		Msg("Shipment created successfully")
 
 	// 10. Send tracking ID and link as follow-up message
-	baseURL := w.TrackingBaseURL
+	baseURL := w.FrontendURL
 	if baseURL == "" {
-		baseURL = "https://web-tracker-iota.vercel.app"
+		baseURL = os.Getenv("FRONTEND_URL")
 	}
 
 	trackingMsg := fmt.Sprintf("📦 *SHIPMENT INFORMATION CREATED*\n\n━━━━━━━━━━━━━━━━━━━━━━━\nTracking ID: *%s*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n📌 *Track your package:*\n%s?id=%s", trackingID, baseURL, trackingID)
@@ -315,5 +321,3 @@ func (w *Worker) isPotentialManifest(text string) (bool, bool) {
 
 	return false, count >= 3
 }
-
-

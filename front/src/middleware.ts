@@ -12,7 +12,6 @@ export async function middleware(request: NextRequest) {
 
   const isAuthPage = request.nextUrl.pathname.startsWith('/auth')
   const isProtectedPage = request.nextUrl.pathname.startsWith('/admin') || request.nextUrl.pathname.startsWith('/dashboard')
-  const isHomePage = request.nextUrl.pathname === '/'
 
   let isValid = false
   if (jwt) {
@@ -25,8 +24,8 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // Authenticated users shouldn't see the auth or home pages
-  if ((isAuthPage || isHomePage) && isValid) {
+  // Authenticated users shouldn't see the auth page
+  if (isAuthPage && isValid) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 

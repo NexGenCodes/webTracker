@@ -83,39 +83,7 @@ func SetupLinkEmail(to, companyName, frontendURL, token string) Email {
 	}
 }
 
-// PairingCodeEmail builds the WhatsApp pairing-code email.
-func PairingCodeEmail(to, companyName, phone, code string) Email {
-	companyName = "CargoHive"
-	html := fmt.Sprintf(`<!DOCTYPE html>
-<html>
-<body style="font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px;">
-    <div style="max-width: 600px; margin: auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-        <h1 style="color: #007bff; font-size: 24px; margin-bottom: 10px;">%s</h1>
-        <h2 style="color: #333; font-size: 18px; margin-bottom: 25px;">WhatsApp Integration Setup</h2>
-        <p style="color: #555; line-height: 1.6;">You have requested a pairing code to link your WhatsApp account to the tracking bot.</p>
-        <div style="background-color: #f8f9fa; border-left: 4px solid #007bff; padding: 15px; margin: 25px 0;">
-            <p style="margin: 0; color: #333;"><strong>Target Phone:</strong> %s</p>
-        </div>
-        <div style="text-align: center; margin: 35px 0; padding: 25px; background: #e9ecef; border-radius: 8px;">
-            <p style="margin: 0 0 10px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: #666;">Your Pairing Code</p>
-            <div style="font-size: 42px; font-weight: bold; letter-spacing: 8px; color: #000; font-family: 'Courier New', Courier, monospace;">%s</div>
-        </div>
-        <p style="color: #dc3545; font-size: 14px; font-weight: bold; text-align: center;">⏱️ THIS CODE EXPIRES IN 2 MINUTES</p>
-        <p style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px; color: #888; font-size: 12px;">
-            If you did not request this code, please ignore this email or contact security.
-            <br>&copy; 2026 %s. All rights reserved.
-        </p>
-    </div>
-</body>
-</html>`, companyName, phone, code, companyName)
 
-	return Email{
-		To:       to,
-		Subject:  fmt.Sprintf("[%s] WhatsApp Pairing Code", companyName),
-		HTMLBody: html,
-		FromName: companyName,
-	}
-}
 
 // DeliveryEmail builds the shipment-arrival notification email.
 func DeliveryEmail(to, recipientName, trackingID, companyName, arrivalDate string) Email {

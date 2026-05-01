@@ -1,14 +1,8 @@
 import { CreateShipmentDto, ShipmentData, ServiceResult, ShipmentStatus, DashboardStats, PaginatedResult, Pagination } from '@/types/shipment';
 import { logger } from '@/lib/logger';
 
-import { createAdminClient } from '@/lib/supabase/admin';
-
-function getNextJsBaseUrl() {
-    if (typeof window !== 'undefined') return '';
-    if (process.env.API_URL) return process.env.API_URL;
-    if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-    return `http://localhost:${process.env.PORT ?? 3000}`;
-}
+import { getBackendUrl, backendHeaders } from '@/lib/backend';
+import { createClient } from '@/lib/supabase/server';
 
 const REQUEST_TIMEOUT = 10000;
 
@@ -36,15 +30,23 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
-    // Ensure absolute URL for server-side fetches
-    const baseUrl = getNextJsBaseUrl();
+    // Ensure absolute URL points to the Go backend
+    const baseUrl = getBackendUrl();
     const fullUrl = url.startsWith('/') ? `${baseUrl}${url}` : url;
 
+    // Inject JWT headers for authentication to Go backend
+    const baseHeaders = await backendHeaders();
+    const mergedOptions: RequestInit = {
+        ...options,
+        headers: {
+            ...baseHeaders,
+            ...options.headers,
+        },
+        signal: controller.signal
+    };
+
     try {
-        const response = await fetch(fullUrl, {
-            ...options,
-            signal: controller.signal
-        });
+        const response = await fetch(fullUrl, mergedOptions);
         clearTimeout(timeoutId);
         return response;
     } catch (error: unknown) {
@@ -205,7 +207,7 @@ export class ShipmentService {
         if (!trackingNumber) return null;
 
         try {
-            const supabase = createAdminClient();
+            const supabase = await createClient();
 
             const { data, error } = await supabase
                 .from('shipment')
@@ -348,7 +350,7 @@ export class ShipmentService {
         status?: string;
     } = {}): Promise<ServiceResult<PaginatedResult<ShipmentData>>> {
         try {
-            const supabase = createAdminClient();
+            const supabase = await createClient();
             const page = params.page || 1;
             const limit = params.limit || 20;
             const offset = (page - 1) * limit;
@@ -424,7 +426,7 @@ export class ShipmentService {
      */
     static async getDashboardData(): Promise<ServiceResult<{ shipments: ShipmentData[], stats: DashboardStats }>> {
         try {
-            const supabase = createAdminClient();
+            const supabase = await createClient();
 
             // Fetch Recent List
             const { data: apiShipments, error: listError } = await supabase
@@ -586,7 +588,7 @@ export class ShipmentService {
      */
     static async getTelemetry(): Promise<ServiceResult<{ stats: unknown[]; recent: unknown[] }>> {
         try {
-            const supabase = createAdminClient();
+            const supabase = await createClient();
 
             // Fetch recent telemetry events
             const { data: recent, error: recentError } = await supabase

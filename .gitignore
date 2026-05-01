@@ -22,6 +22,7 @@ node_modules/
 
 # production
 /build
+**/bin
 
 # misc
 .DS_Store

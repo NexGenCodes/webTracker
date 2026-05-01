@@ -11,6 +11,8 @@ import (
 
 	"database/sql"
 	"webtracker-bot/internal/config"
+	"webtracker-bot/internal/database"
+	"webtracker-bot/internal/database/db"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/receipt"
@@ -21,11 +23,7 @@ import (
 	"webtracker-bot/internal/worker"
 
 	"github.com/google/uuid"
-
-	"webtracker-bot/internal/database/db"
-	"webtracker-bot/internal/database"
 	transport_http "webtracker-bot/internal/api"
-	
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/store"
 	"go.mau.fi/whatsmeow/store/sqlstore"
@@ -95,6 +93,24 @@ func (a *App) DeactivateBot(companyID uuid.UUID) error {
 
 	logger.Info().Str("company_id", companyID.String()).Msg("Bot dynamically deactivated")
 	return nil
+}
+
+// LogoutBot logs out of WhatsApp, deleting the session from the database and the remote device.
+func (a *App) LogoutBot(companyID uuid.UUID) error {
+	bot, err := a.GetBot(companyID)
+	if err != nil {
+		return err
+	}
+
+	err = bot.WA.Logout(context.Background())
+	if err != nil {
+		logger.Warn().Err(err).Str("company_id", companyID.String()).Msg("Failed to send logout to WhatsApp, device may already be disconnected")
+	}
+
+	_ = a.ConfigUC.UpdateCompanyAuthStatus(context.Background(), companyID, "pending")
+
+	// Deactivate bot from memory
+	return a.DeactivateBot(companyID)
 }
 
 func (a *App) GetAllBots() []*whatsapp.BotInstance {
@@ -236,7 +252,7 @@ func (a *App) Run() error {
 			Cfg:             a.Cfg,
 			ShipmentUC:      a.ShipmentUC,
 			ConfigUC:        a.ConfigUC,
-			TrackingBaseURL: a.Cfg.TrackingBaseURL,
+			FrontendURL:     a.Cfg.FrontendURL,
 			ShipmentService: shipmentService,
 			Bots:            a, // 'a' implements BotProvider
 		}
@@ -300,7 +316,19 @@ func (a *App) connectWA() error {
 func (a *App) GeneratePairingCode(ctx context.Context, companyID uuid.UUID, phone string) (string, error) {
 	bot, err := a.GetBot(companyID)
 	if err != nil {
-		return "", err
+		company, err := a.ConfigUC.GetCompanyByID(ctx, companyID)
+		if err != nil {
+			return "", fmt.Errorf("failed to get company: %w", err)
+		}
+		
+		if err := a.initBotForCompany(company); err != nil {
+			return "", fmt.Errorf("failed to init bot for company: %w", err)
+		}
+		
+		bot, err = a.GetBot(companyID)
+		if err != nil {
+			return "", err
+		}
 	}
 
 	if err := bot.WA.Connect(); err != nil {
@@ -429,5 +457,3 @@ func (a *App) Shutdown() error {
 	logger.Info().Msg("App shutdown complete.")
 	return nil
 }
-
-

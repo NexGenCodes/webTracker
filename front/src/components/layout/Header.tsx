@@ -7,10 +7,11 @@ import { LanguageToggle } from '@/components/shared/LanguageToggle';
 import { ThemeToggle } from '@/components/shared/ThemeToggle';
 import { useI18n } from '@/components/providers/I18nContext';
 import { cn } from '@/lib/utils';
-import { Menu, X, LogOut, ArrowRight } from 'lucide-react';
-import { motion, AnimatePresence, useScroll, useSpring } from 'framer-motion';
+import { Menu, X, ArrowRight } from 'lucide-react';
+import { motion, useScroll, useSpring } from 'framer-motion';
 import { useState, useEffect } from 'react';
 import { useMultiTenant } from '@/components/providers/MultiTenantProvider';
+import { MobileNavOverlay } from './MobileNavOverlay';
 
 interface HeaderProps {
     showNav?: boolean;
@@ -35,18 +36,6 @@ export const Header: React.FC<HeaderProps> = ({ showNav = true, className }) => 
         setMobileMenuOpen(false);
     }, [pathname]);
 
-    // Lock body scroll when mobile menu is open
-    useEffect(() => {
-        if (mobileMenuOpen) {
-            document.body.style.overflow = 'hidden';
-        } else {
-            document.body.style.overflow = '';
-        }
-        return () => {
-            document.body.style.overflow = '';
-        };
-    }, [mobileMenuOpen]);
-
     const { scrollYProgress } = useScroll();
     const scaleX = useSpring(scrollYProgress, {
         stiffness: 100,
@@ -54,22 +43,17 @@ export const Header: React.FC<HeaderProps> = ({ showNav = true, className }) => 
         restDelta: 0.001
     });
 
-    const navLinks = user ? [
-        { href: '/dashboard', label: dict.common.dashboard || 'Dashboard' },
-        { href: '/track', label: dict.common.track || 'Track' },
-        { href: '/dashboard/settings', label: dict.common.settings || 'Settings' },
-        { href: '/dashboard/billing', label: dict.common.billing || 'Billing' },
-    ] : [
+    const navLinks = [
         { href: '/', label: dict.common.home || 'Home' },
         { href: '/track', label: dict.common.track || 'Track' },
         { href: '/pricing', label: dict.common.pricing || 'Pricing' },
-        { href: '/about', label: dict.common.about },
+        { href: '/about', label: dict.common.about || 'About' },
     ];
 
     return (
         <header className={cn(
             "sticky top-0 z-[1000] transition-all duration-500",
-            scrolled || mobileMenuOpen ? "py-4 bg-surface/80 backdrop-blur-xl border-b border-border shadow-md" : "py-6 md:py-8 bg-transparent",
+            scrolled || mobileMenuOpen ? "py-4 bg-surface border-b border-border shadow-md" : "py-6 md:py-8",
             className
         )}>
             {/* Scroll Progress Bar */}
@@ -112,8 +96,12 @@ export const Header: React.FC<HeaderProps> = ({ showNav = true, className }) => 
                         <ThemeToggle />
 
                         {user ? (
-                            <Link href="/auth/signout" className="hidden lg:flex items-center justify-center w-8 h-8 rounded-full bg-surface-muted text-text-muted hover:text-accent hover:bg-accent/10 transition-all border border-border">
-                                <LogOut size={14} />
+                            <Link
+                                href="/dashboard"
+                                className="hidden lg:flex items-center gap-2 px-5 py-2.5 bg-surface text-text-main border border-border hover:border-accent hover:text-accent rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95"
+                            >
+                                {dict.common?.dashboard || 'Dashboard'}
+                                <ArrowRight size={14} />
                             </Link>
                         ) : (
                             <Link
@@ -140,86 +128,75 @@ export const Header: React.FC<HeaderProps> = ({ showNav = true, className }) => 
             </div>
 
             {/* Mobile Navigation Overlay */}
-            <AnimatePresence mode="wait">
-                {mobileMenuOpen && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="fixed inset-0 z-120 bg-surface flex flex-col p-8 pt-32 h-screen w-screen overflow-y-auto"
-                    >
-                        {/* Internal Close Button (Failsafe) */}
-                        <button
-                            onClick={() => setMobileMenuOpen(false)}
-                            className="absolute top-6 right-6 p-4 text-text-muted hover:text-accent transition-colors bg-surface-muted rounded-2xl"
-                            aria-label="Close menu"
-                        >
-                            <X size={32} strokeWidth={3} />
-                        </button>
-
-                        <nav className="flex flex-col gap-4">
-                            {navLinks.map((link, i) => {
-                                const isActive = pathname === link.href;
-                                return (
-                                    <motion.div
-                                        key={link.href}
-                                        initial={{ opacity: 0, x: -20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        transition={{ delay: 0.1 + i * 0.05, ease: "easeOut" }}
-                                    >
-                                        <Link
-                                            href={link.href}
-                                            onClick={() => setMobileMenuOpen(false)}
-                                            className={cn(
-                                                "text-4xl font-black uppercase tracking-tighter py-5 border-b border-border/40 block transition-all active:scale-[0.98]",
-                                                isActive ? "text-accent" : "text-text-main hover:text-accent"
-                                            )}
-                                        >
-                                            {link.label}
-                                        </Link>
-                                    </motion.div>
-                                );
-                            })}
-                        </nav>
-
-                        {/* Mobile CTA for unauthenticated users */}
-                        {!user && (
+            <MobileNavOverlay isOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} zIndex="z-[120]">
+                <nav className="flex flex-col gap-4">
+                    {navLinks.map((link, i) => {
+                        const isActive = pathname === link.href;
+                        return (
                             <motion.div
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.3 }}
-                                className="mt-8"
+                                key={link.href}
+                                initial={{ opacity: 0, x: -20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: 0.1 + i * 0.05, ease: "easeOut" }}
                             >
                                 <Link
-                                    href="/auth"
+                                    href={link.href}
                                     onClick={() => setMobileMenuOpen(false)}
-                                    className="flex items-center justify-center gap-3 w-full py-5 bg-accent text-white rounded-2xl font-black uppercase tracking-widest text-base transition-all active:scale-95 shadow-xl shadow-accent/20"
+                                    className={cn(
+                                        "text-4xl font-black uppercase tracking-tighter py-5 border-b border-border/40 block transition-all active:scale-[0.98]",
+                                        isActive ? "text-accent" : "text-text-main hover:text-accent"
+                                    )}
                                 >
-                                    {dict.auth?.getStarted || 'Get Started'}
-                                    <ArrowRight size={18} />
+                                    {link.label}
                                 </Link>
                             </motion.div>
-                        )}
+                        );
+                    })}
+                </nav>
 
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ delay: 0.4 }}
-                            className="mt-auto pb-10"
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 }}
+                    className="mt-8"
+                >
+                    {user ? (
+                        <Link
+                            href="/dashboard"
+                            onClick={() => setMobileMenuOpen(false)}
+                            className="flex items-center justify-center gap-3 w-full py-5 bg-surface text-text-main border border-border rounded-2xl font-black uppercase tracking-widest text-base transition-all active:scale-95 shadow-lg"
                         >
-                            <div className="pt-10 border-t border-border/40 text-center">
-                                <p className="text-[10px] font-black uppercase tracking-[0.4em] text-accent opacity-60 mb-2">
-                                    {dict.common.safeLogistics}
-                                </p>
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-text-muted opacity-30">
-                                    {dict.common.tagline || ""}
-                                </p>
-                            </div>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+                            {dict.common?.dashboard || 'Dashboard'}
+                            <ArrowRight size={18} />
+                        </Link>
+                    ) : (
+                        <Link
+                            href="/auth"
+                            onClick={() => setMobileMenuOpen(false)}
+                            className="flex items-center justify-center gap-3 w-full py-5 bg-accent text-white rounded-2xl font-black uppercase tracking-widest text-base transition-all active:scale-95 shadow-xl shadow-accent/20"
+                        >
+                            {dict.auth?.getStarted || 'Get Started'}
+                            <ArrowRight size={18} />
+                        </Link>
+                    )}
+                </motion.div>
+
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.4 }}
+                    className="mt-auto pb-10"
+                >
+                    <div className="pt-10 border-t border-border/40 text-center">
+                        <p className="text-[10px] font-black uppercase tracking-[0.4em] text-accent opacity-60 mb-2">
+                            {dict.common.safeLogistics}
+                        </p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-text-muted opacity-30">
+                            {dict.common.tagline || ""}
+                        </p>
+                    </div>
+                </motion.div>
+            </MobileNavOverlay>
         </header >
     );
 };

@@ -22,4 +22,5 @@ type BotProvider interface {
 	ActivateBot(ctx context.Context, companyID uuid.UUID) error
 	DeactivateBot(companyID uuid.UUID) error
 	GeneratePairingCode(ctx context.Context, companyID uuid.UUID, phone string) (string, error)
+	LogoutBot(companyID uuid.UUID) error
 }

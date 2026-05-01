@@ -3,7 +3,6 @@
 import { Suspense, useEffect, useState } from 'react';
 import { MessageSquare, Cpu, Palette } from 'lucide-react';
 import { useI18n } from '@/components/providers/I18nContext';
-import { Footer } from '@/components/layout/Footer';
 import { FeatureCard } from '@/components/landing/FeatureCard';
 import { HeroSection } from '@/components/landing/HeroSection';
 import { TrustMetricsSection } from '@/components/landing/TrustMetricsSection';
@@ -23,18 +22,6 @@ function HomeContent() {
 
   return (
     <main className="min-h-screen flex flex-col items-center overflow-x-hidden relative">
-      {/* Background */}
-      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
-        <div className="absolute inset-0 bg-dot-grid opacity-[0.1]" />
-        <div className="bg-stars-layer opacity-[0.4]" />
-        <div className="absolute inset-0 bg-topography opacity-[0.2]" />
-        <div className="shooting-star" style={{ top: '10%', left: '80%', animationDelay: '2s' }} />
-        <div className="shooting-star" style={{ top: '30%', left: '40%', animationDelay: '7s' }} />
-        <div className="shooting-star" style={{ top: '50%', left: '90%', animationDelay: '15s' }} />
-        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-accent/5 blur-[120px] rounded-full" />
-        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-primary/5 blur-[100px] rounded-full" />
-      </div>
-
       <div className="w-full flex flex-col flex-1 relative z-10">
 
         {/* 1. Hero — Search bar + animated tracking demo */}
@@ -84,10 +71,6 @@ function HomeContent() {
         {/* 6. CTA — Get Started */}
         <GetStartedSection />
 
-        {/* Footer */}
-        <div className="max-w-7xl mx-auto px-4 md:px-6 w-full">
-          <Footer />
-        </div>
       </div>
     </main>
   );

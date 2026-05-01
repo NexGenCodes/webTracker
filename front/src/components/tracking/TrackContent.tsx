@@ -9,7 +9,6 @@ import { createClient } from '@/lib/supabase/client';
 import { AlertCircle, ShieldCheck, Package } from 'lucide-react';
 import { ShipmentData } from '@/types/shipment';
 import { useI18n } from '@/components/providers/I18nContext';
-import { Footer } from '@/components/layout/Footer';
 import { useShipmentProgress } from '@/hooks/useShipmentProgress';
 
 import { ShipmentStatusHeader } from './ShipmentStatusHeader';
@@ -28,10 +27,10 @@ export function TrackContent({ initialId: propId }: TrackProps) {
   const [loading, setLoading] = useState(false);
   const [shippingData, setShippingData] = useState<ShipmentData | null>(null);
   const liveProgress = useShipmentProgress(shippingData);
-  
+
   const [originCoords, setOriginCoords] = useState<[number, number]>([51.5074, -0.1278]);
   const [destCoords, setDestCoords] = useState<[number, number]>([40.7128, -74.0060]);
-  
+
   useEffect(() => {
     if (!shippingData) return;
 
@@ -41,10 +40,10 @@ export function TrackContent({ initialId: propId }: TrackProps) {
       try {
         const res = await fetch(`https://restcountries.com/v3.1/name/${encodeURIComponent(country)}?fullText=true`);
         if (!res.ok) {
-           const resFallback = await fetch(`https://restcountries.com/v3.1/name/${encodeURIComponent(country)}`);
-           if (!resFallback.ok) return null;
-           const data = await resFallback.json();
-           return data[0]?.latlng as [number, number];
+          const resFallback = await fetch(`https://restcountries.com/v3.1/name/${encodeURIComponent(country)}`);
+          if (!resFallback.ok) return null;
+          const data = await resFallback.json();
+          return data[0]?.latlng as [number, number];
         }
         const data = await res.json();
         return data[0]?.latlng as [number, number];
@@ -154,17 +153,6 @@ export function TrackContent({ initialId: propId }: TrackProps) {
 
   return (
     <main className="min-h-screen flex flex-col items-center overflow-x-hidden relative">
-      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
-        <div className="absolute inset-0 bg-dot-grid opacity-[0.1]" />
-        <div className="bg-stars-layer opacity-[0.4]" />
-        <div className="absolute inset-0 bg-topography opacity-[0.2]" />
-        <div className="shooting-star" style={{ top: '10%', left: '80%', animationDelay: '2s' }} />
-        <div className="shooting-star" style={{ top: '30%', left: '40%', animationDelay: '7s' }} />
-        <div className="shooting-star" style={{ top: '50%', left: '90%', animationDelay: '15s' }} />
-        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-accent/5 blur-[120px] rounded-full" />
-        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-primary/5 blur-[100px] rounded-full" />
-      </div>
-
       <div className="w-full max-w-7xl flex flex-col flex-1 px-3 md:px-6 pt-32 md:pt-40 relative z-10">
 
         {!shippingData && (
@@ -223,12 +211,12 @@ export function TrackContent({ initialId: propId }: TrackProps) {
                 <ShipmentTerminalState type="delivered" dict={dict} />
               ) : (
                 <>
-                  <ShipmentMapBar 
-                    shippingData={shippingData} 
-                    originCoords={originCoords} 
-                    destCoords={destCoords} 
-                    liveProgress={liveProgress} 
-                    dict={dict} 
+                  <ShipmentMapBar
+                    shippingData={shippingData}
+                    originCoords={originCoords}
+                    destCoords={destCoords}
+                    liveProgress={liveProgress}
+                    dict={dict}
                   />
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-20 relative z-10">
                     <ShipmentDetails shippingData={shippingData} dict={dict} />
@@ -239,8 +227,6 @@ export function TrackContent({ initialId: propId }: TrackProps) {
             </div>
           </div>
         )}
-
-        <Footer />
       </div>
     </main>
   );
