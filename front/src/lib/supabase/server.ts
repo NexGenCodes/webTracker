@@ -5,14 +5,23 @@ export async function createClient() {
   const cookieStore = await cookies()
   const jwt = cookieStore.get('jwt')?.value
 
-  const options: any = {
+  type Cookie = { name: string; value: string; options?: unknown };
+  
+  const options: {
+    cookies: {
+      getAll: () => { name: string; value: string }[];
+      setAll: (cookiesToSet: Cookie[]) => void;
+    };
+    global?: { headers: Record<string, string> };
+  } = {
     cookies: {
       getAll() {
         return cookieStore.getAll()
       },
-      setAll(cookiesToSet: any[]) {
+      setAll(cookiesToSet: Cookie[]) {
         try {
           cookiesToSet.forEach(({ name, value, options }) =>
+            // @ts-expect-error - Supabase CookieOptions is compatible with Next.js ResponseCookie
             cookieStore.set(name, value, options)
           )
         } catch {
