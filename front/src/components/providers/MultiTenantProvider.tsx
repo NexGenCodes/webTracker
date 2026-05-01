@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { getApiUrl } from '@/lib/utils';
+import { checkAuthAction } from '@/app/actions/auth';
 import { useRouter, usePathname } from 'next/navigation';
 
 type AppUser = {
@@ -20,38 +20,42 @@ type MultiTenantContextType = {
 const MultiTenantContext = createContext<MultiTenantContextType>({
     user: null,
     companyId: null,
-    loading: true,
+    loading: false,
     refreshAuth: async () => {},
 });
 
 export const useMultiTenant = () => useContext(MultiTenantContext);
 
-export default function MultiTenantProvider({ children }: { children: React.ReactNode }) {
-    const [user, setUser] = useState<AppUser | null>(null);
-    const [companyId, setCompanyId] = useState<string | null>(null);
-    const [loading, setLoading] = useState(true);
+export default function MultiTenantProvider({ 
+    children, 
+    initialUser = null, 
+    initialCompanyId = null 
+}: { 
+    children: React.ReactNode;
+    initialUser?: AppUser | null;
+    initialCompanyId?: string | null;
+}) {
+    const [user, setUser] = useState<AppUser | null>(initialUser);
+    const [companyId, setCompanyId] = useState<string | null>(initialCompanyId);
+    const [loading, setLoading] = useState(false);
     const router = useRouter();
     const pathname = usePathname();
 
     const initializeAuth = async () => {
         try {
-            const res = await fetch(`${getApiUrl()}/api/auth/me`, {
-                credentials: 'include'
-            });
+            const { user } = await checkAuthAction();
             
-            if (res.ok) {
-                const data = await res.json();
+            if (user) {
                 setUser({
-                    email: data.email,
-                    company_name: data.company_name,
-                    plan_type: data.plan_type
+                    email: user.email,
+                    company_name: user.company_name,
+                    plan_type: user.plan_type
                 });
-                setCompanyId(data.company_id);
+                setCompanyId(user.company_id || null);
             } else {
                 setUser(null);
                 setCompanyId(null);
-                // Redirect if unauthenticated on protected routes
-                if (res.status === 401 && (pathname.startsWith('/dashboard') || pathname.startsWith('/track') || pathname.startsWith('/admin'))) {
+                if (pathname.startsWith('/dashboard') || pathname.startsWith('/track') || pathname.startsWith('/admin')) {
                     router.push('/auth');
                 }
             }
@@ -59,6 +63,9 @@ export default function MultiTenantProvider({ children }: { children: React.Reac
             console.error("Auth check failed:", err);
             setUser(null);
             setCompanyId(null);
+            if (pathname.startsWith('/dashboard') || pathname.startsWith('/track') || pathname.startsWith('/admin')) {
+                router.push('/auth');
+            }
         } finally {
             setLoading(false);
         }
@@ -69,22 +76,21 @@ export default function MultiTenantProvider({ children }: { children: React.Reac
         await initializeAuth();
     };
 
-    useEffect(() => {
-        initializeAuth();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    // Re-validate auth when user returns to the tab (prevents stale JWT sessions)
+    // We no longer fetch on mount because the Server Component pre-fills the data.
+    // We only listen for visibility changes to catch if the user logged out in another tab.
     useEffect(() => {
         const handleVisibility = () => {
             if (document.visibilityState === 'visible') {
-                initializeAuth();
+                checkAuthAction().then(({ user }) => {
+                    if (!user && (pathname.startsWith('/dashboard') || pathname.startsWith('/track') || pathname.startsWith('/admin'))) {
+                        router.push('/auth');
+                    }
+                }).catch(() => {});
             }
         };
         document.addEventListener('visibilitychange', handleVisibility);
         return () => document.removeEventListener('visibilitychange', handleVisibility);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [pathname, router]);
 
     return (
         <MultiTenantContext.Provider value={{ user, companyId, loading, refreshAuth }}>

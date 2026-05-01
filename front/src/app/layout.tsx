@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { PLATFORM_NAME, APP_DESCRIPTION } from "@/constants";
 import Providers from '@/components/providers/Providers';
+import { getServerSession } from '@/lib/auth';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -29,17 +30,19 @@ import { ClientTransitionProvider } from '@/components/providers/ClientTransitio
 import { Toaster } from "react-hot-toast";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const { user } = await getServerSession();
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <Providers>
+        <Providers initialUser={user} initialCompanyId={user?.company_id}>
           <Toaster position="top-left" toastOptions={{
             className: 'font-bold uppercase text-[11px] tracking-[0.1em] border shadow-2xl rounded-2xl p-4 min-w-[320px]',
             duration: 5000,

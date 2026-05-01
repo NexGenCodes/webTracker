@@ -3,7 +3,6 @@
 import { useI18n } from '@/components/providers/I18nContext';
 import { ArrowLeft, FileText } from "lucide-react";
 import Link from "next/link";
-import { Footer } from '@/components/layout/Footer';
 import { PLATFORM_NAME } from '@/constants';
 
 export default function TermsPage() {
@@ -48,8 +47,6 @@ export default function TermsPage() {
                         </section>
                     </div>
                 </article>
-
-                <Footer minimal={true} />
             </div>
         </main>
     );

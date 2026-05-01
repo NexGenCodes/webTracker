@@ -8,7 +8,15 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/react";
 import MultiTenantProvider from "./MultiTenantProvider";
 
-export default function Providers({ children }: { children: React.ReactNode }) {
+export default function Providers({ 
+  children,
+  initialUser = null,
+  initialCompanyId = null,
+}: { 
+  children: React.ReactNode;
+  initialUser?: { email: string; company_name: string; plan_type: string } | null;
+  initialCompanyId?: string | null;
+}) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -22,7 +30,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <MultiTenantProvider>
+    <MultiTenantProvider initialUser={initialUser} initialCompanyId={initialCompanyId}>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <I18nProvider>

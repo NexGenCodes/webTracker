@@ -5,12 +5,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http/httptest"
+	"os"
 	"testing"
 
+	httpapi "webtracker-bot/internal/api"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/database/db"
 	"webtracker-bot/internal/shipment"
-	httpapi "webtracker-bot/internal/api"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/assert"
@@ -20,8 +21,7 @@ import (
 func TestAPI_Deep(t *testing.T) {
 	// Setup dependencies
 	cfg := &config.Config{
-		TrackingBaseURL: "http://localhost:3000",
-		APISecretKey:    "test-secret",
+		FrontendURL:  os.Getenv("FRONTEND_URL"),
 	}
 
 	setupApp := func() (*fiber.App, *MockQuerier) {

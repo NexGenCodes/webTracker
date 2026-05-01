@@ -23,8 +23,6 @@ type Config struct {
 	LogLevel       string `env:"LOG_LEVEL" env-default:"info"`
 	WorkerPoolSize int    `env:"WORKER_POOL_SIZE" env-default:"5"`
 	BufferSize     int    `env:"BUFFER_SIZE" env-default:"100"`
-	PairingPhone   string `env:"WHATSAPP_PAIRING_PHONE"`
-	BotOwnerPhone  string `env:"BOT_OWNER_PHONE"`
 
 	// Notification Config
 	SMTPHost     string `env:"SMTP_HOST"`
@@ -37,17 +35,10 @@ type Config struct {
 	UseOptimizedReceipt bool `env:"USE_OPTIMIZED_RECEIPT" env-default:"true"`
 
 	// Access Control
-	AllowPrivateChat bool     `env:"WHATSAPP_ALLOW_PRIVATE_CHAT" env-default:"false"`
-	AdminPhones      []string `env:"WHATSAPP_ADMIN_PHONES" env-separator:","`
-
-	// Public Tracking URL
-	TrackingBaseURL string `env:"TRACKING_BASE_URL" env-default:"http://localhost:3000"`
+	AllowPrivateChat bool `env:"WHATSAPP_ALLOW_PRIVATE_CHAT" env-default:"false"`
 
 	// REST API Port
 	APIPort string `env:"API_PORT" env-default:"5000"`
-
-	// API Security
-	APISecretKey string `env:"API_SECRET_KEY"`
 
 	// Paystack
 	PaystackSecretKey string `env:"PAYSTACK_SECRET_KEY"`
@@ -158,18 +149,6 @@ func Load() *Config {
 		} else {
 			cfg.DatabaseURL += "?search_path=public"
 		}
-	}
-
-	// Phone Cleaning
-	cfg.PairingPhone = cleanPhone(cfg.PairingPhone)
-	for i, p := range cfg.AdminPhones {
-		cfg.AdminPhones[i] = cleanPhone(p)
-	}
-
-	if cfg.BotOwnerPhone == "" && len(cfg.AdminPhones) > 0 {
-		cfg.BotOwnerPhone = cfg.AdminPhones[0]
-	} else {
-		cfg.BotOwnerPhone = cleanPhone(cfg.BotOwnerPhone)
 	}
 
 	if cfg.LogPath == "" {

@@ -158,17 +158,34 @@ export function RegisterView({
                         error={form.formState.errors.confirmPassword?.message}
                     />
 
-                    <button type="submit" disabled={loading} className="btn-primary w-full py-4 text-base flex items-center justify-center gap-3 active:scale-95 disabled:opacity-50 transition-all duration-200 mt-6">
+                    {/* Terms & Privacy Checkbox */}
+                    <div className="flex flex-col gap-2 mt-6 mb-6">
+                        <label className="flex items-start gap-3 cursor-pointer group">
+                            <div className="relative flex items-center justify-center mt-0.5">
+                                <input
+                                    type="checkbox"
+                                    className="peer appearance-none w-4 h-4 border-2 border-border rounded-[4px] checked:bg-accent checked:border-accent transition-colors cursor-pointer bg-surface"
+                                    {...form.register('acceptTerms')}
+                                />
+                                <CheckCircle2 className="absolute text-white opacity-0 peer-checked:opacity-100 w-3 h-3 pointer-events-none" />
+                            </div>
+                            <span className="text-xs text-text-muted font-medium leading-relaxed flex-1">
+                                {dict.auth?.termsAgreeRegister || 'I agree to the'}{' '}
+                                <Link href="/terms" className="text-accent hover:underline font-bold" target="_blank">{dict.common?.terms || 'Terms of Service'}</Link>
+                                {' '}{dict.auth?.and || 'and'}{' '}
+                                <Link href="/privacy" className="text-accent hover:underline font-bold" target="_blank">{dict.common?.privacy || 'Privacy Policy'}</Link>
+                            </span>
+                        </label>
+                        {form.formState.errors.acceptTerms?.message && (
+                            <p className="text-error text-xs font-bold pl-7">
+                                {form.formState.errors.acceptTerms.message as string}
+                            </p>
+                        )}
+                    </div>
+
+                    <button type="submit" disabled={loading} className="btn-primary w-full py-4 text-base flex items-center justify-center gap-3 active:scale-95 disabled:opacity-50 transition-all duration-200">
                         {loading ? <Loader2 className="animate-spin" size={20} /> : <>{dict.auth?.continue || 'Continue'} <ArrowRight size={18} /></>}
                     </button>
-
-                    {/* Terms & Privacy */}
-                    <p className="text-center text-[10px] text-text-muted/60 font-medium leading-relaxed">
-                        {dict.auth?.termsAgreeRegister || 'By creating an account, you agree to our'}{' '}
-                        <Link href="/terms" className="text-accent hover:underline font-bold">{dict.common?.terms || 'Terms of Service'}</Link>
-                        {' '}{dict.auth?.and || 'and'}{' '}
-                        <Link href="/privacy" className="text-accent hover:underline font-bold">{dict.common?.privacy || 'Privacy Policy'}</Link>
-                    </p>
                 </form>
             )}
 

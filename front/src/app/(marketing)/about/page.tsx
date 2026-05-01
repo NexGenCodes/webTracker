@@ -2,7 +2,6 @@
 
 import { useI18n } from '@/components/providers/I18nContext';
 
-import { Footer } from '@/components/layout/Footer';
 import { FeatureCard } from '@/components/landing/FeatureCard';
 import { Shield, Activity, ArrowLeft, ArrowRight } from "lucide-react";
 import Link from "next/link";
@@ -13,13 +12,6 @@ export default function AboutPage() {
 
     return (
         <main className="min-h-screen flex flex-col items-center overflow-x-hidden relative">
-            <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
-                <div className="absolute inset-0 bg-dot-grid opacity-[0.1]" />
-                <div className="bg-stars-layer opacity-[0.3]" />
-                <div className="shooting-star" style={{ top: '20%', left: '70%', animationDelay: '1s' }} />
-                <div className="shooting-star" style={{ top: '60%', left: '30%', animationDelay: '9s' }} />
-                <div className="absolute inset-0 bg-topography opacity-[0.15]" />
-            </div>
             <div className="w-full max-w-7xl flex flex-col flex-1 px-6 pt-32 md:pt-40 relative z-10">
                 <section className="animate-fade-in relative pb-10 md:pb-24">
                     <div className="absolute -top-20 -left-20 w-80 h-80 bg-accent/10 rounded-full blur-3xl pointer-events-none animate-pulse" />
@@ -80,7 +72,6 @@ export default function AboutPage() {
                     </div>
                 </section>
 
-                <Footer minimal={true} />
             </div>
         </main>
     );

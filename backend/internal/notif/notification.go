@@ -13,16 +13,7 @@ import (
 // Prefer injecting *Mailer via DI for new code.
 // ---------------------------------------------------------------------------
 
-// SendPairingCodeEmail sends the pairing code via a professional HTML email
-func SendPairingCodeEmail(cfg *config.Config, companyName, code string) {
-	m := NewMailer(cfg)
-	companyName = strings.ToUpper(companyName)
-	if companyName == "" {
-		companyName = "AIRWAYBILL"
-	}
-	e := PairingCodeEmail(cfg.NotifyEmail, companyName, cfg.PairingPhone, code)
-	m.Send(e)
-}
+
 
 // SendSetupLinkEmail sends a magic setup link to a company admin
 func SendSetupLinkEmail(cfg *config.Config, adminEmail, companyName, setupToken string) {

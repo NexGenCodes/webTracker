@@ -8,9 +8,7 @@ import {
     ResetPasswordForm,
     AuthMode 
 } from '@/lib/validations/auth';
-import { getApiUrl } from '@/lib/utils';
-
-const API_URL = getApiUrl();
+import { forgotPasswordAction, resetPasswordAction } from '@/app/actions/auth';
 
 export function usePasswordReset(
     setError: (msg: string | null) => void,
@@ -33,20 +31,8 @@ export function usePasswordReset(
         setError(null);
         setLoading(true);
         try {
-            const res = await fetch(`${API_URL}/api/auth/forgot-password`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ email: data.email }),
-            });
+            const resData = await forgotPasswordAction(data.email);
 
-            if (!res.ok) {
-                const resData = await res.json();
-                setError(resData.error || "Failed to send reset code.");
-                return;
-            }
-
-            const resData = await res.json();
             if (resData.reset_token) {
                 sessionStorage.setItem('reset_token', resData.reset_token);
             }
@@ -54,8 +40,8 @@ export function usePasswordReset(
             setEmailCache(data.email);
             setSuccessMessage("A 6-digit reset code has been sent to your email.");
             setTimeout(() => switchMode('reset-password'), 2000);
-        } catch {
-            setError("Network error. Please try again.");
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Network error. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -71,26 +57,12 @@ export function usePasswordReset(
         setLoading(true);
         try {
             const resetToken = sessionStorage.getItem('reset_token') || '';
-            const res = await fetch(`${API_URL}/api/auth/reset-password`, {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'X-Reset-Token': resetToken
-                },
-                credentials: 'include',
-                body: JSON.stringify({ email: emailCache, otp: code, new_password: data.password }),
-            });
-
-            if (!res.ok) {
-                const resData = await res.json();
-                setError(resData.error || "Failed to reset password.");
-                return;
-            }
+            await resetPasswordAction(emailCache, code, data.password, resetToken);
 
             setSuccessMessage("Password reset successfully. You can now sign in.");
             setTimeout(() => switchMode('signin'), 2000);
-        } catch {
-            setError("Network error. Please try again.");
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Network error. Please try again.');
         } finally {
             setLoading(false);
         }

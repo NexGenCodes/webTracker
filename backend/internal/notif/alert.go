@@ -26,8 +26,8 @@ func SendStatusAlert(ctx context.Context, wa *whatsmeow.Client, cfg *config.Conf
 
 	var msg string
 	link := ""
-	if cfg != nil && cfg.TrackingBaseURL != "" {
-		link = fmt.Sprintf("\n🌐 *Track Here:* %s/%s", cfg.TrackingBaseURL, tracking)
+	if cfg != nil && cfg.FrontendURL != "" {
+		link = fmt.Sprintf("\n🌐 *Track Here:* %s/track/%s", cfg.FrontendURL, tracking)
 	}
 
 	switch status {

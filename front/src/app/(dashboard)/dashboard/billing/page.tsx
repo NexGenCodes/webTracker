@@ -4,10 +4,11 @@ import { useState } from 'react';
 import { useMultiTenant } from '@/components/providers/MultiTenantProvider';
 import { CheckCircle2, Zap, ArrowRight, ShieldCheck, HelpCircle } from 'lucide-react';
 import { LayoutHeader } from '@/components/layout/LayoutHeader';
-import { Footer } from '@/components/layout/Footer';
+import { subscribeAction } from '@/app/actions/billing';
 
 import { BILLING_PLANS } from '@/constants';
 import { useI18n } from '@/components/providers/I18nContext';
+import toast from 'react-hot-toast';
 
 export default function BillingPage() {
     const { user } = useMultiTenant();
@@ -18,24 +19,14 @@ export default function BillingPage() {
     const handleSubscribe = async (planId: string) => {
         setLoadingPlan(planId);
         try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/company/subscribe`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({
-                    callback_url: window.location.href,
-                    plan: planId
-                })
-            });
-            const data = await res.json();
+            const data = await subscribeAction(planId, window.location.href);
             if (data.authorization_url) {
                 window.location.href = data.authorization_url;
             } else {
-                alert(data.error || 'Failed to start subscription');
+                toast.error(data.error || 'Failed to start subscription');
             }
-        } catch (err) {
-            console.error(err);
-            alert('Network error. Please try again.');
+        } catch {
+            toast.error('Network error. Please try again.');
         } finally {
             setLoadingPlan(null);
         }
@@ -96,61 +87,62 @@ export default function BillingPage() {
                     {BILLING_PLANS.map((plan, index) => {
                         const plansDict = (dict.marketing?.pricing?.plans as Record<string, string>) || {};
                         return (
-                        <div
-                            key={plan.id}
-                            className={`relative bg-surface rounded-3xl border transition-all duration-300 hover:scale-[1.02] flex flex-col ${plan.popular ? 'border-accent shadow-2xl shadow-accent/10' : 'border-border'}`}
-                            style={{ animationDelay: `${0.2 + (index * 0.1)}s` }}
-                        >
-                            {plan.popular && (
-                                <div className="absolute -top-4 left-0 right-0 flex justify-center">
-                                    <div className="bg-accent text-white text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full flex items-center gap-1 shadow-lg shadow-accent/30">
-                                        <Zap size={12} className="fill-white" /> {dict.marketing?.pricing?.mostPopular || 'Most Popular'}
+                            <div
+                                key={plan.id}
+                                className={`relative bg-surface rounded-3xl border transition-all duration-300 hover:scale-[1.02] flex flex-col ${plan.popular ? 'border-accent shadow-2xl shadow-accent/10' : 'border-border'}`}
+                                style={{ animationDelay: `${0.2 + (index * 0.1)}s` }}
+                            >
+                                {plan.popular && (
+                                    <div className="absolute -top-4 left-0 right-0 flex justify-center">
+                                        <div className="bg-accent text-white text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full flex items-center gap-1 shadow-lg shadow-accent/30">
+                                            <Zap size={12} className="fill-white" /> {dict.marketing?.pricing?.mostPopular || 'Most Popular'}
+                                        </div>
                                     </div>
-                                </div>
-                            )}
-
-                            <div className="p-8 border-b border-border">
-                                <h3 className="text-lg font-black uppercase tracking-widest text-text-main mb-2">{plansDict[plan.nameKey]}</h3>
-                                <p className="text-text-muted text-sm min-h-[40px] mb-6">{plansDict[plan.descKey]}</p>
-
-                                <div className="mb-2">
-                                    <span className="text-4xl font-black text-text-main tracking-tighter">
-                                        {billingCycle === 'annually' && plan.price !== 'Custom'
-                                            ? `₦${(parseInt(plan.price.replace(/\D/g, '')) * 0.85).toLocaleString()}`
-                                            : plan.price}
-                                    </span>
-                                    <span className="text-text-muted text-sm font-bold ml-1">{plansDict[plan.intervalKey]}</span>
-                                </div>
-
-                                {plan.trialKey ? (
-                                    <p className="text-accent text-xs font-black uppercase tracking-widest mb-6">+{plansDict[plan.trialKey]}</p>
-                                ) : (
-                                    <div className="h-[24px] mb-6"></div> // Spacer
                                 )}
 
-                                <button 
-                                    onClick={() => handleSubscribe(plan.id)}
-                                    disabled={loadingPlan === plan.id}
-                                    className={`w-full py-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${plan.popular ? 'bg-accent text-white hover:bg-accent-hover shadow-lg shadow-accent/20' : 'bg-surface-muted text-text-main hover:bg-border border border-border'} disabled:opacity-50`}
-                                >
-                                    {loadingPlan === plan.id ? 'Please wait...' : plansDict[plan.btnKey]}
-                                    {loadingPlan !== plan.id && <ArrowRight size={14} />}
-                                </button>
-                            </div>
+                                <div className="p-8 border-b border-border">
+                                    <h3 className="text-lg font-black uppercase tracking-widest text-text-main mb-2">{plansDict[plan.nameKey]}</h3>
+                                    <p className="text-text-muted text-sm min-h-[40px] mb-6">{plansDict[plan.descKey]}</p>
 
-                            <div className="p-8 flex-1 bg-surface/50 rounded-b-3xl">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-text-muted mb-6">What&apos;s included</p>
-                                <ul className="space-y-4">
-                                    {plan.features.map((feature: string, i: number) => (
-                                        <li key={i} className="flex items-start gap-3">
-                                            <CheckCircle2 size={16} className="text-accent shrink-0 mt-0.5" />
-                                            <span className="text-sm text-text-main font-medium">{plansDict[feature]}</span>
-                                        </li>
-                                    ))}
-                                </ul>
+                                    <div className="mb-2">
+                                        <span className="text-4xl font-black text-text-main tracking-tighter">
+                                            {billingCycle === 'annually' && plan.price !== 'Custom'
+                                                ? `₦${(parseInt(plan.price.replace(/\D/g, '')) * 0.85).toLocaleString()}`
+                                                : plan.price}
+                                        </span>
+                                        <span className="text-text-muted text-sm font-bold ml-1">{plansDict[plan.intervalKey]}</span>
+                                    </div>
+
+                                    {plan.trialKey ? (
+                                        <p className="text-accent text-xs font-black uppercase tracking-widest mb-6">+{plansDict[plan.trialKey]}</p>
+                                    ) : (
+                                        <div className="h-[24px] mb-6"></div> // Spacer
+                                    )}
+
+                                    <button
+                                        onClick={() => handleSubscribe(plan.id)}
+                                        disabled={loadingPlan === plan.id}
+                                        className={`w-full py-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${plan.popular ? 'bg-accent text-white hover:bg-accent-hover shadow-lg shadow-accent/20' : 'bg-surface-muted text-text-main hover:bg-border border border-border'} disabled:opacity-50`}
+                                    >
+                                        {loadingPlan === plan.id ? 'Please wait...' : plansDict[plan.btnKey]}
+                                        {loadingPlan !== plan.id && <ArrowRight size={14} />}
+                                    </button>
+                                </div>
+
+                                <div className="p-8 flex-1 bg-surface/50 rounded-b-3xl">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-text-muted mb-6">What&apos;s included</p>
+                                    <ul className="space-y-4">
+                                        {plan.features.map((feature: string, i: number) => (
+                                            <li key={i} className="flex items-start gap-3">
+                                                <CheckCircle2 size={16} className="text-accent shrink-0 mt-0.5" />
+                                                <span className="text-sm text-text-main font-medium">{plansDict[feature]}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
                             </div>
-                        </div>
-                    )})}
+                        )
+                    })}
                 </div>
 
                 {/* FAQ or Trust Section */}
@@ -165,8 +157,6 @@ export default function BillingPage() {
                     </a>
                 </div>
             </div>
-
-            <Footer />
         </main>
     );
 }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useMultiTenant } from '@/components/providers/MultiTenantProvider';
+import { createClient } from '@/lib/supabase/client';
 import { 
     CONTACT_EMAIL, 
     CONTACT_PHONE, 
@@ -27,25 +28,26 @@ export function useCompanySettings() {
             return;
         }
 
+        const supabase = createClient();
+
         const fetchSettings = async () => {
             try {
-                const res = await fetch(`/api/company/settings`, {
-                    headers: { 'X-Company-ID': companyId }
-                });
-                if (res.ok) {
-                    const json = await res.json();
-                    const data = json.data;
-                    if (data) {
-                        setSettings({
-                            companyName: data.name || '',
-                            contactEmail: data.admin_email || CONTACT_EMAIL,
-                            contactPhone: data.whatsapp_phone || CONTACT_PHONE,
-                            contactHq: CONTACT_HQ,
-                            logoUrl: data.logo_url || '',
-                            trackingPrefix: data.tracking_prefix || '',
-                            brandColor: data.brand_color || '#0066FF'
-                        });
-                    }
+                const { data, error } = await supabase
+                    .from('companies')
+                    .select('name, admin_email, whatsapp_phone, logo_url, tracking_prefix, brand_color')
+                    .eq('id', companyId)
+                    .single();
+
+                if (data && !error) {
+                    setSettings({
+                        companyName: data.name || '',
+                        contactEmail: data.admin_email || CONTACT_EMAIL,
+                        contactPhone: data.whatsapp_phone || CONTACT_PHONE,
+                        contactHq: CONTACT_HQ,
+                        logoUrl: data.logo_url || '',
+                        trackingPrefix: data.tracking_prefix || '',
+                        brandColor: data.brand_color || '#0066FF'
+                    });
                 }
             } catch (error) {
                 console.error("Failed to fetch company settings:", error);

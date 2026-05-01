@@ -2,7 +2,6 @@
 
 import { useI18n } from "@/components/providers/I18nContext";
 import { Header } from "@/components/layout/Header";
-import { Footer } from "@/components/layout/Footer";
 import { PremiumInput, PremiumTextarea } from "@/components/shared/PremiumInput";
 import { IconInfoItem } from "@/components/shared/IconInfoItem";
 import { Mail, Phone, MapPin, Send, ArrowLeft } from "lucide-react";
@@ -52,13 +51,6 @@ export default function ContactPage() {
 
     return (
         <main className="min-h-screen flex flex-col items-center overflow-x-hidden relative">
-            <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
-                <div className="absolute inset-0 bg-dot-grid opacity-[0.1]" />
-                <div className="bg-stars-layer opacity-[0.3]" />
-                <div className="shooting-star" style={{ top: '15%', left: '85%', animationDelay: '4s' }} />
-                <div className="shooting-star" style={{ top: '45%', left: '20%', animationDelay: '12s' }} />
-                <div className="absolute inset-0 bg-topography opacity-[0.15]" />
-            </div>
             <div className="w-full max-w-7xl flex flex-col flex-1 px-6 pt-32 md:pt-40 pb-20 relative z-10">
                 <Header showNav={true} />
 
@@ -117,8 +109,6 @@ export default function ContactPage() {
                         )}
                     </div>
                 </section>
-
-                <Footer minimal={true} />
             </div>
         </main>
     );
