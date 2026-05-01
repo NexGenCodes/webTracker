@@ -45,9 +45,12 @@ export async function loginAction(data: LoginInput) {
             path: '/',
             maxAge: 7 * 24 * 60 * 60 // 7 days
         });
+
+        // Force revalidation of all critical routes
         revalidatePath('/', 'layout');
-        revalidatePath('/dashboard');
-        revalidatePath('/auth');
+        revalidatePath('/', 'page');
+        revalidatePath('/dashboard', 'layout');
+        revalidatePath('/auth', 'layout');
     }
 
     return resData;
@@ -141,9 +144,11 @@ export async function logoutAction() {
     const cookieStore = await cookies();
     cookieStore.delete('jwt');
 
+    // Force revalidation of all critical routes
     revalidatePath('/', 'layout');
-    revalidatePath('/dashboard');
-    revalidatePath('/auth');
+    revalidatePath('/', 'page');
+    revalidatePath('/dashboard', 'layout');
+    revalidatePath('/auth', 'layout');
 
-    redirect('/auth');
+    return { success: true };
 }

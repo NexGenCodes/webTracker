@@ -193,7 +193,10 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
 
     const handleCopyCode = async () => {
         if (!pairingCode) return;
-        await navigator.clipboard.writeText(pairingCode);
+        const formatted = pairingCode.length === 8 
+            ? `${pairingCode.slice(0, 4)}-${pairingCode.slice(4)}`
+            : pairingCode;
+        await navigator.clipboard.writeText(formatted);
         setCodeCopied(true);
     };
 
