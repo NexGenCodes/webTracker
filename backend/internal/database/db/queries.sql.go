@@ -8,6 +8,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
@@ -120,7 +121,9 @@ func (q *Queries) CountShipmentsByStatus(ctx context.Context, companyID uuid.Nul
 }
 
 const createCompany = `-- name: CreateCompany :one
-INSERT INTO companies (name, admin_email, setup_token) VALUES ($1, $2, $3) RETURNING id, name, admin_email, admin_password_hash, whatsapp_phone, logo_url, brand_color, auth_status, subscription_status, subscription_expiry, plan_type, setup_token, tracking_prefix, created_at, updated_at
+INSERT INTO companies (name, admin_email, setup_token, subscription_expiry, plan_type) 
+VALUES ($1, $2, $3, CURRENT_TIMESTAMP + INTERVAL '7 days', 'trial') 
+RETURNING id, name, admin_email, admin_password_hash, whatsapp_phone, logo_url, brand_color, auth_status, subscription_status, subscription_expiry, plan_type, setup_token, tracking_prefix, created_at, updated_at
 `
 
 type CreateCompanyParams struct {
@@ -255,6 +258,64 @@ func (q *Queries) FindSimilarShipment(ctx context.Context, arg FindSimilarShipme
 	var tracking_id string
 	err := row.Scan(&tracking_id)
 	return tracking_id, err
+}
+
+const getActivePlans = `-- name: GetActivePlans :many
+SELECT id, name, name_key, desc_key, base_price, currency, interval_key, popular, trial_key, btn_key, features, sort_order
+FROM plans
+WHERE is_active = TRUE
+ORDER BY sort_order ASC
+`
+
+type GetActivePlansRow struct {
+	ID          string          `json:"id"`
+	Name        string          `json:"name"`
+	NameKey     string          `json:"name_key"`
+	DescKey     string          `json:"desc_key"`
+	BasePrice   int32           `json:"base_price"`
+	Currency    string          `json:"currency"`
+	IntervalKey string          `json:"interval_key"`
+	Popular     sql.NullBool    `json:"popular"`
+	TrialKey    sql.NullString  `json:"trial_key"`
+	BtnKey      string          `json:"btn_key"`
+	Features    json.RawMessage `json:"features"`
+	SortOrder   sql.NullInt32   `json:"sort_order"`
+}
+
+func (q *Queries) GetActivePlans(ctx context.Context) ([]GetActivePlansRow, error) {
+	rows, err := q.db.QueryContext(ctx, getActivePlans)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetActivePlansRow
+	for rows.Next() {
+		var i GetActivePlansRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.NameKey,
+			&i.DescKey,
+			&i.BasePrice,
+			&i.Currency,
+			&i.IntervalKey,
+			&i.Popular,
+			&i.TrialKey,
+			&i.BtnKey,
+			&i.Features,
+			&i.SortOrder,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getAllActiveCompanies = `-- name: GetAllActiveCompanies :many
@@ -411,33 +472,6 @@ func (q *Queries) GetCompanyByID(ctx context.Context, id uuid.UUID) (Company, er
 	return i, err
 }
 
-const getCompanyBySetupToken = `-- name: GetCompanyBySetupToken :one
-SELECT id, name, admin_email, admin_password_hash, whatsapp_phone, logo_url, brand_color, auth_status, subscription_status, subscription_expiry, plan_type, setup_token, tracking_prefix, created_at, updated_at FROM companies WHERE setup_token = $1
-`
-
-func (q *Queries) GetCompanyBySetupToken(ctx context.Context, setupToken sql.NullString) (Company, error) {
-	row := q.db.QueryRowContext(ctx, getCompanyBySetupToken, setupToken)
-	var i Company
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.AdminEmail,
-		&i.AdminPasswordHash,
-		&i.WhatsappPhone,
-		&i.LogoUrl,
-		&i.BrandColor,
-		&i.AuthStatus,
-		&i.SubscriptionStatus,
-		&i.SubscriptionExpiry,
-		&i.PlanType,
-		&i.SetupToken,
-		&i.TrackingPrefix,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
 const getGroupAuthority = `-- name: GetGroupAuthority :one
 SELECT is_authorized, updated_at FROM GroupAuthority WHERE company_id = $1 AND jid = $2
 `
@@ -473,6 +507,45 @@ func (q *Queries) GetLastShipmentIDForUser(ctx context.Context, arg GetLastShipm
 	var tracking_id string
 	err := row.Scan(&tracking_id)
 	return tracking_id, err
+}
+
+const getPlanByID = `-- name: GetPlanByID :one
+SELECT id, name, name_key, desc_key, base_price, currency, interval_key, popular, trial_key, btn_key, features
+FROM plans
+WHERE id = $1 AND is_active = TRUE
+`
+
+type GetPlanByIDRow struct {
+	ID          string          `json:"id"`
+	Name        string          `json:"name"`
+	NameKey     string          `json:"name_key"`
+	DescKey     string          `json:"desc_key"`
+	BasePrice   int32           `json:"base_price"`
+	Currency    string          `json:"currency"`
+	IntervalKey string          `json:"interval_key"`
+	Popular     sql.NullBool    `json:"popular"`
+	TrialKey    sql.NullString  `json:"trial_key"`
+	BtnKey      string          `json:"btn_key"`
+	Features    json.RawMessage `json:"features"`
+}
+
+func (q *Queries) GetPlanByID(ctx context.Context, id string) (GetPlanByIDRow, error) {
+	row := q.db.QueryRowContext(ctx, getPlanByID, id)
+	var i GetPlanByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.NameKey,
+		&i.DescKey,
+		&i.BasePrice,
+		&i.Currency,
+		&i.IntervalKey,
+		&i.Popular,
+		&i.TrialKey,
+		&i.BtnKey,
+		&i.Features,
+	)
+	return i, err
 }
 
 const getRecentEvents = `-- name: GetRecentEvents :many
@@ -763,18 +836,30 @@ func (q *Queries) RecordEvent(ctx context.Context, arg RecordEventParams) error 
 	return err
 }
 
-const regenerateSetupToken = `-- name: RegenerateSetupToken :exec
-UPDATE companies SET setup_token = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1
+const recordPayment = `-- name: RecordPayment :one
+INSERT INTO payments (company_id, reference, amount, status)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (reference) DO NOTHING
+RETURNING id
 `
 
-type RegenerateSetupTokenParams struct {
-	ID         uuid.UUID      `json:"id"`
-	SetupToken sql.NullString `json:"setup_token"`
+type RecordPaymentParams struct {
+	CompanyID uuid.NullUUID   `json:"company_id"`
+	Reference string          `json:"reference"`
+	Amount    sql.NullFloat64 `json:"amount"`
+	Status    sql.NullString  `json:"status"`
 }
 
-func (q *Queries) RegenerateSetupToken(ctx context.Context, arg RegenerateSetupTokenParams) error {
-	_, err := q.db.ExecContext(ctx, regenerateSetupToken, arg.ID, arg.SetupToken)
-	return err
+func (q *Queries) RecordPayment(ctx context.Context, arg RecordPaymentParams) (int32, error) {
+	row := q.db.QueryRowContext(ctx, recordPayment,
+		arg.CompanyID,
+		arg.Reference,
+		arg.Amount,
+		arg.Status,
+	)
+	var id int32
+	err := row.Scan(&id)
+	return id, err
 }
 
 const runAgedCleanup = `-- name: RunAgedCleanup :exec
@@ -1052,7 +1137,7 @@ func (q *Queries) UpdateCompanySettings(ctx context.Context, arg UpdateCompanySe
 const updateCompanySubscriptionStatus = `-- name: UpdateCompanySubscriptionStatus :exec
 UPDATE companies 
 SET subscription_status = $2, 
-    subscription_expiry = CURRENT_TIMESTAMP + INTERVAL '30 days',
+    subscription_expiry = GREATEST(subscription_expiry, CURRENT_TIMESTAMP) + INTERVAL '30 days',
     updated_at = CURRENT_TIMESTAMP 
 WHERE id = $1
 `
@@ -1064,6 +1149,20 @@ type UpdateCompanySubscriptionStatusParams struct {
 
 func (q *Queries) UpdateCompanySubscriptionStatus(ctx context.Context, arg UpdateCompanySubscriptionStatusParams) error {
 	_, err := q.db.ExecContext(ctx, updateCompanySubscriptionStatus, arg.ID, arg.SubscriptionStatus)
+	return err
+}
+
+const updatePlanPrice = `-- name: UpdatePlanPrice :exec
+UPDATE plans SET base_price = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1
+`
+
+type UpdatePlanPriceParams struct {
+	ID        string `json:"id"`
+	BasePrice int32  `json:"base_price"`
+}
+
+func (q *Queries) UpdatePlanPrice(ctx context.Context, arg UpdatePlanPriceParams) error {
+	_, err := q.db.ExecContext(ctx, updatePlanPrice, arg.ID, arg.BasePrice)
 	return err
 }
 

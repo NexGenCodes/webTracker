@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"fmt"
-	"log"
 	"math/big"
 	"strings"
 	"time"
@@ -16,6 +15,7 @@ import (
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/database/db"
 	"webtracker-bot/internal/database/dbutil"
+	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/notif"
 	"webtracker-bot/internal/parser"
 	"webtracker-bot/internal/shipment"
@@ -109,7 +109,7 @@ func (h *ShipmentHandler) Create(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to look up company"})
 	}
-	remaining, err := CheckShipmentCap(c.Context(), h.cfg, h.shipmentUC, companyID, company.PlanType.String)
+	remaining, err := CheckShipmentCap(c.Context(), h.cfg, h.shipmentUC, companyID, company.PlanType.String, company.SubscriptionExpiry)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to check shipment cap"})
 	}
@@ -136,7 +136,7 @@ func (h *ShipmentHandler) Create(c *fiber.Ctx) error {
 		}
 
 		detailedErr := strings.Join(errs, ", ")
-		log.Printf("Create shipment validation error: %v", detailedErr)
+		logger.Error().Str("details", detailedErr).Msg("Create shipment validation error")
 
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error":   "Validation failed: missing or invalid field(s) - " + detailedErr,
@@ -147,7 +147,7 @@ func (h *ShipmentHandler) Create(c *fiber.Ctx) error {
 	// Generate a collision-resistant tracking ID
 	randVal, err := rand.Int(rand.Reader, big.NewInt(999999999))
 	if err != nil {
-		log.Printf("Failed to generate random ID: %v", err)
+		logger.Error().Err(err).Msg("Failed to generate random ID")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to generate ID"})
 	}
 	trackingID := fmt.Sprintf("AWB-%09d", randVal.Int64())
@@ -182,7 +182,7 @@ func (h *ShipmentHandler) Create(c *fiber.Ctx) error {
 	}
 
 	if err := h.shipmentUC.Create(c.Context(), companyID, params); err != nil {
-		log.Printf("Create shipment error: %v", err)
+		logger.Error().Err(err).Str("company_id", companyID.String()).Msg("Create shipment error")
 		h.shipmentUC.RecordEvent(c.Context(), companyID, "admin_create_fail", []byte(fmt.Sprintf(`{"error": "%s"}`, err.Error())))
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create shipment"})
 	}
@@ -224,7 +224,7 @@ func (h *ShipmentHandler) UpdateStatus(c *fiber.Ctx) error {
 	}
 
 	if err := h.shipmentUC.UpdateStatus(c.Context(), companyID, id, req.Status, req.Destination); err != nil {
-		log.Printf("Update status error: %v", err)
+		logger.Error().Err(err).Str("id", id).Msg("Update status error")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update status"})
 	}
 
@@ -247,7 +247,7 @@ func (h *ShipmentHandler) Delete(c *fiber.Ctx) error {
 
 	id := c.Params("id")
 	if err := h.shipmentUC.Delete(c.Context(), companyID, id); err != nil {
-		log.Printf("Delete error: %v", err)
+		logger.Error().Err(err).Str("id", id).Msg("Delete error")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete shipment"})
 	}
 	return c.JSON(fiber.Map{"success": true})
@@ -261,7 +261,7 @@ func (h *ShipmentHandler) DeleteDelivered(c *fiber.Ctx) error {
 	}
 
 	if err := h.shipmentUC.DeleteDelivered(c.Context(), companyID); err != nil {
-		log.Printf("Cleanup error: %v", err)
+		logger.Error().Err(err).Str("company_id", companyID.String()).Msg("Cleanup error")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to cleanup"})
 	}
 	return c.JSON(fiber.Map{"success": true})
@@ -302,7 +302,7 @@ func (h *ShipmentHandler) ParseText(c *fiber.Ctx) error {
 			m.Validate()
 			h.shipmentUC.RecordEvent(c.Context(), companyID, "admin_parse_ai", []byte(fmt.Sprintf(`{"text_len": %d}`, len(req.Text))))
 		} else {
-			log.Printf("AI Parse error: %v", err)
+			logger.Error().Err(err).Msg("AI Parse error")
 			h.shipmentUC.RecordEvent(c.Context(), companyID, "admin_parse_fail", []byte(fmt.Sprintf(`{"error": "%s"}`, err.Error())))
 		}
 	} else {
@@ -324,7 +324,7 @@ func (h *ShipmentHandler) BulkCreateCSV(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to look up company"})
 	}
-	remaining, err := CheckShipmentCap(c.Context(), h.cfg, h.shipmentUC, companyID, company.PlanType.String)
+	remaining, err := CheckShipmentCap(c.Context(), h.cfg, h.shipmentUC, companyID, company.PlanType.String, company.SubscriptionExpiry)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to check shipment cap"})
 	}
@@ -355,7 +355,7 @@ func (h *ShipmentHandler) BulkCreateCSV(c *fiber.Ctx) error {
 	for _, m := range manifests {
 		randVal, err := rand.Int(rand.Reader, big.NewInt(999999999))
 		if err != nil {
-			log.Printf("Failed to generate random ID: %v", err)
+			logger.Error().Err(err).Msg("Failed to generate random ID in bulk")
 			failed++
 			continue
 		}
@@ -386,7 +386,7 @@ func (h *ShipmentHandler) BulkCreateCSV(c *fiber.Ctx) error {
 			Weight:               toNullFloat64(m.Weight),
 			UpdatedAt:            toNullTime(now),
 		}); err != nil {
-			log.Printf("Bulk create error: %v", err)
+			logger.Error().Err(err).Msg("Bulk create error")
 			failed++
 		} else {
 			createdIds = append(createdIds, trackingID)
@@ -463,11 +463,17 @@ func (h *ShipmentHandler) BulkDelete(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid payload"})
 	}
 
+	deleted := 0
+	failed := 0
 	for _, id := range req.IDs {
-		_ = h.shipmentUC.Delete(c.Context(), companyID, id)
+		if err := h.shipmentUC.Delete(c.Context(), companyID, id); err != nil {
+			failed++
+		} else {
+			deleted++
+		}
 	}
 
-	h.shipmentUC.RecordEvent(c.Context(), companyID, "admin_bulk_delete", []byte(fmt.Sprintf(`{"count": %d}`, len(req.IDs))))
+	h.shipmentUC.RecordEvent(c.Context(), companyID, "admin_bulk_delete", []byte(fmt.Sprintf(`{"deleted": %d, "failed": %d}`, deleted, failed)))
 
-	return c.JSON(fiber.Map{"success": true, "deleted": len(req.IDs)})
+	return c.JSON(fiber.Map{"success": true, "deleted": deleted, "failed": failed})
 }

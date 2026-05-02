@@ -20,13 +20,13 @@ export function WhatsAppTab({ whatsappConnected, whatsappPhone, companyId, onCon
 
     const handleDisconnect = () => {
         startTransition(async () => {
-            try {
-                await disconnectWhatsApp(companyId);
+            const result = await disconnectWhatsApp(companyId);
+            if (result.success) {
                 toast.success('WhatsApp bot disconnected successfully.');
                 queryClient.invalidateQueries({ queryKey: ['company', companyId] });
                 setShowConfirm(false);
-            } catch {
-                toast.error('Failed to disconnect bot. Please try again.');
+            } else {
+                toast.error(result.error || 'Failed to disconnect bot. Please try again.');
             }
         });
     };

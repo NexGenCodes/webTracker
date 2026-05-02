@@ -25,9 +25,9 @@ func Connect(dsn string) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to open pgx connection: %w", err)
 	}
 
-	// SaaS-ready pool sizes (scales to 50+ companies)
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(10)
+	// Free Tier safe pool sizes (Supabase/Neon free tier caps at ~10-20 connections)
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(5)
 	db.SetConnMaxLifetime(30 * time.Minute)
 	db.SetConnMaxIdleTime(5 * time.Minute)
 

@@ -1,32 +1,9 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
-import { CreateShipmentDto, ShipmentData, ServiceResult } from '@/types/shipment';
+import { ShipmentData } from '@/types/shipment';
 import { ShipmentService } from '@/services/shipment.service';
 import { logger } from '@/lib/logger';
 import { vitals } from '@/lib/vitals';
-import { getServerSession } from '@/lib/auth';
-
-/**
- * Common Authorization wrapper
- */
-export async function isAdmin() {
-    const { authenticated } = await getServerSession();
-    return authenticated;
-}
-
-/**
- * Create a new shipment from Admin Portal
- */
-export async function createShipment(data: CreateShipmentDto): Promise<ServiceResult<{ trackingNumber: string }>> {
-    vitals.track('SHIPMENT_CREATED');
-    if (!(await isAdmin())) return { success: false, error: 'Unauthorized' };
-
-    logger.info('Creating shipment', { data });
-    const result = await ShipmentService.create(data);
-    if (result.success) revalidatePath('/dashboard');
-    return result;
-}
 
 /**
  * Public: Get tracking details
@@ -39,96 +16,5 @@ export async function getTracking(trackingNumber: string): Promise<ShipmentData 
         logger.error('Error fetching tracking', { trackingNumber, error });
         return null; // Return null instead of crashing, behaves like "not found"
     }
-}
-
-/**
- * Admin: Update status manually
- */
-export async function updateShipmentStatus(
-    trackingNumber: string,
-    status: 'PENDING' | 'IN_TRANSIT' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELED',
-    location: string
-): Promise<ServiceResult<void>> {
-    if (!(await isAdmin())) return { success: false, error: 'Unauthorized' };
-
-    logger.info('Updating shipment status', { trackingNumber, status, location });
-
-    const result = await ShipmentService.updateStatus(trackingNumber, status, location);
-    if (result.success) {
-        revalidatePath('/');
-        revalidatePath('/dashboard');
-    }
-    return result;
-}
-
-/**
- * Admin: Cancel shipment
- */
-export async function cancelShipment(trackingNumber: string) {
-    return await updateShipmentStatus(trackingNumber, 'CANCELED', 'Canceled via Admin Portal');
-}
-
-/**
- * Admin: Quick Deliver action
- */
-export async function markAsDelivered(trackingNumber: string) {
-    if (!(await isAdmin())) return { success: false, error: 'Unauthorized' };
-
-    const result = await ShipmentService.markDelivered(trackingNumber);
-    if (result.success) {
-        revalidatePath('/');
-        revalidatePath('/dashboard');
-    }
-    return result;
-}
-
-/**
- * Admin: Delete shipment
- */
-export async function deleteShipment(trackingNumber: string) {
-    if (!(await isAdmin())) return { success: false, error: 'Unauthorized' };
-
-    const result = await ShipmentService.delete(trackingNumber);
-    if (result.success) revalidatePath('/dashboard');
-    return result;
-}
-
-/**
- * Admin: Bulk cleanup
- */
-export async function bulkDeleteDelivered() {
-    if (!(await isAdmin())) return { success: false, error: 'Unauthorized' };
-
-    const result = await ShipmentService.bulkDeleteDelivered();
-    if (result.success) revalidatePath('/dashboard');
-    return result;
-}
-
-/**
- * Admin: Dashboard Stats
- */
-export async function getAdminDashboardData() {
-    if (!(await isAdmin())) return { success: false, error: 'Unauthorized' };
-    return await ShipmentService.getDashboardData();
-}
-
-/**
- * Admin: Paginated & Filtered Shipments
- */
-export async function getAdminShipments(params: {
-    page?: number;
-    limit?: number;
-    search?: string;
-    status?: string;
-}) {
-    if (!(await isAdmin())) return { success: false, error: 'Unauthorized' };
-    return await ShipmentService.getShipments(params);
-}
-
-/**
- * Cron: Maintenance tasks
- */
-export async function pruneOldShipments() {
-    await ShipmentService.pruneStale();
 }
 

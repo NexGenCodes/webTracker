@@ -167,20 +167,29 @@ func (m *MockQuerier) UpdateShipmentFieldSenderPhone(ctx context.Context, arg db
 	return nil
 }
 func (m *MockQuerier) CreateCompany(ctx context.Context, arg db.CreateCompanyParams) (db.Company, error) {
-	return db.Company{}, nil
+	args := m.Called(ctx, arg)
+	return args.Get(0).(db.Company), args.Error(1)
 }
 func (m *MockQuerier) GetCompanyByEmail(ctx context.Context, adminEmail string) (db.Company, error) {
-	return db.Company{}, nil
+	args := m.Called(ctx, adminEmail)
+	return args.Get(0).(db.Company), args.Error(1)
 }
 func (m *MockQuerier) GetAllActiveCompanies(ctx context.Context) ([]db.Company, error) {
 	return nil, nil
 }
-func (m *MockQuerier) GetCompanyBySetupToken(ctx context.Context, setupToken sql.NullString) (db.Company, error) {
-	return db.Company{}, nil
+
+func (m *MockQuerier) GetActivePlans(ctx context.Context) ([]db.GetActivePlansRow, error) {
+	return nil, nil
 }
-func (m *MockQuerier) RegenerateSetupToken(ctx context.Context, arg db.RegenerateSetupTokenParams) error {
+
+func (m *MockQuerier) GetPlanByID(ctx context.Context, id string) (db.GetPlanByIDRow, error) {
+	return db.GetPlanByIDRow{}, nil
+}
+
+func (m *MockQuerier) UpdatePlanPrice(ctx context.Context, arg db.UpdatePlanPriceParams) error {
 	return nil
 }
+
 func (m *MockQuerier) UpdateCompanyAuthStatus(ctx context.Context, arg db.UpdateCompanyAuthStatusParams) error {
 	return nil
 }
@@ -195,6 +204,9 @@ func (m *MockQuerier) SetCompanyPassword(ctx context.Context, arg db.SetCompanyP
 }
 func (m *MockQuerier) UpdateCompanyOnboarding(ctx context.Context, arg db.UpdateCompanyOnboardingParams) error {
 	return nil
+}
+func (m *MockQuerier) RecordPayment(ctx context.Context, arg db.RecordPaymentParams) (int32, error) {
+	return 1, nil
 }
 
 // Test Company ID for all tests

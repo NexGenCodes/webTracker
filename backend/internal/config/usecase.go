@@ -95,9 +95,7 @@ func (u *Usecase) GetCompanyByID(ctx context.Context, companyID uuid.UUID) (db.C
 	return u.repo.GetCompanyByID(ctx, companyID)
 }
 
-func (u *Usecase) GetCompanyBySetupToken(ctx context.Context, setupToken string) (db.Company, error) {
-	return u.repo.GetCompanyBySetupToken(ctx, sql.NullString{String: setupToken, Valid: true})
-}
+
 
 func (u *Usecase) UpdateCompanySettings(ctx context.Context, companyID uuid.UUID, name, adminEmail, logoUrl string) error {
 	return u.repo.UpdateCompanySettings(ctx, db.UpdateCompanySettingsParams{
@@ -116,10 +114,16 @@ func (u *Usecase) UpdateCompanyAuthStatus(ctx context.Context, companyID uuid.UU
 }
 
 func (u *Usecase) UpdateCompanySubscriptionStatus(ctx context.Context, companyID uuid.UUID, subStatus string) error {
-	return u.repo.UpdateCompanySubscriptionStatus(ctx, db.UpdateCompanySubscriptionStatusParams{
-		ID:                 companyID,
-		SubscriptionStatus: sql.NullString{String: subStatus, Valid: true},
-	})
+	// Use manual SQL to ensure we EXTEND the expiry if it's already in the future
+	_, err := u.pool.ExecContext(ctx,
+		`UPDATE companies 
+		 SET subscription_status = $1, 
+		     subscription_expiry = GREATEST(subscription_expiry, CURRENT_TIMESTAMP) + INTERVAL '30 days',
+		     updated_at = CURRENT_TIMESTAMP 
+		 WHERE id = $2`,
+		subStatus, companyID,
+	)
+	return err
 }
 
 func (u *Usecase) CreateCompany(ctx context.Context, name, adminEmail, setupToken string) (db.Company, error) {
@@ -130,12 +134,21 @@ func (u *Usecase) CreateCompany(ctx context.Context, name, adminEmail, setupToke
 	})
 }
 
-func (u *Usecase) RegenerateSetupToken(ctx context.Context, companyID uuid.UUID, newToken string) error {
-	return u.repo.RegenerateSetupToken(ctx, db.RegenerateSetupTokenParams{
-		ID:         companyID,
-		SetupToken: sql.NullString{String: newToken, Valid: true},
+// RecordPayment returns the new payment ID if successful, or 0 if it was a duplicate
+func (u *Usecase) RecordPayment(ctx context.Context, companyID uuid.UUID, reference string, amount float64, status string) (int32, error) {
+	id, err := u.repo.RecordPayment(ctx, db.RecordPaymentParams{
+		CompanyID: uuid.NullUUID{UUID: companyID, Valid: true},
+		Reference: reference,
+		Amount:    sql.NullFloat64{Float64: amount, Valid: true},
+		Status:    sql.NullString{String: status, Valid: true},
 	})
+	if err == sql.ErrNoRows {
+		return 0, nil // Duplicate reference (ON CONFLICT DO NOTHING returns no rows)
+	}
+	return id, err
 }
+
+
 
 // UpdateCompanyWhatsAppPhone updates the WhatsApp phone for a company.
 // Uses direct SQL to avoid SQLC regeneration requirement.
@@ -179,4 +192,10 @@ func (u *Usecase) DeleteCompany(ctx context.Context, companyID uuid.UUID) error 
 	return tx.Commit()
 }
 
+func (uc *Usecase) GetActivePlans(ctx context.Context) ([]db.GetActivePlansRow, error) {
+	return uc.repo.GetActivePlans(ctx)
+}
 
+func (uc *Usecase) GetPlanByID(ctx context.Context, id string) (db.GetPlanByIDRow, error) {
+	return uc.repo.GetPlanByID(ctx, id)
+}

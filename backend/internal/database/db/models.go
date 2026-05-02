@@ -6,6 +6,7 @@ package db
 
 import (
 	"database/sql"
+	"encoding/json"
 
 	"github.com/google/uuid"
 	"github.com/sqlc-dev/pqtype"
@@ -34,6 +35,33 @@ type Groupauthority struct {
 	Jid          string       `json:"jid"`
 	IsAuthorized bool         `json:"is_authorized"`
 	UpdatedAt    sql.NullTime `json:"updated_at"`
+}
+
+type Payment struct {
+	ID        int32           `json:"id"`
+	CompanyID uuid.NullUUID   `json:"company_id"`
+	Reference string          `json:"reference"`
+	Amount    sql.NullFloat64 `json:"amount"`
+	Status    sql.NullString  `json:"status"`
+	CreatedAt sql.NullTime    `json:"created_at"`
+}
+
+type Plan struct {
+	ID          string          `json:"id"`
+	Name        string          `json:"name"`
+	NameKey     string          `json:"name_key"`
+	DescKey     string          `json:"desc_key"`
+	BasePrice   int32           `json:"base_price"`
+	Currency    string          `json:"currency"`
+	IntervalKey string          `json:"interval_key"`
+	Popular     sql.NullBool    `json:"popular"`
+	TrialKey    sql.NullString  `json:"trial_key"`
+	BtnKey      string          `json:"btn_key"`
+	Features    json.RawMessage `json:"features"`
+	IsActive    sql.NullBool    `json:"is_active"`
+	SortOrder   sql.NullInt32   `json:"sort_order"`
+	CreatedAt   sql.NullTime    `json:"created_at"`
+	UpdatedAt   sql.NullTime    `json:"updated_at"`
 }
 
 type Shipment struct {

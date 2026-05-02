@@ -6,9 +6,20 @@ import (
 	"webtracker-bot/internal/logger"
 )
 
+type contextKey string
+
+const (
+	JIDKey         contextKey = "jid"
+	SenderPhoneKey contextKey = "sender_phone"
+	IsAdminKey     contextKey = "is_admin"
+	ChatJIDKey     contextKey = "chat_jid"
+	MessageIDKey   contextKey = "message_id"
+	TextKey        contextKey = "text"
+)
+
 // GetJID safely extracts the sender's JID from context
 func GetJID(ctx context.Context) string {
-	val := ctx.Value("jid")
+	val := ctx.Value(JIDKey)
 	if val == nil {
 		logger.Warn().Msg("Context missing 'jid'")
 		return ""
@@ -23,7 +34,7 @@ func GetJID(ctx context.Context) string {
 
 // GetChatJID safely extracts the chat JID from context
 func GetChatJID(ctx context.Context) string {
-	val := ctx.Value("chat_jid")
+	val := ctx.Value(ChatJIDKey)
 	if val == nil {
 		logger.Warn().Msg("Context missing 'chat_jid'")
 		return ""
@@ -38,7 +49,7 @@ func GetChatJID(ctx context.Context) string {
 
 // GetMessageID safely extracts the message ID from context
 func GetMessageID(ctx context.Context) string {
-	val := ctx.Value("message_id")
+	val := ctx.Value(MessageIDKey)
 	if val == nil {
 		return ""
 	}
@@ -51,7 +62,7 @@ func GetMessageID(ctx context.Context) string {
 
 // GetText safely extracts the original message text from context
 func GetText(ctx context.Context) string {
-	val := ctx.Value("text")
+	val := ctx.Value(TextKey)
 	if val == nil {
 		return ""
 	}
@@ -64,7 +75,7 @@ func GetText(ctx context.Context) string {
 
 // GetSenderPhone safely extracts the sender phone from context
 func GetSenderPhone(ctx context.Context) string {
-	val := ctx.Value("sender_phone")
+	val := ctx.Value(SenderPhoneKey)
 	if val == nil {
 		logger.Warn().Msg("Context missing 'sender_phone'")
 		return ""
@@ -79,7 +90,7 @@ func GetSenderPhone(ctx context.Context) string {
 
 // IsAdmin safely checks if the sender is an admin from context
 func IsAdmin(ctx context.Context) bool {
-	val := ctx.Value("is_admin")
+	val := ctx.Value(IsAdminKey)
 	if val == nil {
 		return false
 	}
@@ -89,4 +100,15 @@ func IsAdmin(ctx context.Context) bool {
 		return false
 	}
 	return b
+}
+
+// WithValues enriches context with multiple values using typed keys
+func WithValues(ctx context.Context, jid, phone string, isAdmin bool, chatJid, msgId, text string) context.Context {
+	ctx = context.WithValue(ctx, JIDKey, jid)
+	ctx = context.WithValue(ctx, SenderPhoneKey, phone)
+	ctx = context.WithValue(ctx, IsAdminKey, isAdmin)
+	ctx = context.WithValue(ctx, ChatJIDKey, chatJid)
+	ctx = context.WithValue(ctx, MessageIDKey, msgId)
+	ctx = context.WithValue(ctx, TextKey, text)
+	return ctx
 }

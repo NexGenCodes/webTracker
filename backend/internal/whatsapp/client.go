@@ -3,7 +3,6 @@ package whatsapp
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 
@@ -49,9 +48,13 @@ func GetBarePhone(jid string) string {
 	if jid == "" {
 		return ""
 	}
-	re := regexp.MustCompile(`^(\d+)`)
-	match := re.FindString(jid)
-	return match
+	if idx := strings.IndexByte(jid, '@'); idx != -1 {
+		jid = jid[:idx]
+	}
+	if idx := strings.IndexByte(jid, ':'); idx != -1 {
+		jid = jid[:idx]
+	}
+	return jid
 }
 
 // Global caches removed to support multi-tenancy. State is now held per bot in BotInstance.

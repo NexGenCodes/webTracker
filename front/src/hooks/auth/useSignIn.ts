@@ -18,15 +18,17 @@ export function useSignIn(setError: (msg: string | null) => void) {
         setError(null);
         
         startTransition(async () => {
-            try {
-                await loginAction(data);
-                await refreshAuth();
-                
-                const redirectUrl = searchParams.get('redirect') || searchParams.get('callbackUrl') || searchParams.get('returnUrl') || '/dashboard';
-                window.location.href = redirectUrl;
-            } catch (err: unknown) {
-                setError(err instanceof Error ? err.message : 'Network error. Please try again.');
+            const result = await loginAction(data);
+            
+            if (!result.success) {
+                setError(result.error || 'Login failed. Please try again.');
+                return;
             }
+
+            await refreshAuth();
+            
+            const redirectUrl = searchParams.get('redirect') || searchParams.get('callbackUrl') || searchParams.get('returnUrl') || '/dashboard';
+            window.location.href = redirectUrl;
         });
     };
 

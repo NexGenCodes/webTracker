@@ -96,16 +96,12 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
     const handleFetchQR = useCallback(() => {
         if (!companyId) return;
         startTransition(async () => {
-            try {
-                const response = await getWhatsAppQR(companyId);
-                if (response.success && response.pairingCode) {
-                    setQrCodeData(response.pairingCode);
-                    setPairStatus(prev => prev === 'idle' ? 'waiting' : prev);
-                } else {
-                    setPairError(response.error || 'Could not fetch QR code.');
-                }
-            } catch (err: unknown) {
-                const msg = err instanceof Error ? err.message : 'An error occurred.';
+            const response = await getWhatsAppQR(companyId);
+            if (response.success && response.data?.pairingCode) {
+                setQrCodeData(response.data.pairingCode);
+                setPairStatus(prev => prev === 'idle' ? 'waiting' : prev);
+            } else {
+                const msg = response.error || 'Could not fetch QR code.';
                 if (msg.toLowerCase().includes('already connected')) {
                     handleConnected();
                 } else {
@@ -230,17 +226,13 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
 
         // Execute Server Action within transition
         startTransition(async () => {
-            try {
-                const response = await pairWhatsApp(companyId, formattedPhone);
+            const response = await pairWhatsApp(companyId, formattedPhone);
 
-                if (response.success && response.pairingCode) {
-                    setPairingCode(response.pairingCode);
-                    setPairStatus('waiting');
-                } else {
-                    setPairError(response.error || 'Code not received. Check phone format.');
-                }
-            } catch (err: unknown) {
-                const msg = err instanceof Error ? err.message : 'An error occurred during pairing.';
+            if (response.success && response.data?.code) {
+                setPairingCode(response.data.code);
+                setPairStatus('waiting');
+            } else {
+                const msg = response.error || 'Code not received. Check phone format.';
                 if (msg.toLowerCase().includes('already connected')) {
                     handleConnected();
                 } else {

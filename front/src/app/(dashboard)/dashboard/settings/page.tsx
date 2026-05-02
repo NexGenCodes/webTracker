@@ -74,30 +74,31 @@ export default function SettingsPage() {
         if (!confirm("Are you sure you want to disconnect the WhatsApp bot? This will instantly stop all tracking and delete your session.")) return;
 
         setIsDisconnecting(true);
-        try {
-            if (!companyId) return;
-            await disconnectWhatsApp(companyId);
+        if (!companyId) return;
+        
+        const result = await disconnectWhatsApp(companyId);
+        if (result.success) {
             toast.success("Bot disconnected successfully.");
             window.location.reload(); // Refresh to update status globally
-        } catch {
-            toast.error("Failed to disconnect bot");
-        } finally {
-            setIsDisconnecting(false);
+        } else {
+            toast.error(result.error || "Failed to disconnect bot");
         }
+        setIsDisconnecting(false);
     };
 
     const handleDeleteAccount = async () => {
         setIsDeleting(true);
-        try {
-            if (!companyId) return;
-            await deleteAccount(companyId);
+        if (!companyId) return;
+        
+        const result = await deleteAccount(companyId);
+        if (result.success) {
             toast.success("Account deleted. Redirecting...");
             
             // Clear session and force full reload to auth
             await logoutAction();
             window.location.href = '/auth';
-        } catch {
-            toast.error("Failed to delete account. Please try again.");
+        } else {
+            toast.error(result.error || "Failed to delete account. Please try again.");
             setIsDeleting(false);
         }
     };

@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"webtracker-bot/internal/api"
 	"webtracker-bot/internal/commands"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/database/db"
@@ -19,6 +20,7 @@ import (
 	"webtracker-bot/internal/parser"
 	"webtracker-bot/internal/receipt"
 	"webtracker-bot/internal/shipment"
+	"webtracker-bot/internal/utils"
 	"webtracker-bot/internal/whatsapp"
 )
 
@@ -68,12 +70,7 @@ func (w *Worker) process(job models.Job) {
 	defer bot.Sender.SetTyping(job.ChatJID, false)
 
 	// 2. Check for Commands
-	ctx := context.WithValue(context.Background(), "jid", job.SenderJID.String())
-	ctx = context.WithValue(ctx, "sender_phone", job.SenderPhone)
-	ctx = context.WithValue(ctx, "is_admin", job.IsAdmin)
-	ctx = context.WithValue(ctx, "chat_jid", job.ChatJID.String())
-	ctx = context.WithValue(ctx, "message_id", job.MessageID)
-	ctx = context.WithValue(ctx, "text", job.Text)
+	ctx := utils.WithValues(context.Background(), job.SenderJID.String(), job.SenderPhone, job.IsAdmin, job.ChatJID.String(), job.MessageID, job.Text)
 
 	botPhone := ""
 	if bot.WA != nil && bot.WA.Store != nil && bot.WA.Store.ID != nil {
@@ -198,6 +195,17 @@ func (w *Worker) process(job models.Job) {
 		dupMsg := fmt.Sprintf("⚠️ *SHIPMENT ALREADY EXISTS*\n\nA shipment for this recipient phone is already in the system.\n\n🆔 *%s*\n\n🔹 Use `!edit %s ...` to update.\n🔹 Use `!delete %s` to remove.", existingID, existingID, existingID)
 		bot.Sender.Reply(job.ChatJID, job.SenderJID, dupMsg, job.MessageID, job.Text)
 		return
+	}
+
+	// 5c. Billing Limit Check
+	company, err := w.ConfigUC.GetCompanyByID(context.Background(), job.CompanyID)
+	if err == nil {
+		remaining, err := api.CheckShipmentCap(context.Background(), w.Cfg, w.ShipmentUC, job.CompanyID, company.PlanType.String, company.SubscriptionExpiry)
+		if err == nil && remaining == 0 {
+			logger.Info().Str("company_id", job.CompanyID.String()).Msg("Shipment blocked: billing limit reached")
+			bot.Sender.Reply(job.ChatJID, job.SenderJID, "⚠️ *SHIPMENT BLOCKED*\n\nYour monthly shipment limit has been reached or your subscription has expired.\n\nPlease contact your administrator to upgrade your plan via the dashboard.", job.MessageID, job.Text)
+			return
+		}
 	}
 
 	// Generate schedule dates using the new Smart Anchor Algorithm (A & B)

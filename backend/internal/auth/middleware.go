@@ -21,17 +21,16 @@ func JWTAuth(publicKeyPath string) fiber.Handler {
 
 	return func(c *fiber.Ctx) error {
 		path := c.Path()
-		// Allow health checks, public tracking, and specific auth/webhook routes without JWT
+		// Allow health checks and specific auth/webhook routes without JWT
 		if path == "/health" ||
-			strings.HasPrefix(path, "/api/track/") ||
 			path == "/api/auth/register-intent" ||
 			path == "/api/auth/verify-otp" ||
 			path == "/api/auth/login" ||
 			path == "/api/auth/logout" ||
 			path == "/api/auth/forgot-password" ||
 			path == "/api/auth/reset-password" ||
-			strings.HasPrefix(path, "/api/webhooks/") ||
-			strings.HasPrefix(path, "/api/company/onboard") {
+			path == "/api/billing/plans" ||
+			strings.HasPrefix(path, "/api/webhooks/") {
 			return c.Next()
 		}
 

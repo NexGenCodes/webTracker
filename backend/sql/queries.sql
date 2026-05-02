@@ -10,8 +10,7 @@ WHERE auth_status = 'active'
 -- name: GetCompanyByID :one
 SELECT * FROM companies WHERE id = $1;
 
--- name: GetCompanyBySetupToken :one
-SELECT * FROM companies WHERE setup_token = $1;
+
 
 -- name: UpdateCompanySettings :exec
 UPDATE companies SET name = $2, admin_email = $3, logo_url = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $1;
@@ -22,15 +21,16 @@ UPDATE companies SET auth_status = $2, updated_at = CURRENT_TIMESTAMP WHERE id =
 -- name: UpdateCompanySubscriptionStatus :exec
 UPDATE companies 
 SET subscription_status = $2, 
-    subscription_expiry = CURRENT_TIMESTAMP + INTERVAL '30 days',
+    subscription_expiry = GREATEST(subscription_expiry, CURRENT_TIMESTAMP) + INTERVAL '30 days',
     updated_at = CURRENT_TIMESTAMP 
 WHERE id = $1;
 
 -- name: CreateCompany :one
-INSERT INTO companies (name, admin_email, setup_token) VALUES ($1, $2, $3) RETURNING *;
+INSERT INTO companies (name, admin_email, setup_token, subscription_expiry, plan_type) 
+VALUES ($1, $2, $3, CURRENT_TIMESTAMP + INTERVAL '7 days', 'trial') 
+RETURNING *;
 
--- name: RegenerateSetupToken :exec
-UPDATE companies SET setup_token = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1;
+
 
 -- name: GetSystemConfig :one
 SELECT value FROM SystemConfig WHERE company_id = $1 AND key = $2;
@@ -208,3 +208,23 @@ UPDATE companies SET admin_password_hash = $2, updated_at = CURRENT_TIMESTAMP WH
 
 -- name: UpdateCompanyOnboarding :exec
 UPDATE companies SET whatsapp_phone = $2, tracking_prefix = $3, auth_status = 'active', updated_at = CURRENT_TIMESTAMP WHERE id = $1;
+
+-- name: RecordPayment :one
+INSERT INTO payments (company_id, reference, amount, status)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (reference) DO NOTHING
+RETURNING id;
+
+-- name: GetActivePlans :many
+SELECT id, name, name_key, desc_key, base_price, currency, interval_key, popular, trial_key, btn_key, features, sort_order
+FROM plans
+WHERE is_active = TRUE
+ORDER BY sort_order ASC;
+
+-- name: GetPlanByID :one
+SELECT id, name, name_key, desc_key, base_price, currency, interval_key, popular, trial_key, btn_key, features
+FROM plans
+WHERE id = $1 AND is_active = TRUE;
+
+-- name: UpdatePlanPrice :exec
+UPDATE plans SET base_price = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1;

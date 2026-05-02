@@ -6,6 +6,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/gofiber/fiber/v2/middleware/recover"
 
 	"database/sql"
 	"time"
@@ -29,6 +30,9 @@ type Server struct {
 func NewServer(cfg *config.Config, shipmentUC *shipment.Usecase, configUC *config.Usecase, db *sql.DB, bots whatsapp.BotProvider) *Server {
 	app := fiber.New(fiber.Config{
 		DisableStartupMessage: true,
+		BodyLimit:             1 * 1024 * 1024, // 1MB — prevents OOM on free tier
+		ReadTimeout:           30 * time.Second,
+		WriteTimeout:          30 * time.Second,
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
 			code := fiber.StatusInternalServerError
 			if e, ok := err.(*fiber.Error); ok {
@@ -41,6 +45,7 @@ func NewServer(cfg *config.Config, shipmentUC *shipment.Usecase, configUC *confi
 	})
 
 	// Global Middlewares
+	app.Use(recover.New()) // Catch panics — prevents full process crash
 	app.Use(logger.New())
 
 	// Safely restrict CORS to the configured frontend URL and local development
@@ -84,6 +89,9 @@ func (s *Server) SetupRoutes() {
 
 	companyHandler := NewCompanyHandler(s.cfg, s.configUC, s.bots)
 	companyHandler.RegisterRoutes(s.app)
+
+	billingHandler := NewBillingHandler(s.cfg, s.configUC)
+	billingHandler.RegisterRoutes(s.app)
 
 	// Enhanced Healthcheck
 	s.app.Get("/health", func(c *fiber.Ctx) error {

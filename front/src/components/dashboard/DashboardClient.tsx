@@ -45,9 +45,9 @@ const TABS: { id: Tab; icon: typeof Package; label: string }[] = [
 
 const PLAN_DETAILS: Record<string, { name: string; price: string }> = {
     trial: { name: '7 Days Free Trial', price: '₦0' },
-    basic: { name: 'Basic Plan', price: '₦10,000' },
-    pro: { name: 'Professional Plan', price: '₦25,000' },
-    enterprise: { name: 'Enterprise Plan', price: '₦50,000' },
+    starter: { name: 'Starter Plan', price: '₦12,000' },
+    pro: { name: 'Professional Plan', price: '₦30,000' },
+    enterprise: { name: 'Enterprise Plan', price: '₦85,000' },
 };
 
 const StatusBadge = ({ status }: { status: string }) => {
@@ -55,6 +55,7 @@ const StatusBadge = ({ status }: { status: string }) => {
         active: { icon: CheckCircle2, color: 'text-success', label: 'Active' },
         pending: { icon: AlertTriangle, color: 'text-warning', label: 'Pending Setup' },
         suspended: { icon: XCircle, color: 'text-error', label: 'Suspended' },
+        expired: { icon: XCircle, color: 'text-error', label: 'Expired' },
     };
     const c = config[status] || config.pending;
     return (
@@ -153,16 +154,27 @@ export default function DashboardClient({ initialCompanyData, initialStats, user
 
     // --- DERIVED STATE ---
     const companyName = companyData?.name || user?.company_name || 'CARGOHIVE';
-    const subscriptionStatus = companyData?.subscription_status || 'active';
     const whatsappConnected = companyData?.auth_status === 'active';
-    const overallStatus = whatsappConnected ? subscriptionStatus : 'pending';
-
     const planType = (companyData?.plan_type || 'trial').toLowerCase();
     const currentPlan = PLAN_DETAILS[planType] || PLAN_DETAILS['trial'];
 
-    const expiryDate = companyData?.subscription_expiry
-        ? new Date(companyData.subscription_expiry).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    const expiryDateString = companyData?.subscription_expiry;
+    const expiryDate = expiryDateString
+        ? new Date(expiryDateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
         : '—';
+
+    let daysRemaining = 0;
+    let isExpired = false;
+    if (expiryDateString) {
+        daysRemaining = Math.ceil((new Date(expiryDateString).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+        if (daysRemaining < 0) {
+            isExpired = true;
+            daysRemaining = 0;
+        }
+    }
+
+    const subscriptionStatus = isExpired ? 'expired' : (companyData?.subscription_status || 'active');
+    const overallStatus = whatsappConnected ? subscriptionStatus : 'pending';
 
     return (
         <div className="pb-32 md:pb-24 relative bg-background overflow-x-hidden">
@@ -260,6 +272,8 @@ export default function DashboardClient({ initialCompanyData, initialStats, user
                                     planType={planType}
                                     currentPlan={currentPlan}
                                     expiryDate={expiryDate}
+                                    daysRemaining={daysRemaining}
+                                    isExpired={isExpired}
                                     onConnectClick={() => setIsConnectModalOpen(true)}
                                 />
                             )}

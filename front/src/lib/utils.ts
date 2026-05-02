@@ -129,3 +129,20 @@ export function isValidTrackingNumber(id: string): boolean {
 export function getApiUrl(): string {
     return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 }
+
+/**
+ * Formats a price from subunits (kobo/cents) to a display string.
+ * e.g. formatPrice(1200000, "NGN") → "₦12,000"
+ */
+export function formatPrice(amountInSubunits: number, currency: string = 'NGN'): string {
+    const major = amountInSubunits / 100;
+    const symbols: Record<string, string> = {
+        'NGN': '₦',
+        'USD': '$',
+        'GHS': 'GH₵',
+        'KES': 'KSh',
+        'GBP': '£',
+    };
+    const symbol = symbols[currency] || currency + ' ';
+    return `${symbol}${major.toLocaleString()}`;
+}
