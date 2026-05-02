@@ -194,7 +194,7 @@ export default function DashboardClient({ initialCompanyData, initialStats, user
                 <div
                     role="tablist"
                     aria-label="Dashboard Navigation"
-                    className="flex flex-wrap gap-2 sm:gap-4 border-b border-border/50 mb-10 pb-2 relative"
+                    className="flex overflow-x-auto no-scrollbar gap-2 sm:gap-4 border-b border-border/50 mb-10 pb-2 relative max-w-full"
                 >
                     {TABS.map((tab) => {
                         const isActive = activeTab === tab.id;

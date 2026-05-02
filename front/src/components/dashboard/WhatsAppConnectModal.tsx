@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useTransition, useCallback } from 'react';
-import { Smartphone, Copy, Check, Loader2, XCircle, ChevronRight, AlertTriangle } from 'lucide-react';
+import { Smartphone, Copy, Check, Loader2, XCircle, ChevronRight, AlertTriangle, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
@@ -64,7 +64,7 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
     const [codeCopied, setCodeCopied] = useState(false);
     const [pairStatus, setPairStatus] = useState<'idle' | 'waiting' | 'connected'>('idle');
     const [connectMode, setConnectMode] = useState<'qr' | 'phone'>('qr');
-    
+
     // React 19 / Next.js 15: useTransition for Server Action
     const [isPending, startTransition] = useTransition();
 
@@ -192,7 +192,7 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
 
     const handleCopyCode = async () => {
         if (!pairingCode) return;
-        const formatted = pairingCode.length === 8 
+        const formatted = pairingCode.length === 8
             ? `${pairingCode.slice(0, 4)}-${pairingCode.slice(4)}`
             : pairingCode;
         await navigator.clipboard.writeText(formatted);
@@ -399,23 +399,34 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
                                         </p>
                                     </div>
 
-                                    <div className="flex justify-center gap-3">
+                                    <div className="flex justify-center gap-1 sm:gap-2 md:gap-3">
                                         {pairingCode.split('').map((char, i) => (
                                             <React.Fragment key={i}>
-                                                {i === 4 && <div className="w-4 flex items-center justify-center text-border font-black text-2xl">-</div>}
-                                                <div className="w-10 h-14 md:w-12 md:h-16 bg-surface border border-border/50 rounded-xl flex items-center justify-center text-2xl md:text-3xl font-black text-accent shadow-inner">
+                                                {i === 4 && <div className="w-2 sm:w-4 flex items-center justify-center text-border font-black text-lg sm:text-2xl">-</div>}
+                                                <div className="w-8 h-10 sm:w-10 sm:h-14 md:w-12 md:h-16 bg-surface border border-border/50 rounded-lg sm:rounded-xl flex items-center justify-center text-xl sm:text-2xl md:text-3xl font-black text-accent shadow-inner">
                                                     {char}
                                                 </div>
                                             </React.Fragment>
                                         ))}
                                     </div>
-                                    <button
-                                        onClick={handleCopyCode}
-                                        className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-surface border border-border hover:bg-surface-hover text-sm font-bold text-text-main transition-colors mx-auto"
-                                    >
-                                        {codeCopied ? <Check size={16} className="text-success" /> : <Copy size={16} />}
-                                        {codeCopied ? 'Copied!' : 'Copy Code'}
-                                    </button>
+                                    <div className="flex flex-col sm:flex-row justify-center gap-3 mt-6">
+                                        <button
+                                            onClick={handleCopyCode}
+                                            className="inline-flex items-center justify-center gap-2 px-6 py-3.5 sm:py-2.5 rounded-xl sm:rounded-full bg-surface border border-border hover:bg-surface-hover text-sm font-bold text-text-main transition-colors w-full sm:w-auto active:scale-95"
+                                        >
+                                            {codeCopied ? <Check size={16} className="text-success" /> : <Copy size={16} />}
+                                            {codeCopied ? 'Copied!' : 'Copy Code'}
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setPairStatus('idle');
+                                            }}
+                                            className="inline-flex items-center justify-center gap-2 px-6 py-3.5 sm:py-2.5 rounded-xl sm:rounded-full bg-surface-muted hover:bg-border text-text-muted hover:text-text-main transition-colors w-full sm:w-auto text-sm font-bold active:scale-95"
+                                        >
+                                            <RefreshCw size={16} />
+                                            Regenerate
+                                        </button>
+                                    </div>
 
                                     <div className="p-4 rounded-xl bg-accent/5 border border-accent/10 flex items-center justify-center gap-3">
                                         {pairStatus === 'connected' ? (
