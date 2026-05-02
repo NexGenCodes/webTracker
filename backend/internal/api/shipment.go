@@ -44,23 +44,13 @@ func NewShipmentHandler(shipmentUC *shipment.Usecase, configUC *config.Usecase, 
 }
 
 func getCompanyID(c *fiber.Ctx) uuid.UUID {
-	// Securely extract company_id from the validated JWT token
+	// Securely extract company_id from the validated JWT token — ONLY source of truth
 	if user, ok := c.Locals("user").(*auth.JWTClaims); ok && user != nil {
 		if user.CompanyID != uuid.Nil {
 			return user.CompanyID
 		}
 	}
-
-	// Fallback for edge cases (e.g., internal testing or unprotected routes, if any)
-	idStr := c.Get("X-Company-ID")
-	if idStr == "" {
-		idStr = c.Query("company_id")
-	}
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		return uuid.Nil
-	}
-	return id
+	return uuid.Nil
 }
 
 func (h *ShipmentHandler) RegisterRoutes(router fiber.Router) {

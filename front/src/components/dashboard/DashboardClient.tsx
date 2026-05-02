@@ -89,7 +89,7 @@ export default function DashboardClient({ initialCompanyData, initialStats, user
             return data as CompanyData;
         },
         initialData: initialCompanyData,
-        staleTime: 1000 * 5, // 5 seconds (was 5 minutes)
+        staleTime: 1000 * 60 * 5, // 5 minutes
     });
 
     const { data: shipmentStats, isFetching: fetchingStats } = useQuery({
@@ -108,7 +108,7 @@ export default function DashboardClient({ initialCompanyData, initialStats, user
             return { total: data.length, active, delivered };
         },
         initialData: initialStats,
-        staleTime: 1000 * 5, // 5 seconds (was 5 minutes)
+        staleTime: 1000 * 60 * 5, // 5 minutes
     });
 
     // Handle Authorization Errors
@@ -165,25 +165,25 @@ export default function DashboardClient({ initialCompanyData, initialStats, user
                     animate={{ y: 0, opacity: 1 }}
                     className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12"
                 >
-                    <div className="flex items-center gap-6">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
                         {companyData?.logo_url ? (
-                            <div className="relative w-16 h-16 rounded-2xl shadow-lg border border-border overflow-hidden">
+                            <div className="relative w-16 h-16 rounded-2xl shadow-lg border border-border overflow-hidden shrink-0">
                                 <Image src={companyData.logo_url} alt="Logo" fill className="object-cover" />
                             </div>
                         ) : (
-                            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent to-primary flex items-center justify-center shadow-lg shadow-accent/20 border border-white/10">
+                            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent to-primary flex items-center justify-center shadow-lg shadow-accent/20 border border-white/10 shrink-0">
                                 <span className="text-2xl font-black text-white">{companyName.substring(0, 2).toUpperCase()}</span>
                             </div>
                         )}
-                        <div>
-                            <h1 className="text-3xl sm:text-4xl font-black text-text-main uppercase tracking-tighter drop-shadow-sm">
+                        <div className="min-w-0">
+                            <h1 className="text-3xl sm:text-4xl font-black text-text-main uppercase tracking-tighter drop-shadow-sm truncate">
                                 {companyName}
                             </h1>
-                            <div className="flex items-center gap-3 mt-3">
+                            <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-2 sm:mt-3">
                                 <StatusBadge status={overallStatus} />
-                                <span className="w-1 h-1 rounded-full bg-border" />
-                                <span className="text-xs font-bold text-text-muted uppercase tracking-widest flex items-center gap-2">
-                                    <UserCircle2 size={14} /> {user?.email}
+                                <span className="hidden sm:inline-block w-1 h-1 rounded-full bg-border" />
+                                <span className="text-xs font-bold text-text-muted uppercase tracking-widest flex items-center gap-2 truncate">
+                                    <UserCircle2 size={14} className="shrink-0" /> <span className="truncate">{user?.email}</span>
                                 </span>
                             </div>
                         </div>
