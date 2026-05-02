@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getServerSession } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { getJwtTokenAction } from '@/app/actions/auth';
 import DashboardClient from '@/components/dashboard/DashboardClient';
 
 export default async function DashboardPage() {
@@ -11,6 +12,7 @@ export default async function DashboardPage() {
     }
 
     const supabase = await createClient();
+    const jwt = await getJwtTokenAction();
 
     // Fetch company data
     const { data: companyData, error: companyError } = await supabase
@@ -45,7 +47,8 @@ export default async function DashboardPage() {
             initialCompanyData={companyData} 
             initialStats={stats} 
             user={user} 
-            companyId={user.company_id} 
+            companyId={user.company_id}
+            jwt={jwt}
         />
     );
 }

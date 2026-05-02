@@ -95,8 +95,6 @@ func (u *Usecase) GetCompanyByID(ctx context.Context, companyID uuid.UUID) (db.C
 	return u.repo.GetCompanyByID(ctx, companyID)
 }
 
-
-
 func (u *Usecase) UpdateCompanySettings(ctx context.Context, companyID uuid.UUID, name, adminEmail, logoUrl string) error {
 	return u.repo.UpdateCompanySettings(ctx, db.UpdateCompanySettingsParams{
 		ID:         companyID,
@@ -113,16 +111,25 @@ func (u *Usecase) UpdateCompanyAuthStatus(ctx context.Context, companyID uuid.UU
 	})
 }
 
-func (u *Usecase) UpdateCompanySubscriptionStatus(ctx context.Context, companyID uuid.UUID, subStatus string) error {
+func (u *Usecase) UpdateCompanySubscriptionStatus(ctx context.Context, companyID uuid.UUID, subStatus, planType string) error {
 	// Use manual SQL to ensure we EXTEND the expiry if it's already in the future
-	_, err := u.pool.ExecContext(ctx,
-		`UPDATE companies 
+	// Also update plan_type if provided (from payment metadata)
+	query := `UPDATE companies 
 		 SET subscription_status = $1, 
 		     subscription_expiry = GREATEST(subscription_expiry, CURRENT_TIMESTAMP) + INTERVAL '30 days',
-		     updated_at = CURRENT_TIMESTAMP 
-		 WHERE id = $2`,
-		subStatus, companyID,
-	)
+		     updated_at = CURRENT_TIMESTAMP`
+	args := []interface{}{subStatus}
+
+	if planType != "" {
+		query += `, plan_type = $3`
+		query += ` WHERE id = $2`
+		args = append(args, companyID, planType)
+	} else {
+		query += ` WHERE id = $2`
+		args = append(args, companyID)
+	}
+
+	_, err := u.pool.ExecContext(ctx, query, args...)
 	return err
 }
 
@@ -199,3 +206,4 @@ func (uc *Usecase) GetActivePlans(ctx context.Context) ([]db.GetActivePlansRow, 
 func (uc *Usecase) GetPlanByID(ctx context.Context, id string) (db.GetPlanByIDRow, error) {
 	return uc.repo.GetPlanByID(ctx, id)
 }
+

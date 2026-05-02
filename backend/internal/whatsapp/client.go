@@ -9,6 +9,7 @@ import (
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
+	"webtracker-bot/internal/utils"
 	
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/store"
@@ -44,18 +45,7 @@ func NewClientForDevice(device *store.Device) *whatsmeow.Client {
 
 // GetBarePhone extracts only the digits before any device/suffix markers.
 // e.g. "23480...0:12" -> "23480...0"
-func GetBarePhone(jid string) string {
-	if jid == "" {
-		return ""
-	}
-	if idx := strings.IndexByte(jid, '@'); idx != -1 {
-		jid = jid[:idx]
-	}
-	if idx := strings.IndexByte(jid, ':'); idx != -1 {
-		jid = jid[:idx]
-	}
-	return jid
-}
+
 
 // Global caches removed to support multi-tenancy. State is now held per bot in BotInstance.
 const maxCacheAge = 1 * time.Hour
@@ -71,7 +61,7 @@ func checkCacheCleanup(bot *BotInstance) {
 	}
 }
 
-func HandleEvent(bot *BotInstance, evt interface{}, queue chan<- models.Job, cfg *config.Config, configUC *config.Usecase) {
+func HandleEvent(bot *BotInstance, evt interface{}, queue chan<- models.Job, cfg *config.Config, configUC models.ConfigUsecase) {
 	client := bot.WA
 	companyID := bot.CompanyID
 
@@ -102,7 +92,7 @@ func HandleEvent(bot *BotInstance, evt interface{}, queue chan<- models.Job, cfg
 		chatJID := v.Info.Chat
 		isGroup := chatJID.Server == "g.us"
 
-		senderPhone := GetBarePhone(v.Info.Sender.User)
+		senderPhone := utils.GetBarePhone(v.Info.Sender.User)
 
 		// 1. Identify Bot Identity (Phone & LID) from cache or store
 		bot.IdentityCache.RLock()
@@ -111,7 +101,7 @@ func HandleEvent(bot *BotInstance, evt interface{}, queue chan<- models.Job, cfg
 		bot.IdentityCache.RUnlock()
 
 		if botPhone == "" && client.Store.ID != nil {
-			botPhone = GetBarePhone(client.Store.ID.User)
+			botPhone = utils.GetBarePhone(client.Store.ID.User)
 			bot.IdentityCache.Lock()
 			bot.IdentityCache.BotPhone = botPhone
 			bot.IdentityCache.Unlock()
@@ -126,7 +116,7 @@ func HandleEvent(bot *BotInstance, evt interface{}, queue chan<- models.Job, cfg
 		// 2. Persistent Bot LID Mapping (Update cache if found)
 		if v.Info.IsFromMe && client.Store.ID != nil {
 			senderPhone = botPhone
-			newLID := GetBarePhone(v.Info.Sender.User)
+			newLID := utils.GetBarePhone(v.Info.Sender.User)
 			if newLID != "" && newLID != botLID {
 				botLID = newLID
 				bot.IdentityCache.Lock()
@@ -160,7 +150,7 @@ func HandleEvent(bot *BotInstance, evt interface{}, queue chan<- models.Job, cfg
 					isSenderAdmin = true
 				} else if strings.HasPrefix(text, "!") || strings.HasPrefix(text, "#") {
 					// Check Cache First
-					senderBare := GetBarePhone(v.Info.Sender.User)
+					senderBare := utils.GetBarePhone(v.Info.Sender.User)
 					if groupAdmins, ok := bot.ParticipantsCache.Load(chatJID.String()); ok {
 						admins := groupAdmins.(map[string]bool)
 						if isAdminEntry, exist := admins[senderBare]; exist {
@@ -237,7 +227,7 @@ func HandleEvent(bot *BotInstance, evt interface{}, queue chan<- models.Job, cfg
 }
 
 // verifyGroupAuthority performs a real-time check. Updates both DB and in-memory cache.
-func verifyGroupAuthority(bot *BotInstance, configUC *config.Usecase, chat types.JID) bool {
+func verifyGroupAuthority(bot *BotInstance, configUC models.ConfigUsecase, chat types.JID) bool {
 	client := bot.WA
 	companyID := bot.CompanyID
 
@@ -253,15 +243,15 @@ func verifyGroupAuthority(bot *BotInstance, configUC *config.Usecase, chat types
 	bot.IdentityCache.RUnlock()
 
 	if botPhone == "" && client.Store.ID != nil {
-		botPhone = GetBarePhone(client.Store.ID.User)
+		botPhone = utils.GetBarePhone(client.Store.ID.User)
 	}
 
-	ownerUserJID := GetBarePhone(resp.OwnerJID.User)
+	ownerUserJID := utils.GetBarePhone(resp.OwnerJID.User)
 	isAuth := (botPhone != "" && ownerUserJID == botPhone) || (botLID != "" && ownerUserJID == botLID)
 
 	admins := make(map[string]bool)
 	for _, p := range resp.Participants {
-		pBare := GetBarePhone(p.JID.User)
+		pBare := utils.GetBarePhone(p.JID.User)
 		isAdmin := p.IsAdmin || p.IsSuperAdmin || pBare == ownerUserJID
 		admins[pBare] = isAdmin
 

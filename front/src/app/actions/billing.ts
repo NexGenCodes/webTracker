@@ -100,40 +100,39 @@ export async function getSubscriptionStatusAction(): Promise<ActionResult<{ stat
     }
 }
 
-export async function waitForPaymentAction(reference: string): Promise<ActionResult<{ status: string }>> {
+/**
+ * Performs a single check of the subscription status after payment.
+ * 
+ * NOTE: Do NOT use polling here — the frontend should subscribe to
+ * Supabase Realtime `postgres_changes` on the `companies` table to
+ * detect status transitions instantly. This action is a one-shot
+ * fallback for the initial check after redirect.
+ */
+export async function checkPaymentStatusAction(): Promise<ActionResult<{ status: string }>> {
     try {
         const session = await getServerSession();
         if (!session?.user?.company_id) {
             return { success: false, error: 'Unauthorized.' };
         }
 
-        const maxAttempts = 12;
-        const delayMs = 2500; // 30 seconds total max wait
+        const res = await fetch(`${getApiUrl()}/api/company/subscription-status`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${session.token}`,
+                'Content-Type': 'application/json'
+            },
+            cache: 'no-store'
+        });
 
-        for (let i = 0; i < maxAttempts; i++) {
-            const res = await fetch(`${getApiUrl()}/api/company/subscription-status`, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${session.token}`,
-                    'Content-Type': 'application/json'
-                },
-                cache: 'no-store'
-            });
-
-            if (res.ok) {
-                const data = await res.json();
-                if (data.status === 'active') {
-                    return { success: true, data: { status: 'active' } };
-                }
-            }
-
-            // Wait before next attempt
-            await new Promise(resolve => setTimeout(resolve, delayMs));
+        if (res.ok) {
+            const data = await res.json();
+            return { success: true, data: { status: data.status || 'pending' } };
         }
 
-        return { success: false, error: 'Payment verification is taking longer than usual. It will update automatically once processed.' };
+        return { success: false, error: 'Failed to check payment status.' };
     } catch (error) {
         Sentry.captureException(error);
         return { success: false, error: 'Network error.' };
     }
 }
+

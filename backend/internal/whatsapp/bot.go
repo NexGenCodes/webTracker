@@ -1,7 +1,6 @@
 package whatsapp
 
 import (
-	"context"
 	"sync"
 	"time"
 
@@ -37,12 +36,15 @@ type IdentityCacheData struct {
 	BotLID   string
 }
 
-type BotProvider interface {
-	GetBot(companyID uuid.UUID) (*BotInstance, error)
-	GetAllBots() []*BotInstance
-	ActivateBot(ctx context.Context, companyID uuid.UUID) error
-	DeactivateBot(companyID uuid.UUID) error
-	GeneratePairingCode(ctx context.Context, companyID uuid.UUID, phone string) (string, error)
-	GetQR(ctx context.Context, companyID uuid.UUID) (string, error)
-	LogoutBot(companyID uuid.UUID) error
+func (b *BotInstance) GetWAClient() *whatsmeow.Client   { return b.WA }
+func (b *BotInstance) GetSender() models.WhatsAppSender { return b.Sender }
+func (b *BotInstance) GetPrefix() string                { return b.Prefix }
+func (b *BotInstance) GetCompanyName() string           { return b.CompanyName }
+func (b *BotInstance) GetTier() string                  { return b.Tier }
+func (b *BotInstance) GetJobs() chan models.Job         { return b.Jobs }
+
+func (b *BotInstance) GetCurrentQR() string {
+	b.QRMu.RLock()
+	defer b.QRMu.RUnlock()
+	return b.CurrentQR
 }

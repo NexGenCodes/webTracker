@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS companies (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS SystemConfig (
+CREATE TABLE IF NOT EXISTS systemconfig (
     company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
     key TEXT,
     value TEXT NOT NULL,
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS SystemConfig (
     PRIMARY KEY (company_id, key)
 );
 
-CREATE TABLE IF NOT EXISTS UserPreference (
+CREATE TABLE IF NOT EXISTS userpreference (
     company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
     jid TEXT,
     language TEXT NOT NULL DEFAULT 'en',
@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS UserPreference (
     PRIMARY KEY (company_id, jid)
 );
 
-CREATE TABLE IF NOT EXISTS GroupAuthority (
+CREATE TABLE IF NOT EXISTS groupauthority (
     company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
     jid TEXT,
     is_authorized BOOLEAN NOT NULL DEFAULT FALSE,
@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS GroupAuthority (
     PRIMARY KEY (company_id, jid)
 );
 
-CREATE TABLE IF NOT EXISTS Shipment (
+CREATE TABLE IF NOT EXISTS shipment (
     tracking_id TEXT PRIMARY KEY,
     company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
     user_jid TEXT NOT NULL,
@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS Shipment (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS Telemetry (
+CREATE TABLE IF NOT EXISTS telemetry (
     id SERIAL PRIMARY KEY,
     company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
     event_type TEXT NOT NULL,
@@ -78,14 +78,14 @@ CREATE TABLE IF NOT EXISTS Telemetry (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS idx_telemetry_event_type ON Telemetry(event_type);
-CREATE INDEX IF NOT EXISTS idx_telemetry_created_at ON Telemetry(created_at);
+CREATE INDEX IF NOT EXISTS idx_telemetry_event_type ON telemetry(event_type);
+CREATE INDEX IF NOT EXISTS idx_telemetry_created_at ON telemetry(created_at);
 
 -- Performance indexes for multi-tenant scalability
-CREATE INDEX IF NOT EXISTS idx_shipment_company_created ON Shipment(company_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_shipment_company_status ON Shipment(company_id, status);
-CREATE INDEX IF NOT EXISTS idx_shipment_company_user ON Shipment(company_id, user_jid);
-CREATE INDEX IF NOT EXISTS idx_telemetry_company_created ON Telemetry(company_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_shipment_company_created ON shipment(company_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_shipment_company_status ON shipment(company_id, status);
+CREATE INDEX IF NOT EXISTS idx_shipment_company_user ON shipment(company_id, user_jid);
+CREATE INDEX IF NOT EXISTS idx_telemetry_company_created ON telemetry(company_id, created_at DESC);
 
 -- Enable RLS
 ALTER TABLE companies ENABLE ROW LEVEL SECURITY;
@@ -102,6 +102,12 @@ DROP POLICY IF EXISTS "tenant_read_own_shipments" ON shipment;
 CREATE POLICY "tenant_read_own_shipments" ON shipment 
   FOR SELECT TO authenticated 
   USING (company_id = (auth.jwt() ->> 'company_id')::uuid);
+
+-- Shipments: anon users can read shipments (for public tracking page)
+DROP POLICY IF EXISTS "anon_read_shipment_by_tracking" ON shipment;
+CREATE POLICY "anon_read_shipment_by_tracking" ON shipment
+  FOR SELECT TO anon
+  USING (true);
 
 -- Add shipment and companies to Realtime publication
 ALTER TABLE shipment REPLICA IDENTITY FULL;

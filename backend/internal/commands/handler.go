@@ -9,16 +9,17 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/google/uuid"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/i18n"
 	"webtracker-bot/internal/logger"
+	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/notif"
 	"webtracker-bot/internal/parser"
 	"webtracker-bot/internal/receipt"
 	"webtracker-bot/internal/shipment"
 	"webtracker-bot/internal/utils"
-	"webtracker-bot/internal/whatsapp"
+
+	"github.com/google/uuid"
 )
 
 func i18nLang(s string) i18n.Language {
@@ -35,14 +36,14 @@ type Result struct {
 }
 
 type Handler interface {
-	Execute(ctx context.Context, shipUC *shipment.Usecase, configUC *config.Usecase, companyID uuid.UUID, args []string, lang string, isAdmin bool) Result
+	Execute(ctx context.Context, shipUC models.ShipmentUsecase, configUC models.ConfigUsecase, companyID uuid.UUID, args []string, lang string, isAdmin bool) Result
 }
 
 type Dispatcher struct {
 	cfg           *config.Config
-	shipUC        *shipment.Usecase
-	configUC      *config.Usecase
-	sender        *whatsapp.Sender // Added for broadcasting
+	shipUC        models.ShipmentUsecase
+	configUC      models.ConfigUsecase
+	sender        models.WhatsAppSender
 	handlers      map[string]Handler
 	AwbCmd        string
 	CompanyName   string
@@ -51,7 +52,7 @@ type Dispatcher struct {
 	AdminTimezone string
 }
 
-func NewDispatcher(cfg *config.Config, shipUC *shipment.Usecase, configUC *config.Usecase, sender *whatsapp.Sender, awbCmd string, companyName string, botPhone string, adminTimezone string, tier string) *Dispatcher {
+func NewDispatcher(cfg *config.Config, shipUC models.ShipmentUsecase, configUC models.ConfigUsecase, sender models.WhatsAppSender, awbCmd string, companyName string, botPhone string, adminTimezone string, tier string) *Dispatcher {
 	d := &Dispatcher{
 		cfg:           cfg,
 		shipUC:        shipUC,
@@ -167,7 +168,7 @@ type StatsHandler struct {
 	AdminTimezone string
 }
 
-func (h *StatsHandler) Execute(ctx context.Context, shipUC *shipment.Usecase, configUC *config.Usecase, companyID uuid.UUID, args []string, lang string, isAdmin bool) Result {
+func (h *StatsHandler) Execute(ctx context.Context, shipUC models.ShipmentUsecase, configUC models.ConfigUsecase, companyID uuid.UUID, args []string, lang string, isAdmin bool) Result {
 	if len(args) > 0 {
 		return Result{Message: i18n.T(i18nLang(lang), "ERR_INCORRECT_USAGE")}
 	}
@@ -199,7 +200,7 @@ type InfoHandler struct {
 	CompanyPrefix string
 }
 
-func (h *InfoHandler) Execute(ctx context.Context, shipUC *shipment.Usecase, configUC *config.Usecase, companyID uuid.UUID, args []string, lang string, isAdmin bool) Result {
+func (h *InfoHandler) Execute(ctx context.Context, shipUC models.ShipmentUsecase, configUC models.ConfigUsecase, companyID uuid.UUID, args []string, lang string, isAdmin bool) Result {
 	var trackingID string
 	jid := utils.GetJID(ctx)
 
@@ -278,7 +279,7 @@ type HelpHandler struct {
 	CompanyPrefix string
 }
 
-func (h *HelpHandler) Execute(ctx context.Context, shipUC *shipment.Usecase, configUC *config.Usecase, companyID uuid.UUID, args []string, lang string, isAdmin bool) Result {
+func (h *HelpHandler) Execute(ctx context.Context, shipUC models.ShipmentUsecase, configUC models.ConfigUsecase, companyID uuid.UUID, args []string, lang string, isAdmin bool) Result {
 	company := strings.ToUpper(h.CompanyName)
 	if company == "" {
 		company = "LOGISTICS"
@@ -311,7 +312,7 @@ func (h *HelpHandler) Execute(ctx context.Context, shipUC *shipment.Usecase, con
 
 type LangHandler struct{}
 
-func (h *LangHandler) Execute(ctx context.Context, shipUC *shipment.Usecase, configUC *config.Usecase, companyID uuid.UUID, args []string, lang string, isAdmin bool) Result {
+func (h *LangHandler) Execute(ctx context.Context, shipUC models.ShipmentUsecase, configUC models.ConfigUsecase, companyID uuid.UUID, args []string, lang string, isAdmin bool) Result {
 	if len(args) < 1 {
 		return Result{Message: "🌐 *LANGUAGE MENU*\n\nUsage: `!lang [en|pt|es|de]`\n\nExample: `!lang pt` para Português"}
 	}
@@ -334,11 +335,11 @@ type EditHandler struct {
 	CompanyName   string
 	CompanyPrefix string
 	AdminTimezone string
-	Sender        *whatsapp.Sender
+	Sender        models.WhatsAppSender
 	Cfg           *config.Config
 }
 
-func (h *EditHandler) Execute(ctx context.Context, shipUC *shipment.Usecase, configUC *config.Usecase, companyID uuid.UUID, args []string, lang string, isAdmin bool) Result {
+func (h *EditHandler) Execute(ctx context.Context, shipUC models.ShipmentUsecase, configUC models.ConfigUsecase, companyID uuid.UUID, args []string, lang string, isAdmin bool) Result {
 	if len(args) < 1 {
 		return Result{Message: "✏️ *EDIT SHIPMENT*\n\nUsage: `!edit [TrackingID] [Updates...]` or `!edit [Updates...]` (targets last shipment)\n\n*Example:* `!edit LGS-1234 name: John, departure: tomorrow`"}
 	}
@@ -472,7 +473,7 @@ func (h *EditHandler) Execute(ctx context.Context, shipUC *shipment.Usecase, con
 		dbShip, _ := shipUC.Track(ctx, companyID, trackingID)
 		if dbShip != nil {
 			// Recalculate Arrival based on new Departure
-			arrival, outForDelivery := shipUC.Service.CalculateArrival(newDeparture, dbShip.Origin.String, dbShip.Destination.String)
+			arrival, outForDelivery := shipUC.GetService().CalculateArrival(newDeparture, dbShip.Origin.String, dbShip.Destination.String)
 
 			_ = shipUC.UpdateField(ctx, companyID, trackingID, "expected_delivery_time", arrival.Format("2006-01-02 15:04:05"))
 			_ = shipUC.UpdateField(ctx, companyID, trackingID, "outfordelivery_time", outForDelivery.Format("2006-01-02 15:04:05"))
@@ -507,8 +508,8 @@ func (h *EditHandler) Execute(ctx context.Context, shipUC *shipment.Usecase, con
 			_ = shipUC.UpdateField(ctx, companyID, trackingID, "status", newStatus)
 
 			// If it transitions, optionally trigger the notification explicitly!
-			if h.Sender != nil && h.Sender.Client != nil {
-				notif.SendStatusAlert(ctx, h.Sender.Client, h.Cfg, h.CompanyName, dbShip.UserJid, trackingID, newStatus, dbShip.RecipientEmail.String)
+			if h.Sender != nil && h.Sender.GetWAClient() != nil {
+				notif.SendStatusAlert(ctx, h.Sender.GetWAClient(), h.Cfg, h.CompanyName, dbShip.UserJid, trackingID, newStatus, dbShip.RecipientEmail.String)
 			}
 		}
 	}
@@ -525,7 +526,7 @@ func (h *EditHandler) Execute(ctx context.Context, shipUC *shipment.Usecase, con
 // DeleteHandler handles !delete [trackingID]
 type DeleteHandler struct{}
 
-func (h *DeleteHandler) Execute(ctx context.Context, shipUC *shipment.Usecase, configUC *config.Usecase, companyID uuid.UUID, args []string, lang string, isAdmin bool) Result {
+func (h *DeleteHandler) Execute(ctx context.Context, shipUC models.ShipmentUsecase, configUC models.ConfigUsecase, companyID uuid.UUID, args []string, lang string, isAdmin bool) Result {
 	var trackingID string
 	jid := utils.GetJID(ctx)
 
@@ -552,7 +553,7 @@ type StatusHandler struct {
 	BotPhone string
 }
 
-func (h *StatusHandler) Execute(ctx context.Context, shipUC *shipment.Usecase, configUC *config.Usecase, companyID uuid.UUID, args []string, lang string, isAdmin bool) Result {
+func (h *StatusHandler) Execute(ctx context.Context, shipUC models.ShipmentUsecase, configUC models.ConfigUsecase, companyID uuid.UUID, args []string, lang string, isAdmin bool) Result {
 	// Performance Telemetry
 	uptime := time.Since(logger.GlobalVitals.StartTime)
 	jobs := atomic.LoadInt64(&logger.GlobalVitals.JobsProcessed)
@@ -585,10 +586,10 @@ func (h *StatusHandler) Execute(ctx context.Context, shipUC *shipment.Usecase, c
 
 // ReceiptHandler handles !receipt [ID]
 type ReceiptHandler struct {
-	Sender *whatsapp.Sender
+	Sender models.WhatsAppSender
 }
 
-func (h *ReceiptHandler) Execute(ctx context.Context, shipUC *shipment.Usecase, configUC *config.Usecase, companyID uuid.UUID, args []string, lang string, isAdmin bool) Result {
+func (h *ReceiptHandler) Execute(ctx context.Context, shipUC models.ShipmentUsecase, configUC models.ConfigUsecase, companyID uuid.UUID, args []string, lang string, isAdmin bool) Result {
 	if !isAdmin {
 		return Result{Message: "🔒 *ACCESS DENIED*\nOnly admins can regenerate receipts."}
 	}
@@ -645,7 +646,7 @@ func (h *ReceiptHandler) Execute(ctx context.Context, shipUC *shipment.Usecase, 
 	}
 
 	// Render synchronous
-	receiptImg, err := receipt.RenderReceipt(s, h.Sender.CompanyName, i18n.Language(lang))
+	receiptImg, err := receipt.RenderReceipt(s, h.Sender.GetCompanyName(), i18n.Language(lang))
 	if err != nil {
 		return Result{Message: "❌ *RENDER FAILED*", Error: err}
 	}
@@ -655,4 +656,3 @@ func (h *ReceiptHandler) Execute(ctx context.Context, shipUC *shipment.Usecase, 
 		Image:   receiptImg,
 	}
 }
-

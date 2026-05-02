@@ -79,7 +79,7 @@ export function PricingSection() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
-            {plans.map((plan, i) => {
+            {plans.map((plan) => {
               const isCustom = plan.id === 'enterprise';
               const plansDict = (dict.marketing?.pricing?.plans as Record<string, string>) || {};
 

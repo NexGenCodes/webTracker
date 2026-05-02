@@ -15,6 +15,19 @@ import (
 	"github.com/sqlc-dev/pqtype"
 )
 
+const bulkDeleteShipments = `-- name: BulkDeleteShipments :execresult
+DELETE FROM Shipment WHERE company_id = $1 AND tracking_id = ANY($2::text[])
+`
+
+type BulkDeleteShipmentsParams struct {
+	CompanyID uuid.NullUUID `json:"company_id"`
+	Column2   []string      `json:"column_2"`
+}
+
+func (q *Queries) BulkDeleteShipments(ctx context.Context, arg BulkDeleteShipmentsParams) (sql.Result, error) {
+	return q.db.ExecContext(ctx, bulkDeleteShipments, arg.CompanyID, pq.Array(arg.Column2))
+}
+
 const bulkUpdateStatus = `-- name: BulkUpdateStatus :exec
 UPDATE Shipment
 SET status = $3, updated_at = CURRENT_TIMESTAMP
@@ -862,7 +875,7 @@ func (q *Queries) RecordPayment(ctx context.Context, arg RecordPaymentParams) (i
 	return id, err
 }
 
-const runAgedCleanup = `-- name: RunAgedCleanup :exec
+const runAgedCleanup = `-- name: RunAgedCleanup :execresult
 DELETE FROM Shipment 
 WHERE company_id = $1 AND ((status = 'delivered' AND updated_at < $2) OR (created_at < $3))
 `
@@ -873,9 +886,8 @@ type RunAgedCleanupParams struct {
 	CreatedAt sql.NullTime  `json:"created_at"`
 }
 
-func (q *Queries) RunAgedCleanup(ctx context.Context, arg RunAgedCleanupParams) error {
-	_, err := q.db.ExecContext(ctx, runAgedCleanup, arg.CompanyID, arg.UpdatedAt, arg.CreatedAt)
-	return err
+func (q *Queries) RunAgedCleanup(ctx context.Context, arg RunAgedCleanupParams) (sql.Result, error) {
+	return q.db.ExecContext(ctx, runAgedCleanup, arg.CompanyID, arg.UpdatedAt, arg.CreatedAt)
 }
 
 const setCompanyPassword = `-- name: SetCompanyPassword :exec

@@ -1,16 +1,16 @@
 "use client";
 
-import { useState, useTransition, useEffect } from 'react';
+import { useState, useTransition, useEffect, Suspense } from 'react';
 import { useMultiTenant } from '@/components/providers/MultiTenantProvider';
 import { CheckCircle2, Zap, ArrowRight, ShieldCheck, HelpCircle, Loader2 } from 'lucide-react';
-import { subscribeAction, getPlansAction, PlanData, waitForPaymentAction } from '@/app/actions/billing';
+import { subscribeAction, getPlansAction, PlanData, checkPaymentStatusAction } from '@/app/actions/billing';
 import { useSearchParams, useRouter } from 'next/navigation';
 
 import { formatPrice } from '@/lib/utils';
 import { useI18n } from '@/components/providers/I18nContext';
 import toast from 'react-hot-toast';
 
-export default function BillingPage() {
+function BillingPageContent() {
     const { user, companyId, refreshAuth } = useMultiTenant();
     const { dict } = useI18n();
     const searchParams = useSearchParams();
@@ -28,13 +28,16 @@ export default function BillingPage() {
         if (!companyId || !reference) return;
         setIsVerifying(true);
 
-        const result = await waitForPaymentAction(reference);
+        // Wait a few seconds to let webhook process
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        const result = await checkPaymentStatusAction();
         
         if (result.success && result.data?.status === 'active') {
             toast.success('Subscription activated successfully!');
             await refreshAuth();
         } else {
-            toast.error(result.error || 'Payment verification is taking longer than usual.');
+            toast.success('Payment received. Dashboard will update automatically once processed.');
         }
 
         setIsVerifying(false);
@@ -235,5 +238,17 @@ export default function BillingPage() {
                 </div>
             )}
         </main>
+    );
+}
+
+export default function BillingPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center bg-transparent">
+                <Loader2 className="w-8 h-8 text-accent animate-spin" />
+            </div>
+        }>
+            <BillingPageContent />
+        </Suspense>
     );
 }

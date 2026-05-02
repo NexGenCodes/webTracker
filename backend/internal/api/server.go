@@ -13,8 +13,8 @@ import (
 	"webtracker-bot/internal/auth"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/database/db"
+	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/shipment"
-	"webtracker-bot/internal/whatsapp"
 )
 
 type Server struct {
@@ -23,11 +23,11 @@ type Server struct {
 	shipmentUC *shipment.Usecase
 	configUC   *config.Usecase
 	db         *sql.DB
-	bots       whatsapp.BotProvider
+	bots       models.BotProvider
 	startTime  time.Time
 }
 
-func NewServer(cfg *config.Config, shipmentUC *shipment.Usecase, configUC *config.Usecase, db *sql.DB, bots whatsapp.BotProvider) *Server {
+func NewServer(cfg *config.Config, shipmentUC *shipment.Usecase, configUC *config.Usecase, db *sql.DB, bots models.BotProvider) *Server {
 	app := fiber.New(fiber.Config{
 		DisableStartupMessage: true,
 		BodyLimit:             1 * 1024 * 1024, // 1MB — prevents OOM on free tier

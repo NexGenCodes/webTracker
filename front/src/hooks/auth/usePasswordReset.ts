@@ -30,38 +30,25 @@ export function usePasswordReset(
                 return;
             }
 
-            if (result.data?.reset_token) {
-                // Store the reset token in sessionStorage. This is tab-scoped,
-                // cleared on tab close, and avoids polluting React state across
-                // mode transitions. The backend enforces JWT expiry on the token.
-                sessionStorage.setItem('reset_token', result.data.reset_token);
-                setEmailCache(data.email);
-                setSuccessMessage('Password reset code sent to your email.');
-                switchMode('reset-password');
-            } else {
-                setError('Failed to receive reset token.');
-            }
+            setEmailCache(data.email);
+            setSuccessMessage('Password reset code sent to your email.');
+            switchMode('reset-password');
         });
     };
 
     const onResetPassword = (data: ResetPasswordForm, otp: string) => {
-        const resetToken = sessionStorage.getItem('reset_token');
-        if (!resetToken) {
-            setError("Session expired. Please start over.");
-            switchMode('forgot-password');
-            return;
-        }
-
         setError(null);
         startTransition(async () => {
-            const result = await resetPasswordAction(emailCache, otp, data.password, resetToken);
+            const result = await resetPasswordAction(emailCache, otp, data.password);
 
             if (!result.success) {
+                if (result.error?.includes('expired')) {
+                    switchMode('forgot-password');
+                }
                 setError(result.error || 'Failed to reset password. Please verify the code and try again.');
                 return;
             }
 
-            sessionStorage.removeItem('reset_token');
             setSuccessMessage("Password reset successfully. Please sign in.");
             switchMode('signin');
         });

@@ -4,7 +4,86 @@ import (
 	"github.com/google/uuid"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
+	"go.mau.fi/whatsmeow"
+	"webtracker-bot/internal/database/db"
+	"webtracker-bot/internal/config"
+	"context"
+	"database/sql"
+	"time"
 )
+
+type WhatsAppSender interface {
+	Reply(chat, sender types.JID, text string, quotedID string, quotedText string)
+	Send(chat types.JID, text string)
+	SendImage(chat, sender types.JID, imageBytes []byte, caption string, quotedID string, quotedText string) error
+	SetTyping(chat types.JID, typing bool)
+	GetWAClient() *whatsmeow.Client
+	GetCompanyName() string
+}
+
+type BotInstance interface {
+	GetWAClient() *whatsmeow.Client
+	GetSender() WhatsAppSender
+	GetPrefix() string
+	GetCompanyName() string
+	GetTier() string
+	GetJobs() chan Job
+	GetCurrentQR() string
+}
+
+type BotProvider interface {
+	GetBot(companyID uuid.UUID) (BotInstance, error)
+	GetAllBots() []BotInstance
+	ActivateBot(ctx context.Context, companyID uuid.UUID) error
+	DeactivateBot(companyID uuid.UUID) error
+	GeneratePairingCode(ctx context.Context, companyID uuid.UUID, phone string) (string, error)
+	GetQR(ctx context.Context, companyID uuid.UUID) (string, error)
+	LogoutBot(companyID uuid.UUID) error
+}
+
+type ShipmentUsecase interface {
+	Track(ctx context.Context, companyID uuid.UUID, trackingID string) (*db.Shipment, error)
+	Create(ctx context.Context, companyID uuid.UUID, params db.CreateShipmentParams) error
+	RecordEvent(ctx context.Context, companyID uuid.UUID, eventType string, metadata []byte) error
+	GetService() ShipmentService
+	CountByStatus(ctx context.Context, companyID uuid.UUID) (*db.CountShipmentsByStatusRow, error)
+	GetLastForUser(ctx context.Context, companyID uuid.UUID, jid string) (string, error)
+	UpdateField(ctx context.Context, companyID uuid.UUID, trackingID, field, value string) error
+	Delete(ctx context.Context, companyID uuid.UUID, trackingID string) error
+	CountCreatedSince(ctx context.Context, companyID uuid.UUID, since time.Time) (int64, error)
+	CreateWithPrefix(ctx context.Context, companyID uuid.UUID, s *db.Shipment, prefix string) (string, error)
+	FindSimilar(ctx context.Context, companyID uuid.UUID, userJid, phone string) (string, error)
+	CheckShipmentCap(ctx context.Context, cfg *config.Config, companyID uuid.UUID, planType string, expiry sql.NullTime) (int64, error)
+}
+
+type ShipmentService interface {
+	CalculateDeparture(now time.Time, originTZ string) time.Time
+	CalculateArrival(departure time.Time, senderCountry, receiverCountry string) (time.Time, time.Time)
+	ResolveTimezone(country string) string
+}
+
+type ConfigUsecase interface {
+	GetCompanyByID(ctx context.Context, id uuid.UUID) (db.Company, error)
+	GetAllCompanies(ctx context.Context) ([]uuid.UUID, error)
+	GetAllActiveCompanies(ctx context.Context) ([]db.Company, error)
+	UpdateCompanyAuthStatus(ctx context.Context, id uuid.UUID, status string) error
+	UpdateCompanyWhatsAppPhone(ctx context.Context, id uuid.UUID, phone string) error
+	GetUserLanguage(ctx context.Context, companyID uuid.UUID, jid string) (string, error)
+	SetUserLanguage(ctx context.Context, companyID uuid.UUID, jid, lang string) error
+	GetGroupAuthority(ctx context.Context, companyID uuid.UUID, jid string) (bool, bool, error)
+	SetGroupAuthority(ctx context.Context, companyID uuid.UUID, jid string, isAuthorized bool) error
+	GetSystemConfig(ctx context.Context, companyID uuid.UUID, key string) (string, error)
+	SetSystemConfig(ctx context.Context, companyID uuid.UUID, key, value string) error
+	HasAuthorizedGroups(ctx context.Context, companyID uuid.UUID) (bool, error)
+	GetAuthorizedGroups(ctx context.Context, companyID uuid.UUID) ([]string, error)
+	CountAuthorizedGroups(ctx context.Context, companyID uuid.UUID) (int64, error)
+	Ping(ctx context.Context) error
+	GetActivePlans(ctx context.Context) ([]db.GetActivePlansRow, error)
+	DeleteCompany(ctx context.Context, companyID uuid.UUID) error
+	GetPlanByID(ctx context.Context, id string) (db.GetPlanByIDRow, error)
+	RecordPayment(ctx context.Context, companyID uuid.UUID, reference string, amount float64, status string) (int32, error)
+	UpdateCompanySubscriptionStatus(ctx context.Context, companyID uuid.UUID, subStatus, planType string) error
+}
 
 type Manifest struct {
 	ReceiverName    string   `json:"receiverName"`

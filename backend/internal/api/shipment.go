@@ -1,14 +1,15 @@
 package api
 
 import (
+	"context"
 	"crypto/rand"
-	"database/sql"
 	"fmt"
 	"math/big"
 	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/google/uuid"
 
 	"webtracker-bot/internal/auth"
@@ -16,10 +17,10 @@ import (
 	"webtracker-bot/internal/database/db"
 	"webtracker-bot/internal/database/dbutil"
 	"webtracker-bot/internal/logger"
+	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/notif"
 	"webtracker-bot/internal/parser"
 	"webtracker-bot/internal/shipment"
-	"webtracker-bot/internal/whatsapp"
 
 	"github.com/go-playground/validator/v10"
 )
@@ -29,11 +30,11 @@ type ShipmentHandler struct {
 	configUC   *config.Usecase
 	validate   *validator.Validate
 	cfg        *config.Config
-	bots       whatsapp.BotProvider
+	bots       models.BotProvider
 }
 
 // NewShipmentHandler injects the Usecase
-func NewShipmentHandler(shipmentUC *shipment.Usecase, configUC *config.Usecase, cfg *config.Config, bots whatsapp.BotProvider) *ShipmentHandler {
+func NewShipmentHandler(shipmentUC *shipment.Usecase, configUC *config.Usecase, cfg *config.Config, bots models.BotProvider) *ShipmentHandler {
 	return &ShipmentHandler{
 		shipmentUC: shipmentUC,
 		configUC:   configUC,
@@ -57,8 +58,12 @@ func (h *ShipmentHandler) RegisterRoutes(router fiber.Router) {
 	// Admin Routes (Next.js protects these via Supabase Auth before calling Go)
 	admin := router.Group("/api/admin")
 
-	// Shipments (write operations only)
-	shipments := admin.Group("/shipments")
+	// Shipments (write operations only) — rate-limited to 30 req/min per IP to prevent abuse
+	shipments := admin.Group("/shipments", limiter.New(limiter.Config{
+		Max:               30,
+		Expiration:        1 * time.Minute,
+		LimiterMiddleware: limiter.SlidingWindow{},
+	}))
 	shipments.Post("/parse", h.ParseText)
 	shipments.Post("/bulk_csv", h.BulkCreateCSV)
 	shipments.Post("/", h.Create)
@@ -85,18 +90,6 @@ type CreateRequest struct {
 	TransitTime     int     `json:"transitTime"`
 }
 
-func toNullTime(t time.Time) sql.NullTime {
-	return dbutil.ToNullTime(t)
-}
-
-func toNullString(s string) sql.NullString {
-	return dbutil.ToNullString(s)
-}
-
-func toNullFloat64(f float64) sql.NullFloat64 {
-	return dbutil.ToNullFloat64(f)
-}
-
 // Create - POST /api/admin/shipments
 func (h *ShipmentHandler) Create(c *fiber.Ctx) error {
 	companyID := getCompanyID(c)
@@ -109,7 +102,7 @@ func (h *ShipmentHandler) Create(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to look up company"})
 	}
-	remaining, err := CheckShipmentCap(c.Context(), h.cfg, h.shipmentUC, companyID, company.PlanType.String, company.SubscriptionExpiry)
+	remaining, err := h.shipmentUC.CheckShipmentCap(c.Context(), h.cfg, companyID, company.PlanType.String, company.SubscriptionExpiry)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to check shipment cap"})
 	}
@@ -144,46 +137,68 @@ func (h *ShipmentHandler) Create(c *fiber.Ctx) error {
 		})
 	}
 
-	// Generate a collision-resistant tracking ID
-	randVal, err := rand.Int(rand.Reader, big.NewInt(999999999))
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to generate random ID")
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to generate ID"})
+	var trackingID string
+	var insertErr error
+	var params db.CreateShipmentParams
+
+	for attempts := 0; attempts < 5; attempts++ {
+		// Generate a collision-resistant tracking ID
+		randVal, err := rand.Int(rand.Reader, big.NewInt(999999999))
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to generate random ID")
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to generate ID"})
+		}
+
+		prefix := "AWB"
+		if company.TrackingPrefix.Valid && company.TrackingPrefix.String != "" {
+			prefix = company.TrackingPrefix.String
+		}
+		trackingID = fmt.Sprintf("%s-%09d", prefix, randVal.Int64())
+		now := time.Now()
+
+		// Use industrial status calculation algorithms instead of hardcoded defaults
+		departure := h.shipmentUC.Service.CalculateDeparture(now, "Africa/Lagos") // Default origin TZ
+		arrival, outForDelivery := h.shipmentUC.Service.CalculateArrival(departure, req.SenderCountry, req.ReceiverCountry)
+
+		params = db.CreateShipmentParams{
+			TrackingID:           trackingID,
+			UserJid:              "admin_portal",
+			Status:               dbutil.ToNullString("pending"),
+			CreatedAt:            dbutil.ToNullTime(now),
+			ScheduledTransitTime: dbutil.ToNullTime(departure),
+			OutfordeliveryTime:   dbutil.ToNullTime(outForDelivery),
+			ExpectedDeliveryTime: dbutil.ToNullTime(arrival),
+			SenderTimezone:       dbutil.ToNullString("Africa/Lagos"),
+			RecipientTimezone:    dbutil.ToNullString(h.shipmentUC.Service.ResolveTimezone(req.ReceiverCountry)),
+			SenderName:           dbutil.ToNullString(req.SenderName),
+			SenderPhone:          dbutil.ToNullString(req.SenderPhone),
+			Origin:               dbutil.ToNullString(req.SenderCountry),
+			RecipientName:        dbutil.ToNullString(req.ReceiverName),
+			RecipientPhone:       dbutil.ToNullString(req.ReceiverPhone),
+			RecipientEmail:       dbutil.ToNullString(req.ReceiverEmail),
+			RecipientAddress:     dbutil.ToNullString(req.ReceiverAddress),
+			Destination:          dbutil.ToNullString(req.ReceiverCountry),
+			CargoType:            dbutil.ToNullString(req.CargoType),
+			Weight:               dbutil.ToNullFloat64(req.Weight),
+			Cost:                 dbutil.ToNullFloat64(req.Cost),
+			UpdatedAt:            dbutil.ToNullTime(now),
+		}
+
+		insertErr = h.shipmentUC.Create(c.Context(), companyID, params)
+		if insertErr == nil {
+			break // Success
+		}
+
+		// If the error isn't a unique constraint violation, abort
+		if !strings.Contains(insertErr.Error(), "duplicate key value violates unique constraint") && !strings.Contains(insertErr.Error(), "23505") {
+			break
+		}
+		logger.Warn().Str("trackingID", trackingID).Msg("Tracking ID collision detected, retrying...")
 	}
-	trackingID := fmt.Sprintf("AWB-%09d", randVal.Int64())
-	now := time.Now()
 
-	// Use industrial status calculation algorithms instead of hardcoded defaults
-	departure := h.shipmentUC.Service.CalculateDeparture(now, "Africa/Lagos") // Default origin TZ
-	arrival, outForDelivery := h.shipmentUC.Service.CalculateArrival(departure, req.SenderCountry, req.ReceiverCountry)
-
-	params := db.CreateShipmentParams{
-		TrackingID:           trackingID,
-		UserJid:              "admin_portal",
-		Status:               toNullString("pending"),
-		CreatedAt:            toNullTime(now),
-		ScheduledTransitTime: toNullTime(departure),
-		OutfordeliveryTime:   toNullTime(outForDelivery),
-		ExpectedDeliveryTime: toNullTime(arrival),
-		SenderTimezone:       toNullString("Africa/Lagos"),
-		RecipientTimezone:    toNullString(h.shipmentUC.Service.ResolveTimezone(req.ReceiverCountry)),
-		SenderName:           toNullString(req.SenderName),
-		SenderPhone:          toNullString(req.SenderPhone),
-		Origin:               toNullString(req.SenderCountry),
-		RecipientName:        toNullString(req.ReceiverName),
-		RecipientPhone:       toNullString(req.ReceiverPhone),
-		RecipientEmail:       toNullString(req.ReceiverEmail),
-		RecipientAddress:     toNullString(req.ReceiverAddress),
-		Destination:          toNullString(req.ReceiverCountry),
-		CargoType:            toNullString(req.CargoType),
-		Weight:               toNullFloat64(req.Weight),
-		Cost:                 toNullFloat64(req.Cost),
-		UpdatedAt:            toNullTime(now),
-	}
-
-	if err := h.shipmentUC.Create(c.Context(), companyID, params); err != nil {
-		logger.Error().Err(err).Str("company_id", companyID.String()).Msg("Create shipment error")
-		h.shipmentUC.RecordEvent(c.Context(), companyID, "admin_create_fail", []byte(fmt.Sprintf(`{"error": "%s"}`, err.Error())))
+	if insertErr != nil {
+		logger.Error().Err(insertErr).Str("company_id", companyID.String()).Msg("Create shipment error")
+		h.shipmentUC.RecordEvent(c.Context(), companyID, "admin_create_fail", []byte(fmt.Sprintf(`{"error": "%s"}`, insertErr.Error())))
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create shipment"})
 	}
 
@@ -231,7 +246,7 @@ func (h *ShipmentHandler) UpdateStatus(c *fiber.Ctx) error {
 	// Send instant alert for manual admin overrides
 	if h.bots != nil {
 		if bot, err := h.bots.GetBot(companyID); err == nil {
-			notif.SendStatusAlert(c.Context(), bot.WA, h.cfg, bot.CompanyName, ship.UserJid, ship.TrackingID, req.Status, ship.RecipientEmail.String)
+			notif.SendStatusAlert(c.Context(), bot.GetWAClient(), h.cfg, bot.GetCompanyName(), ship.UserJid, ship.TrackingID, req.Status, ship.RecipientEmail.String)
 		}
 	}
 
@@ -324,7 +339,7 @@ func (h *ShipmentHandler) BulkCreateCSV(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to look up company"})
 	}
-	remaining, err := CheckShipmentCap(c.Context(), h.cfg, h.shipmentUC, companyID, company.PlanType.String, company.SubscriptionExpiry)
+	remaining, err := h.shipmentUC.CheckShipmentCap(c.Context(), h.cfg, companyID, company.PlanType.String, company.SubscriptionExpiry)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to check shipment cap"})
 	}
@@ -353,40 +368,55 @@ func (h *ShipmentHandler) BulkCreateCSV(c *fiber.Ctx) error {
 	failed := 0
 
 	for _, m := range manifests {
-		randVal, err := rand.Int(rand.Reader, big.NewInt(999999999))
-		if err != nil {
-			logger.Error().Err(err).Msg("Failed to generate random ID in bulk")
-			failed++
-			continue
+		var trackingID string
+		var insertErr error
+
+		for attempts := 0; attempts < 5; attempts++ {
+			randVal, err := rand.Int(rand.Reader, big.NewInt(999999999))
+			if err != nil {
+				logger.Error().Err(err).Msg("Failed to generate random ID in bulk")
+				insertErr = err
+				break
+			}
+			trackingID = fmt.Sprintf("AWB-%09d", randVal.Int64())
+			now := time.Now()
+
+			departure := h.shipmentUC.Service.CalculateDeparture(now, "Africa/Lagos")
+			arrival, outForDelivery := h.shipmentUC.Service.CalculateArrival(departure, m.SenderCountry, m.ReceiverCountry)
+
+			insertErr = h.shipmentUC.Create(c.Context(), companyID, db.CreateShipmentParams{
+				TrackingID:           trackingID,
+				UserJid:              "admin_portal",
+				Status:               dbutil.ToNullString("pending"),
+				CreatedAt:            dbutil.ToNullTime(now),
+				ScheduledTransitTime: dbutil.ToNullTime(departure),
+				OutfordeliveryTime:   dbutil.ToNullTime(outForDelivery),
+				ExpectedDeliveryTime: dbutil.ToNullTime(arrival),
+				SenderTimezone:       dbutil.ToNullString("Africa/Lagos"),
+				RecipientTimezone:    dbutil.ToNullString(h.shipmentUC.Service.ResolveTimezone(m.ReceiverCountry)),
+				SenderName:           dbutil.ToNullString(m.SenderName),
+				Origin:               dbutil.ToNullString(m.SenderCountry),
+				RecipientName:        dbutil.ToNullString(m.ReceiverName),
+				RecipientPhone:       dbutil.ToNullString(m.ReceiverPhone),
+				RecipientEmail:       dbutil.ToNullString(m.ReceiverEmail),
+				RecipientAddress:     dbutil.ToNullString(m.ReceiverAddress),
+				Destination:          dbutil.ToNullString(m.ReceiverCountry),
+				CargoType:            dbutil.ToNullString(m.CargoType),
+				Weight:               dbutil.ToNullFloat64(m.Weight),
+				UpdatedAt:            dbutil.ToNullTime(now),
+			})
+
+			if insertErr == nil {
+				break // Success
+			}
+
+			if !strings.Contains(insertErr.Error(), "duplicate key value violates unique constraint") && !strings.Contains(insertErr.Error(), "23505") {
+				break // Not a collision error, abort
+			}
 		}
-		trackingID := fmt.Sprintf("AWB-%09d", randVal.Int64())
-		now := time.Now()
 
-		departure := h.shipmentUC.Service.CalculateDeparture(now, "Africa/Lagos")
-		arrival, outForDelivery := h.shipmentUC.Service.CalculateArrival(departure, m.SenderCountry, m.ReceiverCountry)
-
-		if err := h.shipmentUC.Create(c.Context(), companyID, db.CreateShipmentParams{
-			TrackingID:           trackingID,
-			UserJid:              "admin_portal",
-			Status:               toNullString("pending"),
-			CreatedAt:            toNullTime(now),
-			ScheduledTransitTime: toNullTime(departure),
-			OutfordeliveryTime:   toNullTime(outForDelivery),
-			ExpectedDeliveryTime: toNullTime(arrival),
-			SenderTimezone:       toNullString("Africa/Lagos"),
-			RecipientTimezone:    toNullString(h.shipmentUC.Service.ResolveTimezone(m.ReceiverCountry)),
-			SenderName:           toNullString(m.SenderName),
-			Origin:               toNullString(m.SenderCountry),
-			RecipientName:        toNullString(m.ReceiverName),
-			RecipientPhone:       toNullString(m.ReceiverPhone),
-			RecipientEmail:       toNullString(m.ReceiverEmail),
-			RecipientAddress:     toNullString(m.ReceiverAddress),
-			Destination:          toNullString(m.ReceiverCountry),
-			CargoType:            toNullString(m.CargoType),
-			Weight:               toNullFloat64(m.Weight),
-			UpdatedAt:            toNullTime(now),
-		}); err != nil {
-			logger.Error().Err(err).Msg("Bulk create error")
+		if insertErr != nil {
+			logger.Error().Err(insertErr).Msg("Bulk create error")
 			failed++
 		} else {
 			createdIds = append(createdIds, trackingID)
@@ -431,15 +461,22 @@ func (h *ShipmentHandler) BulkUpdateStatus(c *fiber.Ctx) error {
 
 	h.shipmentUC.RecordEvent(c.Context(), companyID, "admin_bulk_update", []byte(fmt.Sprintf(`{"count": %d, "status": "%s"}`, len(req.IDs), req.Status)))
 
-	// Send instant alerts for manual admin bulk overrides
+	// Send instant alerts in background — don't block the HTTP response
 	if h.bots != nil {
 		if bot, err := h.bots.GetBot(companyID); err == nil {
-			for _, id := range req.IDs {
-				// Ignore track errors in bulk sending (if one fails, don't halt everything)
-				if ship, err := h.shipmentUC.Track(c.Context(), companyID, id); err == nil {
-					notif.SendStatusAlert(c.Context(), bot.WA, h.cfg, bot.CompanyName, ship.UserJid, ship.TrackingID, req.Status, ship.RecipientEmail.String)
+			ids := make([]string, len(req.IDs))
+			copy(ids, req.IDs)
+			status := req.Status
+			cfg := h.cfg
+			shipUC := h.shipmentUC
+			go func() {
+				ctx := context.Background()
+				for _, id := range ids {
+					if ship, err := shipUC.Track(ctx, companyID, id); err == nil {
+						notif.SendStatusAlert(ctx, bot.GetWAClient(), cfg, bot.GetCompanyName(), ship.UserJid, ship.TrackingID, status, ship.RecipientEmail.String)
+					}
 				}
-			}
+			}()
 		}
 	}
 
@@ -463,17 +500,12 @@ func (h *ShipmentHandler) BulkDelete(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid payload"})
 	}
 
-	deleted := 0
-	failed := 0
-	for _, id := range req.IDs {
-		if err := h.shipmentUC.Delete(c.Context(), companyID, id); err != nil {
-			failed++
-		} else {
-			deleted++
-		}
+	deleted, err := h.shipmentUC.BulkDelete(c.Context(), companyID, req.IDs)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	h.shipmentUC.RecordEvent(c.Context(), companyID, "admin_bulk_delete", []byte(fmt.Sprintf(`{"deleted": %d, "failed": %d}`, deleted, failed)))
+	h.shipmentUC.RecordEvent(c.Context(), companyID, "admin_bulk_delete", []byte(fmt.Sprintf(`{"deleted": %d}`, deleted)))
 
-	return c.JSON(fiber.Map{"success": true, "deleted": deleted, "failed": failed})
+	return c.JSON(fiber.Map{"success": true, "deleted": deleted})
 }

@@ -19,6 +19,7 @@ import (
 	"webtracker-bot/internal/database/db"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/notif"
+	"webtracker-bot/internal/utils"
 )
 
 // Service handles authentication business logic
@@ -144,7 +145,7 @@ func (s *Service) SetupCompany(ctx context.Context, companyID uuid.UUID, req Set
 	company, _ := s.queries.GetCompanyByID(ctx, companyID)
 
 	if prefix == "" {
-		prefix = config.GenerateAbbreviation(company.Name.String)
+		prefix = utils.GenerateAbbreviation(company.Name.String)
 	}
 
 	err := s.queries.UpdateCompanyOnboarding(ctx, db.UpdateCompanyOnboardingParams{

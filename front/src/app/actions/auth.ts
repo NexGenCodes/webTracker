@@ -32,6 +32,16 @@ export async function checkAuthAction() {
     return await getServerSession();
 }
 
+/**
+ * Returns the raw JWT string from the HttpOnly cookie.
+ * This is used by server components to pass the token to client
+ * components that need it for Supabase Realtime subscriptions.
+ */
+export async function getJwtTokenAction(): Promise<string | undefined> {
+    const cookieStore = await cookies();
+    return cookieStore.get('jwt')?.value;
+}
+
 export async function loginAction(data: LoginInput): Promise<ActionResult> {
     try {
         const res = await fetch(`${getApiUrl()}/api/auth/login`, {
@@ -51,7 +61,7 @@ export async function loginAction(data: LoginInput): Promise<ActionResult> {
         if (resData.token) {
             const cookieStore = await cookies();
             cookieStore.set('jwt', resData.token, {
-                httpOnly: false, // Must be false for Supabase Realtime client to read it
+                httpOnly: true,
                 secure: process.env.NODE_ENV === 'production',
                 sameSite: 'lax',
                 path: '/',
@@ -72,7 +82,7 @@ export async function loginAction(data: LoginInput): Promise<ActionResult> {
     }
 }
 
-export async function registerIntentAction(data: RegisterInput): Promise<ActionResult<{ otp_token?: string }>> {
+export async function registerIntentAction(data: RegisterInput): Promise<ActionResult> {
     try {
         const res = await fetch(`${getApiUrl()}/api/auth/register-intent`, {
             method: 'POST',
@@ -89,15 +99,34 @@ export async function registerIntentAction(data: RegisterInput): Promise<ActionR
             return { success: false, error: resData.error || 'Registration failed.' };
         }
 
-        return { success: true, data: { otp_token: resData.otp_token } };
+        // Store OTP token in an HttpOnly cookie — never expose to client JS
+        if (resData.otp_token) {
+            const cookieStore = await cookies();
+            cookieStore.set('otp_token', resData.otp_token, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                path: '/',
+                maxAge: 10 * 60 // 10 minutes
+            });
+        }
+
+        return { success: true };
     } catch (error) {
         Sentry.captureException(error);
         return { success: false, error: 'Network error. Please check your connection.' };
     }
 }
 
-export async function verifyOtpAction(otp: string, otpToken: string): Promise<ActionResult> {
+export async function verifyOtpAction(otp: string): Promise<ActionResult> {
     try {
+        // Read OTP token from server-side HttpOnly cookie — never from client
+        const cookieStore = await cookies();
+        const otpToken = cookieStore.get('otp_token')?.value;
+        if (!otpToken) {
+            return { success: false, error: 'OTP session expired. Please start over.' };
+        }
+
         const res = await fetch(`${getApiUrl()}/api/auth/verify-otp`, {
             method: 'POST',
             headers: {
@@ -113,14 +142,15 @@ export async function verifyOtpAction(otp: string, otpToken: string): Promise<Ac
         }
 
         if (resData.token) {
-            const cookieStore = await cookies();
             cookieStore.set('jwt', resData.token, {
-                httpOnly: false, // Must be false for Supabase Realtime client to read it
+                httpOnly: true,
                 secure: process.env.NODE_ENV === 'production',
                 sameSite: 'lax',
                 path: '/',
                 maxAge: 7 * 24 * 60 * 60
             });
+            // Clear the OTP token cookie
+            cookieStore.delete('otp_token');
             revalidatePath('/', 'layout');
             revalidatePath('/dashboard');
             revalidatePath('/auth');
@@ -133,7 +163,7 @@ export async function verifyOtpAction(otp: string, otpToken: string): Promise<Ac
     }
 }
 
-export async function forgotPasswordAction(email: string): Promise<ActionResult<{ reset_token?: string }>> {
+export async function forgotPasswordAction(email: string): Promise<ActionResult> {
     try {
         const res = await fetch(`${getApiUrl()}/api/auth/forgot-password`, {
             method: 'POST',
@@ -146,15 +176,34 @@ export async function forgotPasswordAction(email: string): Promise<ActionResult<
             return { success: false, error: resData.error || 'Failed to send reset code.' };
         }
 
-        return { success: true, data: { reset_token: resData.reset_token } };
+        // Store reset token in an HttpOnly cookie — never expose to client JS
+        if (resData.reset_token) {
+            const cookieStore = await cookies();
+            cookieStore.set('reset_token', resData.reset_token, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                path: '/',
+                maxAge: 15 * 60 // 15 minutes
+            });
+        }
+
+        return { success: true };
     } catch (error) {
         Sentry.captureException(error);
         return { success: false, error: 'Network error. Please check your connection.' };
     }
 }
 
-export async function resetPasswordAction(email: string, otp: string, newPassword: string, resetToken: string): Promise<ActionResult> {
+export async function resetPasswordAction(email: string, otp: string, newPassword: string): Promise<ActionResult> {
     try {
+        // Read reset token from server-side HttpOnly cookie — never from client
+        const cookieStore = await cookies();
+        const resetToken = cookieStore.get('reset_token')?.value;
+        if (!resetToken) {
+            return { success: false, error: 'Reset session expired. Please start over.' };
+        }
+
         const res = await fetch(`${getApiUrl()}/api/auth/reset-password`, {
             method: 'POST',
             headers: {
@@ -168,6 +217,9 @@ export async function resetPasswordAction(email: string, otp: string, newPasswor
         if (!res.ok) {
             return { success: false, error: resData.error || 'Failed to reset password.' };
         }
+
+        // Clear the reset token cookie
+        cookieStore.delete('reset_token');
 
         return { success: true };
     } catch (error) {

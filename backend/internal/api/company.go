@@ -5,8 +5,9 @@ import (
 	"time"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/logger"
+	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/payment"
-	"webtracker-bot/internal/whatsapp"
+	"webtracker-bot/internal/shipment"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
@@ -15,12 +16,12 @@ import (
 
 type CompanyHandler struct {
 	cfg      *config.Config
-	configUC *config.Usecase
-	bots     whatsapp.BotProvider
+	configUC models.ConfigUsecase
+	bots     models.BotProvider
 	paystack *payment.PaystackService
 }
 
-func NewCompanyHandler(cfg *config.Config, configUC *config.Usecase, bots whatsapp.BotProvider) *CompanyHandler {
+func NewCompanyHandler(cfg *config.Config, configUC models.ConfigUsecase, bots models.BotProvider) *CompanyHandler {
 	return &CompanyHandler{
 		cfg:      cfg,
 		configUC: configUC,
@@ -62,7 +63,7 @@ func (h *CompanyHandler) RegisterRoutes(app *fiber.App) {
 
 func (h *CompanyHandler) checkSubscription(ctx *fiber.Ctx, companyID uuid.UUID) error {
 	// Super admin bypasses all billing checks
-	if IsSuperAdmin(h.cfg, companyID) {
+	if shipment.IsSuperAdmin(h.cfg, companyID) {
 		return nil
 	}
 
@@ -296,8 +297,12 @@ func (h *CompanyHandler) paystackWebhook(c *fiber.Ctx) error {
 			Status    string `json:"status"`
 			Reference string `json:"reference"`
 			Amount    int    `json:"amount"`
-			Metadata  struct {
+			Customer  struct {
+				Email string `json:"email"`
+			} `json:"customer"`
+			Metadata struct {
 				CompanyID string `json:"company_id"`
+				Plan      string `json:"plan"`
 			} `json:"metadata"`
 		} `json:"data"`
 	}
@@ -311,6 +316,17 @@ func (h *CompanyHandler) paystackWebhook(c *fiber.Ctx) error {
 		companyIDStr := event.Data.Metadata.CompanyID
 		if companyIDStr != "" {
 			if companyID, err := uuid.Parse(companyIDStr); err == nil {
+				// Prevent payment reassignment attacks by verifying customer email matches company admin email
+				company, err := h.configUC.GetCompanyByID(c.Context(), companyID)
+				if err != nil || company.AdminEmail != event.Data.Customer.Email {
+					logger.Error().
+						Str("reference", event.Data.Reference).
+						Str("webhook_email", event.Data.Customer.Email).
+						Str("company_email", company.AdminEmail).
+						Msg("Webhook email mismatch or company not found")
+					return c.SendStatus(fiber.StatusUnauthorized)
+				}
+
 				// Record the payment to guarantee idempotency
 				amountInNaira := float64(event.Data.Amount) / 100.0
 				id, err := h.configUC.RecordPayment(c.Context(), companyID, event.Data.Reference, amountInNaira, "success")
@@ -318,17 +334,18 @@ func (h *CompanyHandler) paystackWebhook(c *fiber.Ctx) error {
 					logger.Error().Err(err).Str("reference", event.Data.Reference).Msg("Failed to record payment")
 					return c.SendStatus(fiber.StatusInternalServerError)
 				}
-				
+
 				if id == 0 {
 					logger.Info().Str("reference", event.Data.Reference).Msg("Duplicate payment webhook ignored")
 					return c.SendStatus(fiber.StatusOK)
 				}
 
-				err = h.configUC.UpdateCompanySubscriptionStatus(c.Context(), companyID, "active")
+				planType := event.Data.Metadata.Plan
+				err = h.configUC.UpdateCompanySubscriptionStatus(c.Context(), companyID, "active", planType)
 				if err != nil {
 					logger.Error().Err(err).Str("company_id", companyIDStr).Msg("Failed to update subscription status on payment")
 				} else {
-					logger.Info().Str("company_id", companyIDStr).Msg("Company subscription activated via Paystack")
+					logger.Info().Str("company_id", companyIDStr).Str("plan", planType).Msg("Company subscription activated via Paystack")
 				}
 			}
 		}

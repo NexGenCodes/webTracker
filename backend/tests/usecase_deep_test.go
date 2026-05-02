@@ -53,6 +53,9 @@ func (m *MockQuerier) TransitionStatusToDelivered(ctx context.Context, arg db.Tr
 func (m *MockQuerier) BulkUpdateStatus(ctx context.Context, arg db.BulkUpdateStatusParams) error {
 	return nil
 }
+func (m *MockQuerier) BulkDeleteShipments(ctx context.Context, arg db.BulkDeleteShipmentsParams) (sql.Result, error) {
+	return mockResult{}, nil
+}
 func (m *MockQuerier) CountAuthorizedGroups(ctx context.Context, companyID uuid.UUID) (int64, error) {
 	return 0, nil
 }
@@ -114,8 +117,8 @@ func (m *MockQuerier) ListShipments(ctx context.Context, arg db.ListShipmentsPar
 	return nil, nil
 }
 func (m *MockQuerier) RecordEvent(ctx context.Context, arg db.RecordEventParams) error { return nil }
-func (m *MockQuerier) RunAgedCleanup(ctx context.Context, arg db.RunAgedCleanupParams) error {
-	return nil
+func (m *MockQuerier) RunAgedCleanup(ctx context.Context, arg db.RunAgedCleanupParams) (sql.Result, error) {
+	return mockResult{}, nil
 }
 func (m *MockQuerier) SetGroupAuthority(ctx context.Context, arg db.SetGroupAuthorityParams) error {
 	args := m.Called(ctx, arg)
@@ -208,6 +211,12 @@ func (m *MockQuerier) UpdateCompanyOnboarding(ctx context.Context, arg db.Update
 func (m *MockQuerier) RecordPayment(ctx context.Context, arg db.RecordPaymentParams) (int32, error) {
 	return 1, nil
 }
+
+// mockResult implements sql.Result for mock returns
+type mockResult struct{}
+
+func (mockResult) LastInsertId() (int64, error) { return 0, nil }
+func (mockResult) RowsAffected() (int64, error) { return 0, nil }
 
 // Test Company ID for all tests
 var testCompanyID = uuid.MustParse("00000000-0000-0000-0000-000000000001")
