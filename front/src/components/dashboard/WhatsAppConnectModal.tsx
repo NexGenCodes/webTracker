@@ -126,8 +126,7 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
             reset();
             handleFetchQR();
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isOpen]);
+    }, [isOpen, reset, handleFetchQR]);
 
     // Auto-refresh QR code every 20 seconds while in QR mode and waiting
     useEffect(() => {

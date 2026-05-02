@@ -3,6 +3,7 @@ package api
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"strings"
 	"time"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/logger"
@@ -124,6 +125,11 @@ func (h *CompanyHandler) logoutBot(c *fiber.Ctx) error {
 	}
 
 	if err := h.bots.LogoutBot(companyID); err != nil {
+		// If the bot is already gone, that's fine — the intent was to disconnect
+		if strings.Contains(err.Error(), "bot not found") {
+			logger.Info().Str("company", companyID.String()).Msg("Bot already disconnected")
+			return c.JSON(fiber.Map{"success": true, "message": "Bot already disconnected"})
+		}
 		logger.Error().Err(err).Str("company", companyID.String()).Msg("Failed to logout bot")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}

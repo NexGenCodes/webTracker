@@ -12,10 +12,12 @@ import (
 	"webtracker-bot/internal/notif"
 	"webtracker-bot/internal/shipment"
 
+	"webtracker-bot/internal/whatsapp"
+
+	"github.com/google/uuid"
 	"github.com/robfig/cron/v3"
 	waProto "go.mau.fi/whatsmeow/binary/proto"
 	"go.mau.fi/whatsmeow/types"
-	"webtracker-bot/internal/whatsapp"
 )
 
 type CronManager struct {
@@ -158,16 +160,16 @@ func (m *CronManager) handleDailyStats() {
 			continue
 		}
 
-		go func() {
-			groups, _ := m.configUC.GetAuthorizedGroups(ctx, companyID)
+		go func(cid uuid.UUID, b *whatsapp.BotInstance) {
+			groups, _ := m.configUC.GetAuthorizedGroups(ctx, cid)
 			for _, g := range groups {
 				jid, _ := types.ParseJID(g)
 				msgContent := &waProto.Message{
 					Conversation: &msg,
 				}
-				bot.WA.SendMessage(ctx, jid, msgContent)
+				b.WA.SendMessage(ctx, jid, msgContent)
 			}
-		}()
+		}(companyID, bot)
 	}
 }
 
@@ -202,4 +204,3 @@ func (m *CronManager) handleHealthCheck() {
 		logger.Error().Err(err).Msg("Health check ping failed")
 	}
 }
-

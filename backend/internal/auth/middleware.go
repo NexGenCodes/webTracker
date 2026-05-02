@@ -28,6 +28,8 @@ func JWTAuth(publicKeyPath string) fiber.Handler {
 			path == "/api/auth/verify-otp" ||
 			path == "/api/auth/login" ||
 			path == "/api/auth/logout" ||
+			path == "/api/auth/forgot-password" ||
+			path == "/api/auth/reset-password" ||
 			strings.HasPrefix(path, "/api/webhooks/") ||
 			strings.HasPrefix(path, "/api/company/onboard") {
 			return c.Next()

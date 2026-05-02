@@ -40,6 +40,8 @@ type App struct {
 	WAStore    *sqlstore.Container
 	Bots       map[uuid.UUID]*whatsapp.BotInstance
 	BotsMu     sync.RWMutex
+	PairLocks  map[uuid.UUID]*sync.Mutex
+	PairMu     sync.Mutex
 	Jobs       chan models.Job
 	WG         sync.WaitGroup
 	Cancel     context.CancelFunc
@@ -47,6 +49,21 @@ type App struct {
 	Context    context.Context
 	SqlPool    *sql.DB
 	HttpServer *transport_http.Server
+}
+
+// getPairLock returns (or creates) a per-company mutex for pairing operations.
+func (a *App) getPairLock(companyID uuid.UUID) *sync.Mutex {
+	a.PairMu.Lock()
+	defer a.PairMu.Unlock()
+	if a.PairLocks == nil {
+		a.PairLocks = make(map[uuid.UUID]*sync.Mutex)
+	}
+	mu, ok := a.PairLocks[companyID]
+	if !ok {
+		mu = &sync.Mutex{}
+		a.PairLocks[companyID] = mu
+	}
+	return mu
 }
 
 func (a *App) GetBot(companyID uuid.UUID) (*whatsapp.BotInstance, error) {
@@ -346,7 +363,14 @@ func (a *App) connectWA() error {
 }
 
 // GeneratePairingCode dynamically connects a bot and returns a pairing code for a given phone number.
+// Uses a per-company mutex to prevent concurrent calls from corrupting whatsmeow's pairing state.
 func (a *App) GeneratePairingCode(ctx context.Context, companyID uuid.UUID, phone string) (string, error) {
+	pairLock := a.getPairLock(companyID)
+	if !pairLock.TryLock() {
+		return "", fmt.Errorf("a pairing request is already in progress, please wait for the current code")
+	}
+	defer pairLock.Unlock()
+
 	bot, err := a.GetBot(companyID)
 	if err != nil {
 		company, err := a.ConfigUC.GetCompanyByID(ctx, companyID)
@@ -364,10 +388,13 @@ func (a *App) GeneratePairingCode(ctx context.Context, companyID uuid.UUID, phon
 		}
 	}
 
-	if !bot.WA.IsConnected() {
-		if err := bot.WA.Connect(); err != nil {
-			return "", fmt.Errorf("failed to connect to WhatsApp: %w", err)
-		}
+	// Disconnect and reconnect to clear any stale pairing state
+	if bot.WA.IsConnected() {
+		bot.WA.Disconnect()
+		time.Sleep(500 * time.Millisecond)
+	}
+	if err := bot.WA.Connect(); err != nil {
+		return "", fmt.Errorf("failed to connect to WhatsApp: %w", err)
 	}
 
 	code, err := bot.WA.PairPhone(ctx, phone, true, whatsmeow.PairClientChrome, "Chrome (Windows)")
