@@ -10,6 +10,8 @@ interface OverviewTabProps {
     planType: string;
     currentPlan: { name: string; price: string };
     expiryDate: string;
+    daysRemaining: number;
+    isExpired: boolean;
     onConnectClick: () => void;
 }
 
@@ -20,11 +22,36 @@ export function OverviewTab({
     planType,
     currentPlan,
     expiryDate,
+    daysRemaining,
+    isExpired,
     onConnectClick
 }: OverviewTabProps) {
     return (
         <div className="space-y-8">
-            {!whatsappConnected && (
+            {isExpired && (
+                <div className="relative overflow-hidden glass-panel p-6 border-error/40 bg-error/5 flex flex-col sm:flex-row items-start sm:items-center gap-6 group hover:shadow-lg hover:shadow-error/10 transition-all duration-300">
+                    <div className="absolute top-0 left-0 w-1 h-full bg-error" />
+                    <div className="w-14 h-14 bg-error/20 rounded-2xl flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform duration-300">
+                        <AlertTriangle className="text-error" size={28} />
+                    </div>
+                    <div className="flex-1">
+                        <h3 className="text-base font-black text-text-main uppercase tracking-widest mb-1">
+                            Subscription Expired
+                        </h3>
+                        <p className="text-sm font-medium text-text-muted">
+                            Your access has been suspended because your trial or subscription has ended. Please upgrade your plan to continue using the service.
+                        </p>
+                    </div>
+                    <a
+                        href="/dashboard/billing"
+                        className="btn-primary px-6 py-3.5 text-xs flex items-center gap-2 active:scale-95 shrink-0 shadow-lg shadow-error/20 !bg-error hover:!bg-error/90 !text-black"
+                    >
+                        Upgrade Now <ChevronRight size={16} />
+                    </a>
+                </div>
+            )}
+
+            {!whatsappConnected && !isExpired && (
                 <div className="relative overflow-hidden glass-panel p-6 border-warning/40 bg-warning/5 flex flex-col sm:flex-row items-start sm:items-center gap-6 group hover:shadow-lg hover:shadow-warning/10 transition-all duration-300">
                     <div className="absolute top-0 left-0 w-1 h-full bg-warning" />
                     <div className="w-14 h-14 bg-warning/20 rounded-2xl flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform duration-300">
@@ -80,14 +107,18 @@ export function OverviewTab({
 
                 <div className="glass-panel p-6 border-border/40 hover:border-border hover:shadow-xl hover:shadow-black/5 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group">
                     <div className="flex items-center justify-between mb-4">
-                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-text-muted">Next Billing</p>
+                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-text-muted">
+                            {planType === 'trial' ? 'Trial Time Left' : 'Next Billing'}
+                        </p>
                         <div className="w-8 h-8 rounded-full bg-surface border border-border flex items-center justify-center text-text-main">
                             <Package size={14} />
                         </div>
                     </div>
-                    <p className="text-2xl font-black text-text-main drop-shadow-sm">{expiryDate}</p>
-                    <p className={`text-xs font-bold mt-2 ${planType === 'trial' ? 'text-warning' : 'text-success'}`}>
-                        {planType === 'trial' ? 'Trial expires soon' : 'Auto-renewal active'}
+                    <p className={`text-2xl font-black drop-shadow-sm ${isExpired ? 'text-error' : 'text-text-main'}`}>
+                        {isExpired ? 'Expired' : (planType === 'trial' ? `${daysRemaining} Days` : expiryDate)}
+                    </p>
+                    <p className={`text-xs font-bold mt-2 ${planType === 'trial' || isExpired ? (isExpired ? 'text-error' : 'text-warning') : 'text-success'}`}>
+                        {isExpired ? 'Renew immediately' : (planType === 'trial' ? 'Upgrade to keep access' : 'Auto-renewal active')}
                     </p>
                 </div>
             </div>

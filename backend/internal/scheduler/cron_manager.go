@@ -30,25 +30,17 @@ type CronManager struct {
 	mu        sync.RWMutex
 }
 
-var (
-	instance *CronManager
-	once     sync.Once
-)
-
 func NewManager(cfg *config.Config, shipUC *shipment.Usecase, configUC *config.Usecase, bots whatsapp.BotProvider) *CronManager {
-	once.Do(func() {
-		// Use seconds precision for robfig/cron/v3
-		c := cron.New(cron.WithSeconds())
-		instance = &CronManager{
-			scheduler: c,
-			cfg:       cfg,
-			shipUC:    shipUC,
-			configUC:  configUC,
-			bots:      bots,
-			locks:     make(map[string]*sync.Mutex),
-		}
-	})
-	return instance
+	// Use seconds precision for robfig/cron/v3
+	c := cron.New(cron.WithSeconds())
+	return &CronManager{
+		scheduler: c,
+		cfg:       cfg,
+		shipUC:    shipUC,
+		configUC:  configUC,
+		bots:      bots,
+		locks:     make(map[string]*sync.Mutex),
+	}
 }
 
 func (m *CronManager) Start() {

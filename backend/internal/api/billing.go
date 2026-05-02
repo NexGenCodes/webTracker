@@ -2,20 +2,69 @@ package api
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"time"
 
 	"webtracker-bot/internal/config"
+	"webtracker-bot/internal/payment"
 	"webtracker-bot/internal/shipment"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 )
 
+// BillingHandler serves plan data from the backend source of truth.
+type BillingHandler struct {
+	cfg      *config.Config
+	configUC *config.Usecase
+}
+
+func NewBillingHandler(cfg *config.Config, configUC *config.Usecase) *BillingHandler {
+	return &BillingHandler{cfg: cfg, configUC: configUC}
+}
+
+func (h *BillingHandler) RegisterRoutes(app *fiber.App) {
+	api := app.Group("/api/billing")
+	api.Get("/plans", h.getPlans)
+}
+
+func (h *BillingHandler) getPlans(c *fiber.Ctx) error {
+	ctx := c.Context()
+	dbPlans, err := h.configUC.GetActivePlans(ctx)
+	if err != nil || len(dbPlans) == 0 {
+		// Fallback to static plans if DB fails or is empty
+		return c.JSON(payment.GetPlans())
+	}
+
+	var plans []payment.Plan
+	for _, p := range dbPlans {
+		var features []string
+		_ = json.Unmarshal(p.Features, &features)
+
+		plans = append(plans, payment.Plan{
+			ID:          p.ID,
+			Name:        p.Name,
+			NameKey:     p.NameKey,
+			DescKey:     p.DescKey,
+			Price:       int(p.BasePrice),
+			Currency:    p.Currency,
+			IntervalKey: p.IntervalKey,
+			Popular:     p.Popular.Bool,
+			TrialKey:    p.TrialKey.String,
+			BtnKey:      p.BtnKey,
+			Features:    features,
+		})
+	}
+	return c.JSON(plans)
+}
+
 // PlanLimits maps plan_type to the maximum shipments allowed per billing cycle.
 var PlanLimits = map[string]int64{
+	"trial":      50,
 	"starter":    50,
 	"pro":        250,
 	"enterprise": 1000,
-	"scale":      1000,
 }
 
 // IsSuperAdmin checks if the given company ID matches the configured super admin.
@@ -39,10 +88,17 @@ func CheckShipmentCap(
 	shipmentUC *shipment.Usecase,
 	companyID uuid.UUID,
 	planType string,
+	expiry sql.NullTime,
 ) (remaining int64, err error) {
 	// Super admin is unlimited
 	if IsSuperAdmin(cfg, companyID) {
 		return -1, nil // -1 signals unlimited
+	}
+
+	// Check if subscription/trial has expired
+	now := time.Now()
+	if expiry.Valid && expiry.Time.Before(now) {
+		return 0, nil // 0 remaining implies payment required / expired
 	}
 
 	limit, ok := PlanLimits[planType]
@@ -52,7 +108,6 @@ func CheckShipmentCap(
 	}
 
 	// Count shipments created since the start of the current calendar month
-	now := time.Now()
 	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 	created, err := shipmentUC.CountCreatedSince(ctx, companyID, startOfMonth)
 	if err != nil {

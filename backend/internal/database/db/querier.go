@@ -6,7 +6,6 @@ package db
 
 import (
 	"context"
-	"database/sql"
 
 	"github.com/google/uuid"
 )
@@ -23,14 +22,15 @@ type Querier interface {
 	DeleteDeliveredShipments(ctx context.Context, companyID uuid.NullUUID) error
 	DeleteShipment(ctx context.Context, arg DeleteShipmentParams) error
 	FindSimilarShipment(ctx context.Context, arg FindSimilarShipmentParams) (string, error)
+	GetActivePlans(ctx context.Context) ([]GetActivePlansRow, error)
 	GetAllActiveCompanies(ctx context.Context) ([]Company, error)
 	GetAllCompanies(ctx context.Context) ([]uuid.UUID, error)
 	GetAuthorizedGroups(ctx context.Context, companyID uuid.UUID) ([]string, error)
 	GetCompanyByEmail(ctx context.Context, adminEmail string) (Company, error)
 	GetCompanyByID(ctx context.Context, id uuid.UUID) (Company, error)
-	GetCompanyBySetupToken(ctx context.Context, setupToken sql.NullString) (Company, error)
 	GetGroupAuthority(ctx context.Context, arg GetGroupAuthorityParams) (GetGroupAuthorityRow, error)
 	GetLastShipmentIDForUser(ctx context.Context, arg GetLastShipmentIDForUserParams) (string, error)
+	GetPlanByID(ctx context.Context, id string) (GetPlanByIDRow, error)
 	GetRecentEvents(ctx context.Context, arg GetRecentEventsParams) ([]Telemetry, error)
 	GetShipment(ctx context.Context, arg GetShipmentParams) (Shipment, error)
 	GetSystemConfig(ctx context.Context, arg GetSystemConfigParams) (string, error)
@@ -40,7 +40,7 @@ type Querier interface {
 	ListAllShipments(ctx context.Context, companyID uuid.NullUUID) ([]Shipment, error)
 	ListShipments(ctx context.Context, arg ListShipmentsParams) ([]Shipment, error)
 	RecordEvent(ctx context.Context, arg RecordEventParams) error
-	RegenerateSetupToken(ctx context.Context, arg RegenerateSetupTokenParams) error
+	RecordPayment(ctx context.Context, arg RecordPaymentParams) (int32, error)
 	RunAgedCleanup(ctx context.Context, arg RunAgedCleanupParams) error
 	SetCompanyPassword(ctx context.Context, arg SetCompanyPasswordParams) error
 	SetGroupAuthority(ctx context.Context, arg SetGroupAuthorityParams) error
@@ -53,6 +53,7 @@ type Querier interface {
 	UpdateCompanyOnboarding(ctx context.Context, arg UpdateCompanyOnboardingParams) error
 	UpdateCompanySettings(ctx context.Context, arg UpdateCompanySettingsParams) error
 	UpdateCompanySubscriptionStatus(ctx context.Context, arg UpdateCompanySubscriptionStatusParams) error
+	UpdatePlanPrice(ctx context.Context, arg UpdatePlanPriceParams) error
 	UpdateShipmentFieldCargoType(ctx context.Context, arg UpdateShipmentFieldCargoTypeParams) error
 	UpdateShipmentFieldDestination(ctx context.Context, arg UpdateShipmentFieldDestinationParams) error
 	UpdateShipmentFieldExpectedDeliveryTime(ctx context.Context, arg UpdateShipmentFieldExpectedDeliveryTimeParams) error

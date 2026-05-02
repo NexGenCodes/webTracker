@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 
 	"webtracker-bot/internal/logger"
 )
@@ -32,7 +33,21 @@ func NewHandler(service *Service) *Handler {
 }
 
 func (h *Handler) RegisterRoutes(app *fiber.App) {
-	group := app.Group("/api/auth")
+	// Create a rate limiter: Max 10 requests per minute per IP for auth routes
+	authLimiter := limiter.New(limiter.Config{
+		Max:        10,
+		Expiration: 1 * time.Minute,
+		KeyGenerator: func(c *fiber.Ctx) string {
+			return c.IP()
+		},
+		LimitReached: func(c *fiber.Ctx) error {
+			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
+				"error": "Too many attempts, please try again later.",
+			})
+		},
+	})
+
+	group := app.Group("/api/auth", authLimiter)
 
 	group.Post("/register-intent", h.registerIntent)
 	group.Post("/verify-otp", h.verifyOTP)
@@ -41,9 +56,9 @@ func (h *Handler) RegisterRoutes(app *fiber.App) {
 	group.Post("/forgot-password", h.forgotPassword)
 	group.Post("/reset-password", h.resetPassword)
 	
-	// Protected routes
-	group.Get("/me", JWTAuth(h.service.cfg.JWTPublicKeyPath), h.me)
-	group.Post("/setup", JWTAuth(h.service.cfg.JWTPublicKeyPath), h.setupCompany)
+	// Protected routes (JWT validation is handled by global middleware in server.go)
+	group.Get("/me", h.me)
+	group.Post("/setup", h.setupCompany)
 }
 
 func (h *Handler) forgotPassword(c *fiber.Ctx) error {
@@ -106,7 +121,10 @@ func (h *Handler) resetPassword(c *fiber.Ctx) error {
 
 
 func (h *Handler) me(c *fiber.Ctx) error {
-	user := c.Locals("user").(*JWTClaims)
+	user, ok := c.Locals("user").(*JWTClaims)
+	if !ok || user == nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+	}
 	return c.JSON(fiber.Map{
 		"company_id":   user.CompanyID,
 		"company_name": user.CompanyName,

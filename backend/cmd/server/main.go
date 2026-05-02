@@ -2,7 +2,9 @@ package main
 
 import (
 	"flag"
+	"os"
 	"runtime/debug"
+	"strconv"
 	"time"
 	"webtracker-bot/internal/app"
 	"webtracker-bot/internal/config"
@@ -11,8 +13,20 @@ import (
 
 func main() {
 	flag.Parse()
+
+	// Dynamic Vertical Scaling Configuration
+	// By default, it limits to 700MB. To scale vertically, set MAX_MEMORY_MB in your environment.
+	// e.g. MAX_MEMORY_MB=2048 for a 2GB VPS.
+	memLimitMB := int64(700)
+	if envMem := os.Getenv("MAX_MEMORY_MB"); envMem != "" {
+		if parsed, err := strconv.ParseInt(envMem, 10, 64); err == nil {
+			memLimitMB = parsed
+		}
+	}
+
 	debug.SetGCPercent(50)
-	debug.SetMemoryLimit(700 * 1024 * 1024)
+	debug.SetMemoryLimit(memLimitMB * 1024 * 1024)
+
 	go func() {
 		for {
 			time.Sleep(5 * time.Minute)

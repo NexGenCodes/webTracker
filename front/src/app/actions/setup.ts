@@ -1,127 +1,131 @@
 'use server';
 
-import { getBackendUrl, backendHeaders } from '@/lib/backend';
+import { getApiUrl } from '@/lib/utils';
 import { getServerSession } from '@/lib/auth';
-import { revalidatePath } from 'next/cache';
+import { ActionResult } from './auth';
 
-export interface WhatsAppPairResponse {
-    success: boolean;
-    pairingCode?: string;
-    error?: string;
+export async function pairWhatsApp(companyId: string, phone: string): Promise<ActionResult<{ code?: string }>> {
+    try {
+        const session = await getServerSession();
+        if (!session.user?.company_id || session.user.company_id !== companyId) {
+            return { success: false, error: 'Unauthorized.' };
+        }
+
+        const res = await fetch(`${getApiUrl()}/api/company/pair`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session.token}`
+            },
+            body: JSON.stringify({ phone }),
+        });
+
+        const resData = await res.json();
+        if (!res.ok) {
+            return { success: false, error: resData.error || 'Failed to request pairing code.' };
+        }
+
+        return { success: true, data: { code: resData.code } };
+    } catch {
+        return { success: false, error: 'Network error. Please check your connection.' };
+    }
 }
 
-export async function pairWhatsApp(companyId: string, phone: string): Promise<WhatsAppPairResponse> {
-    const { user } = await getServerSession();
-    if (!user || user.company_id !== companyId) {
-        throw new Error('Unauthorized');
-    }
+export async function checkWhatsAppStatus(companyId: string): Promise<ActionResult<{ connected: boolean; phone?: string }>> {
+    try {
+        const session = await getServerSession();
+        if (!session.user?.company_id || session.user.company_id !== companyId) {
+            return { success: false, error: 'Unauthorized.' };
+        }
 
-    if (!companyId || !phone) {
-        throw new Error('company_id and phone are required');
-    }
+        const res = await fetch(`${getApiUrl()}/api/company/status`, {
+            headers: {
+                'Authorization': `Bearer ${session.token}`
+            }
+        });
 
-    const res = await fetch(`${getBackendUrl()}/api/company/pair`, {
-        method: 'POST',
-        headers: await backendHeaders({
-            'X-Company-ID': companyId
-        }),
-        body: JSON.stringify({ phone })
-    });
-    
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Backend error' }));
-        throw new Error(err.error || 'Backend error');
+        const resData = await res.json();
+        if (!res.ok) {
+            return { success: false, error: resData.error || 'Failed to check status.' };
+        }
+
+        return { success: true, data: { connected: resData.connected, phone: resData.phone } };
+    } catch {
+        return { success: false, error: 'Network error. Please check your connection.' };
     }
-    
-    const data = await res.json();
-    
-    revalidatePath('/dashboard');
-    return {
-        success: true,
-        pairingCode: data.pairing_code || data.code || data.data?.pairing_code || data.data?.code || data.pairingCode || data.data?.pairingCode
-    };
 }
 
-export async function disconnectWhatsApp(companyId: string): Promise<{ success: boolean; error?: string }> {
-    const { user } = await getServerSession();
-    if (!user || user.company_id !== companyId) {
-        throw new Error('Unauthorized');
-    }
+export async function disconnectWhatsApp(companyId: string): Promise<ActionResult> {
+    try {
+        const session = await getServerSession();
+        if (!session.user?.company_id || session.user.company_id !== companyId) {
+            return { success: false, error: 'Unauthorized.' };
+        }
 
-    if (!companyId) {
-        throw new Error('company_id is required');
-    }
+        const res = await fetch(`${getApiUrl()}/api/company/logout`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${session.token}`
+            }
+        });
 
-    const res = await fetch(`${getBackendUrl()}/api/company/logout`, {
-        method: 'POST',
-        headers: await backendHeaders({
-            'X-Company-ID': companyId
-        })
-    });
-    
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Backend error' }));
-        throw new Error(err.error || 'Backend error');
+        if (!res.ok) {
+            const resData = await res.json();
+            return { success: false, error: resData.error || 'Failed to disconnect.' };
+        }
+
+        return { success: true };
+    } catch {
+        return { success: false, error: 'Network error. Please check your connection.' };
     }
-    
-    await res.json();
-    revalidatePath('/dashboard');
-    return { success: true };
 }
 
-export async function getWhatsAppQR(companyId: string): Promise<WhatsAppPairResponse> {
-    const { user } = await getServerSession();
-    if (!user || user.company_id !== companyId) {
-        throw new Error('Unauthorized');
-    }
+export async function deleteAccount(companyId: string): Promise<ActionResult> {
+    try {
+        const session = await getServerSession();
+        if (!session.user?.company_id || session.user.company_id !== companyId) {
+            return { success: false, error: 'Unauthorized.' };
+        }
 
-    if (!companyId) {
-        throw new Error('company_id is required');
-    }
+        const res = await fetch(`${getApiUrl()}/api/company/delete`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${session.token}`
+            }
+        });
 
-    const res = await fetch(`${getBackendUrl()}/api/company/qr`, {
-        method: 'POST',
-        headers: await backendHeaders({
-            'X-Company-ID': companyId
-        })
-    });
-    
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Backend error' }));
-        throw new Error(err.error || 'Backend error');
+        if (!res.ok) {
+            const resData = await res.json();
+            return { success: false, error: resData.error || 'Failed to delete account.' };
+        }
+
+        return { success: true };
+    } catch {
+        return { success: false, error: 'Network error. Please check your connection.' };
     }
-    
-    const data = await res.json();
-    
-    return {
-        success: true,
-        pairingCode: data.code || data.data?.code
-    };
 }
 
-export async function deleteAccount(companyId: string): Promise<{ success: boolean; error?: string }> {
-    const { user } = await getServerSession();
-    if (!user || user.company_id !== companyId) {
-        throw new Error('Unauthorized');
+export async function getWhatsAppQR(companyId: string): Promise<ActionResult<{ pairingCode?: string }>> {
+    try {
+        const session = await getServerSession();
+        if (!session.user?.company_id || session.user.company_id !== companyId) {
+            return { success: false, error: 'Unauthorized.' };
+        }
+
+        const res = await fetch(`${getApiUrl()}/api/company/qr`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${session.token}`
+            }
+        });
+
+        const resData = await res.json();
+        if (!res.ok) {
+            return { success: false, error: resData.error || 'Failed to fetch QR code.' };
+        }
+
+        return { success: true, data: { pairingCode: resData.code || resData.data?.code } };
+    } catch {
+        return { success: false, error: 'Network error. Please check your connection.' };
     }
-
-    if (!companyId) {
-        throw new Error('company_id is required');
-    }
-
-    const res = await fetch(`${getBackendUrl()}/api/company/delete`, {
-        method: 'DELETE',
-        headers: await backendHeaders({
-            'X-Company-ID': companyId
-        })
-    });
-
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Backend error' }));
-        throw new Error(err.error || 'Failed to delete account');
-    }
-
-    await res.json();
-    revalidatePath('/dashboard');
-    return { success: true };
 }

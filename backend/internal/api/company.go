@@ -1,17 +1,15 @@
 package api
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"strings"
 	"time"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/logger"
-	"webtracker-bot/internal/notif"
 	"webtracker-bot/internal/payment"
 	"webtracker-bot/internal/whatsapp"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/google/uuid"
 )
 
@@ -34,36 +32,32 @@ func NewCompanyHandler(cfg *config.Config, configUC *config.Usecase, bots whatsa
 func (h *CompanyHandler) RegisterRoutes(app *fiber.App) {
 	api := app.Group("/api/company")
 
-	// Multi-tenant: frontend passes X-Company-ID header
+	// Limit pairing requests to prevent WhatsApp spam
+	pairLimiter := limiter.New(limiter.Config{
+		Max:        5,
+		Expiration: 1 * time.Minute,
+		KeyGenerator: func(c *fiber.Ctx) string {
+			return getCompanyID(c).String() // rate limit per company rather than IP
+		},
+		LimitReached: func(c *fiber.Ctx) error {
+			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
+				"error": "Too many pairing attempts. Please wait a minute.",
+			})
+		},
+	})
 
 	api.Post("/activate", h.activateBot)
 	api.Post("/deactivate", h.deactivateBot)
-	api.Post("/pair", h.pairBot)
-	api.Post("/qr", h.getQR)
+	api.Post("/pair", pairLimiter, h.pairBot)
+	api.Post("/qr", pairLimiter, h.getQR)
 	api.Post("/logout", h.logoutBot)
 	api.Delete("/delete", h.deleteCompany)
 
-	api.Get("/setup/:token", h.getCompanyBySetupToken)
-	api.Post("/onboard", h.onboardCompany)
-	api.Post("/resend-setup-link", h.resendSetupLink)
 	api.Post("/subscribe", h.subscribe)
+	api.Get("/subscription-status", h.getSubscriptionStatus)
 
 	// Webhooks
 	app.Post("/api/webhooks/paystack", h.paystackWebhook)
-}
-
-func (h *CompanyHandler) getCompanyBySetupToken(c *fiber.Ctx) error {
-	token := c.Params("token")
-	company, err := h.configUC.GetCompanyBySetupToken(c.Context(), token)
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Invalid or expired setup token"})
-	}
-
-	return c.JSON(fiber.Map{
-		"id":          company.ID,
-		"name":        company.Name.String,
-		"auth_status": company.AuthStatus.String,
-	})
 }
 
 func (h *CompanyHandler) checkSubscription(ctx *fiber.Ctx, companyID uuid.UUID) error {
@@ -204,70 +198,6 @@ func (h *CompanyHandler) getQR(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"success": true, "code": code})
 }
 
-
-func generateToken() string {
-	b := make([]byte, 32)
-	rand.Read(b)
-	return hex.EncodeToString(b)
-}
-
-// onboardCompany creates a new company and sends a magic setup link email
-func (h *CompanyHandler) onboardCompany(c *fiber.Ctx) error {
-	var req struct {
-		Name       string `json:"name"`
-		AdminEmail string `json:"admin_email"`
-	}
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
-	}
-	if req.Name == "" || req.AdminEmail == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "name and admin_email are required"})
-	}
-
-	token := generateToken()
-
-	company, err := h.configUC.CreateCompany(c.Context(), req.Name, req.AdminEmail, token)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to create company")
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
-	}
-
-	// Send magic link email asynchronously
-	go notif.SendSetupLinkEmail(h.cfg, req.AdminEmail, req.Name, token)
-
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"success":    true,
-		"company_id": company.ID,
-		"message":    "Company created. Setup link sent to " + req.AdminEmail,
-	})
-}
-
-// resendSetupLink regenerates a setup token and resends the magic link email
-func (h *CompanyHandler) resendSetupLink(c *fiber.Ctx) error {
-	companyID := getCompanyID(c)
-	if companyID == uuid.Nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing or invalid company_id"})
-	}
-
-	company, err := h.configUC.GetCompanyByID(c.Context(), companyID)
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Company not found"})
-	}
-
-	newToken := generateToken()
-	if err := h.configUC.RegenerateSetupToken(c.Context(), companyID, newToken); err != nil {
-		logger.Error().Err(err).Msg("Failed to regenerate setup token")
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to regenerate token"})
-	}
-
-	go notif.SendSetupLinkEmail(h.cfg, company.AdminEmail, company.Name.String, newToken)
-
-	return c.JSON(fiber.Map{
-		"success": true,
-		"message": "Setup link resent to " + company.AdminEmail,
-	})
-}
-
 // subscribe initializes a Paystack transaction for the company
 func (h *CompanyHandler) subscribe(c *fiber.Ctx) error {
 	companyID := getCompanyID(c)
@@ -288,32 +218,62 @@ func (h *CompanyHandler) subscribe(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
-	var amount int
-	switch req.Plan {
-	case "starter":
-		amount = 1490000 // ₦14,900 in kobo
-	case "enterprise", "scale":
-		amount = 22500000 // ₦225,000 in kobo
-	default:
-		// Default to Pro
-		amount = 5990000 // ₦59,900 in kobo
-		req.Plan = "pro"
+	dbPlan, dbErr := h.configUC.GetPlanByID(c.Context(), req.Plan)
+	var planPrice int
+	var planID string
+
+	if dbErr == nil {
+		planPrice = int(dbPlan.BasePrice)
+		planID = dbPlan.ID
+	} else {
+		// Fallback to static if DB not seeded
+		plan, err := payment.GetPlanByID(req.Plan)
+		if err != nil {
+			plan = payment.PlanPro // Default
+		}
+		planPrice = plan.Price
+		planID = plan.ID
 	}
 
 	metadata := map[string]interface{}{
 		"company_id": companyID.String(),
-		"plan":       req.Plan,
+		"plan":       planID,
 	}
 
-	authURL, err := h.paystack.InitializeTransaction(company.AdminEmail, amount, req.CallbackURL, metadata)
+	authURL, reference, err := h.paystack.InitializeTransaction(company.AdminEmail, planPrice, req.CallbackURL, metadata)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to initialize Paystack transaction")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to start payment"})
 	}
 
+	logger.Info().
+		Str("company_id", companyID.String()).
+		Str("reference", reference).
+		Str("plan", planID).
+		Msg("Payment transaction initialized")
+
 	return c.JSON(fiber.Map{
 		"success":           true,
 		"authorization_url": authURL,
+		"reference":         reference,
+	})
+}
+
+func (h *CompanyHandler) getSubscriptionStatus(c *fiber.Ctx) error {
+	companyID := getCompanyID(c)
+	if companyID == uuid.Nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing or invalid company_id"})
+	}
+
+	company, err := h.configUC.GetCompanyByID(c.Context(), companyID)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Company not found"})
+	}
+
+	return c.JSON(fiber.Map{
+		"status": company.SubscriptionStatus.String,
+		"expiry": company.SubscriptionExpiry.Time,
+		"plan":   company.PlanType.String,
 	})
 }
 
@@ -333,8 +293,10 @@ func (h *CompanyHandler) paystackWebhook(c *fiber.Ctx) error {
 	var event struct {
 		Event string `json:"event"`
 		Data  struct {
-			Status   string `json:"status"`
-			Metadata struct {
+			Status    string `json:"status"`
+			Reference string `json:"reference"`
+			Amount    int    `json:"amount"`
+			Metadata  struct {
 				CompanyID string `json:"company_id"`
 			} `json:"metadata"`
 		} `json:"data"`
@@ -349,7 +311,20 @@ func (h *CompanyHandler) paystackWebhook(c *fiber.Ctx) error {
 		companyIDStr := event.Data.Metadata.CompanyID
 		if companyIDStr != "" {
 			if companyID, err := uuid.Parse(companyIDStr); err == nil {
-				err := h.configUC.UpdateCompanySubscriptionStatus(c.Context(), companyID, "active")
+				// Record the payment to guarantee idempotency
+				amountInNaira := float64(event.Data.Amount) / 100.0
+				id, err := h.configUC.RecordPayment(c.Context(), companyID, event.Data.Reference, amountInNaira, "success")
+				if err != nil {
+					logger.Error().Err(err).Str("reference", event.Data.Reference).Msg("Failed to record payment")
+					return c.SendStatus(fiber.StatusInternalServerError)
+				}
+				
+				if id == 0 {
+					logger.Info().Str("reference", event.Data.Reference).Msg("Duplicate payment webhook ignored")
+					return c.SendStatus(fiber.StatusOK)
+				}
+
+				err = h.configUC.UpdateCompanySubscriptionStatus(c.Context(), companyID, "active")
 				if err != nil {
 					logger.Error().Err(err).Str("company_id", companyIDStr).Msg("Failed to update subscription status on payment")
 				} else {
@@ -361,4 +336,3 @@ func (h *CompanyHandler) paystackWebhook(c *fiber.Ctx) error {
 
 	return c.SendStatus(fiber.StatusOK)
 }
-

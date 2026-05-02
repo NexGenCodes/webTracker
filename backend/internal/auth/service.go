@@ -24,12 +24,12 @@ import (
 // Service handles authentication business logic
 type Service struct {
 	cfg     *config.Config
-	queries *db.Queries
+	queries db.Querier
 	mailer  *notif.Mailer
 }
 
 // NewService creates a new auth service
-func NewService(cfg *config.Config, queries *db.Queries) *Service {
+func NewService(cfg *config.Config, queries db.Querier) *Service {
 	return &Service{
 		cfg:     cfg,
 		queries: queries,

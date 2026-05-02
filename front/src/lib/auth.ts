@@ -27,7 +27,7 @@ export interface SessionUser {
  * Server-side auth check.
  * Verifies the backend JWT cookie using jose.
  */
-export async function getServerSession(): Promise<{ authenticated: boolean; user?: SessionUser }> {
+export async function getServerSession(): Promise<{ authenticated: boolean; user?: SessionUser; token?: string }> {
     try {
         const cookieStore = await cookies();
         const jwt = cookieStore.get('jwt')?.value;
@@ -41,6 +41,7 @@ export async function getServerSession(): Promise<{ authenticated: boolean; user
         
         return { 
             authenticated: true,
+            token: jwt,
             user: {
                 company_id: payload.company_id as string,
                 company_name: payload.company_name as string,

@@ -30,7 +30,7 @@ func main() {
 	defer pool.Close()
 
 	// Define the SQL directory
-	sqlDir := "sql"
+	sqlDir := filepath.Join("sql", "migrations")
 	
 	// Read all files in the sql directory
 	files, err := os.ReadDir(sqlDir)
@@ -52,12 +52,35 @@ func main() {
 	sort.Strings(sqlFiles)
 
 	if len(sqlFiles) == 0 {
-		fmt.Println("No SQL files found in the 'sql' directory.")
+		fmt.Println("No SQL files found in the 'sql/migrations' directory.")
 		return
 	}
 
-	// Execute each SQL file
+	// Create schema_migrations table if it doesn't exist
+	_, err = pool.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS schema_migrations (
+			version TEXT PRIMARY KEY,
+			applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		log.Fatalf("Failed to create schema_migrations table: %v", err)
+	}
+
+	// Execute each SQL file if not already applied
 	for _, fileName := range sqlFiles {
+		// Check if already applied
+		var exists bool
+		err = pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = $1)", fileName).Scan(&exists)
+		if err != nil {
+			log.Fatalf("Failed to check migration status for %s: %v", fileName, err)
+		}
+
+		if exists {
+			fmt.Printf("Skipping already applied migration: %s\n", fileName)
+			continue
+		}
+
 		filePath := filepath.Join(sqlDir, fileName)
 		fmt.Printf("Applying migration: %s...\n", filePath)
 		
@@ -66,14 +89,32 @@ func main() {
 			log.Fatalf("Failed to read sql file %s: %v\n", filePath, err)
 		}
 
-		_, err = pool.Exec(ctx, string(sqlBytes))
+		// Execute the migration and record it in a transaction
+		tx, err := pool.Begin(ctx)
 		if err != nil {
+			log.Fatalf("Failed to begin transaction for %s: %v", fileName, err)
+		}
+
+		_, err = tx.Exec(ctx, string(sqlBytes))
+		if err != nil {
+			tx.Rollback(ctx)
 			log.Fatalf("Failed to execute migration %s: %v\n", filePath, err)
 		}
+
+		_, err = tx.Exec(ctx, "INSERT INTO schema_migrations (version) VALUES ($1)", fileName)
+		if err != nil {
+			tx.Rollback(ctx)
+			log.Fatalf("Failed to record migration %s: %v\n", filePath, err)
+		}
+
+		if err := tx.Commit(ctx); err != nil {
+			log.Fatalf("Failed to commit migration %s: %v\n", filePath, err)
+		}
+
 		fmt.Printf("Successfully applied %s\n", filePath)
 	}
 
-	fmt.Println("All migrations applied successfully!")
+	fmt.Println("All pending migrations applied successfully!")
 
 	// Auto-run generate to ensure Go code is in sync
 	fmt.Println("Auto-running code generation...")

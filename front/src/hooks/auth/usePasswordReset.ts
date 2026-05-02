@@ -1,78 +1,77 @@
-import { useState } from 'react';
+import { useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { 
-    forgotPasswordSchema, 
-    resetPasswordSchema, 
-    ForgotPasswordForm, 
-    ResetPasswordForm,
-    AuthMode 
-} from '@/lib/validations/auth';
+import { forgotPasswordSchema, resetPasswordSchema, ForgotPasswordForm, ResetPasswordForm } from '@/lib/validations/auth';
 import { forgotPasswordAction, resetPasswordAction } from '@/app/actions/auth';
 
 export function usePasswordReset(
     setError: (msg: string | null) => void,
     setSuccessMessage: (msg: string | null) => void,
     setEmailCache: (email: string) => void,
-    switchMode: (mode: AuthMode) => void,
+    switchMode: (mode: 'signin' | 'register' | 'forgot-password' | 'reset-password') => void,
     emailCache: string
 ) {
-    const [loading, setLoading] = useState(false);
+    const [isPending, startTransition] = useTransition();
 
-    const forgotPasswordForm = useForm<ForgotPasswordForm>({ 
-        resolver: zodResolver(forgotPasswordSchema) 
+    const forgotPasswordForm = useForm<ForgotPasswordForm>({
+        resolver: zodResolver(forgotPasswordSchema),
+        defaultValues: { email: emailCache }
     });
-    
-    const resetPasswordForm = useForm<ResetPasswordForm>({ 
-        resolver: zodResolver(resetPasswordSchema) 
-    });
+    const resetPasswordForm = useForm<ResetPasswordForm>({ resolver: zodResolver(resetPasswordSchema) });
 
-    const onForgotPassword = async (data: ForgotPasswordForm) => {
+    const onForgotPassword = (data: ForgotPasswordForm) => {
         setError(null);
-        setLoading(true);
-        try {
-            const resData = await forgotPasswordAction(data.email);
+        setSuccessMessage(null);
+        startTransition(async () => {
+            const result = await forgotPasswordAction(data.email);
 
-            if (resData.reset_token) {
-                sessionStorage.setItem('reset_token', resData.reset_token);
+            if (!result.success) {
+                setError(result.error || 'Failed to send reset code. Please try again.');
+                return;
             }
 
-            setEmailCache(data.email);
-            setSuccessMessage("A 6-digit reset code has been sent to your email.");
-            setTimeout(() => switchMode('reset-password'), 2000);
-        } catch (err: unknown) {
-            setError(err instanceof Error ? err.message : 'Network error. Please try again.');
-        } finally {
-            setLoading(false);
-        }
+            if (result.data?.reset_token) {
+                // Store the reset token in sessionStorage. This is tab-scoped,
+                // cleared on tab close, and avoids polluting React state across
+                // mode transitions. The backend enforces JWT expiry on the token.
+                sessionStorage.setItem('reset_token', result.data.reset_token);
+                setEmailCache(data.email);
+                setSuccessMessage('Password reset code sent to your email.');
+                switchMode('reset-password');
+            } else {
+                setError('Failed to receive reset token.');
+            }
+        });
     };
 
-    const onResetPassword = async (data: ResetPasswordForm, code: string) => {
-        setError(null);
-        if (code.length !== 6) {
-            setError("Please enter the full 6-digit code.");
+    const onResetPassword = (data: ResetPasswordForm, otp: string) => {
+        const resetToken = sessionStorage.getItem('reset_token');
+        if (!resetToken) {
+            setError("Session expired. Please start over.");
+            switchMode('forgot-password');
             return;
         }
 
-        setLoading(true);
-        try {
-            const resetToken = sessionStorage.getItem('reset_token') || '';
-            await resetPasswordAction(emailCache, code, data.password, resetToken);
+        setError(null);
+        startTransition(async () => {
+            const result = await resetPasswordAction(emailCache, otp, data.password, resetToken);
 
-            setSuccessMessage("Password reset successfully. You can now sign in.");
-            setTimeout(() => switchMode('signin'), 2000);
-        } catch (err: unknown) {
-            setError(err instanceof Error ? err.message : 'Network error. Please try again.');
-        } finally {
-            setLoading(false);
-        }
+            if (!result.success) {
+                setError(result.error || 'Failed to reset password. Please verify the code and try again.');
+                return;
+            }
+
+            sessionStorage.removeItem('reset_token');
+            setSuccessMessage("Password reset successfully. Please sign in.");
+            switchMode('signin');
+        });
     };
 
-    return { 
-        forgotPasswordForm, 
-        resetPasswordForm, 
-        onForgotPassword, 
-        onResetPassword, 
-        loading 
+    return {
+        forgotPasswordForm,
+        resetPasswordForm,
+        loading: isPending,
+        onForgotPassword,
+        onResetPassword
     };
 }

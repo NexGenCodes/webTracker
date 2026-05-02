@@ -1,83 +1,109 @@
-import { useState, useEffect, useTransition } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState, useTransition, useRef, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { registerSchema, RegisterForm, RegisterStep } from '@/lib/validations/auth';
+import { registerSchema, RegisterForm } from '@/lib/validations/auth';
 import { registerIntentAction, verifyOtpAction } from '@/app/actions/auth';
 import { useMultiTenant } from '@/components/providers/MultiTenantProvider';
 
 export function useRegister(
     setError: (msg: string | null) => void,
     setEmailCache: (email: string) => void,
-    setRegisterStep: (step: RegisterStep) => void,
-    currentStep: RegisterStep
+    setRegisterStep: (step: 'credentials' | 'otp') => void,
+    registerStep: 'credentials' | 'otp'
 ) {
-    const router = useRouter();
-    const searchParams = useSearchParams();
     const [isPending, startTransition] = useTransition();
     const { refreshAuth } = useMultiTenant();
-    const [otpTimer, setOtpTimer] = useState(600); // 10 minutes
 
-    const form = useForm<RegisterForm>({ 
-        resolver: zodResolver(registerSchema),
-        defaultValues: {
-            companyName: '',
-            email: '',
-            password: '',
-            confirmPassword: '',
-            acceptTerms: false
-        }
-    });
+    const [otpToken, setOtpToken] = useState<string | null>(null);
+    const [otpTimer, setOtpTimer] = useState(0);
+    const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+    // Clean up interval on unmount to prevent memory leaks
     useEffect(() => {
-        let interval: NodeJS.Timeout;
-        if (currentStep === 'otp' && otpTimer > 0) {
-            interval = setInterval(() => {
-                setOtpTimer((prev) => prev - 1);
-            }, 1000);
+        return () => {
+            if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+            }
+        };
+    }, []);
+
+    const form = useForm<RegisterForm>({ resolver: zodResolver(registerSchema) });
+
+    const startOtpTimer = () => {
+        // Clear any existing interval before starting a new one (e.g. on resend)
+        if (intervalRef.current) {
+            clearInterval(intervalRef.current);
         }
-        return () => clearInterval(interval);
-    }, [currentStep, otpTimer]);
+        setOtpTimer(600);
+        intervalRef.current = setInterval(() => {
+            setOtpTimer((prev) => {
+                if (prev <= 1) {
+                    if (intervalRef.current) {
+                        clearInterval(intervalRef.current);
+                        intervalRef.current = null;
+                    }
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+    };
 
     const onRegisterIntent = (data: RegisterForm) => {
         setError(null);
         startTransition(async () => {
-            try {
-                const resData = await registerIntentAction(data);
-                
-                if (resData.otp_token) {
-                    sessionStorage.setItem('otp_token', resData.otp_token);
-                }
+            const result = await registerIntentAction({
+                companyName: data.companyName,
+                email: data.email,
+                password: data.password
+            });
 
+            if (!result.success) {
+                setError(result.error || 'Registration failed. Please try again.');
+                return;
+            }
+
+            if (result.data?.otp_token) {
+                setOtpToken(result.data.otp_token);
                 setEmailCache(data.email);
-                setOtpTimer(600);
                 setRegisterStep('otp');
-            } catch (err: unknown) {
-                setError(err instanceof Error ? err.message : 'Network error. Please try again.');
+                startOtpTimer();
+            } else {
+                setError('Failed to receive OTP verification token.');
             }
         });
     };
 
-    const verifyOtp = (code: string) => {
-        setError(null);
-        if (code.length !== 6) {
-            setError("Please enter the full 6-digit code.");
+    const verifyOtp = async (fullOtp: string) => {
+        if (fullOtp.length !== 6) {
+            setError('Please enter all 6 digits.');
+            return;
+        }
+        if (!otpToken) {
+            setError('Missing verification token. Please start over.');
+            setRegisterStep('credentials');
             return;
         }
 
+        setError(null);
         startTransition(async () => {
-            try {
-                const otpToken = sessionStorage.getItem('otp_token') || '';
-                await verifyOtpAction(code, otpToken);
-                await refreshAuth();
+            const result = await verifyOtpAction(fullOtp, otpToken);
 
-                const redirectUrl = searchParams.get('redirect') || searchParams.get('callbackUrl') || searchParams.get('returnUrl') || '/dashboard';
-                window.location.href = redirectUrl;
-            } catch (err: unknown) {
-                setError(err instanceof Error ? err.message : 'Network error. Please try again.');
+            if (!result.success) {
+                setError(result.error || 'Verification failed. Please check the code and try again.');
+                return;
             }
+
+            await refreshAuth();
+            window.location.href = '/dashboard';
         });
     };
 
-    return { form, onRegisterIntent, verifyOtp, loading: isPending, otpTimer, setOtpTimer };
+    return {
+        form,
+        loading: isPending,
+        onRegisterIntent,
+        verifyOtp,
+        otpTimer
+    };
 }

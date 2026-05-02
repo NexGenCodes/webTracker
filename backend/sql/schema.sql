@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS companies (
     whatsapp_phone TEXT,
     logo_url TEXT,
     brand_color TEXT DEFAULT '#0066FF',
-    auth_status TEXT DEFAULT 'pending_verification',
+    auth_status TEXT DEFAULT 'pending_linking',
     subscription_status TEXT DEFAULT 'active',
     subscription_expiry TIMESTAMP,
     plan_type TEXT DEFAULT 'trial',
@@ -124,3 +124,30 @@ BEGIN
   END IF;
 END
 $$;
+
+CREATE TABLE IF NOT EXISTS payments (
+    id SERIAL PRIMARY KEY,
+    company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
+    reference TEXT UNIQUE NOT NULL,
+    amount DOUBLE PRECISION,
+    status TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS plans (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    name_key TEXT NOT NULL,
+    desc_key TEXT NOT NULL,
+    base_price INT NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'NGN',
+    interval_key TEXT NOT NULL DEFAULT 'monthlyInterval',
+    popular BOOLEAN DEFAULT FALSE,
+    trial_key TEXT,
+    btn_key TEXT NOT NULL,
+    features JSONB NOT NULL DEFAULT '[]',
+    is_active BOOLEAN DEFAULT TRUE,
+    sort_order INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

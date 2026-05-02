@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
@@ -36,18 +37,45 @@ func main() {
 		}
 	}
 
+	// SAFETY GUARD: Never run this against production unless explicitly forced
+	isProd := os.Getenv("APP_ENV") == "production" || strings.Contains(dbURL, "aws") || strings.Contains(dbURL, "rds")
+	forceWipe := os.Getenv("FORCE_PROD_WIPE") == "I_KNOW_WHAT_I_AM_DOING"
+
+	if isProd && !forceWipe {
+		log.Fatal("CRITICAL ERROR: Attempted to run resetdb in a production environment. If you TRULY want to wipe all production data, set the environment variable FORCE_PROD_WIPE=I_KNOW_WHAT_I_AM_DOING")
+	} else if isProd && forceWipe {
+		fmt.Println("⚠️  WARNING: Production wipe override detected. Dropping all production data in 5 seconds...")
+		fmt.Println("Press Ctrl+C NOW to abort.")
+		
+		time.Sleep(1 * time.Second)
+		fmt.Println("5...")
+		time.Sleep(1 * time.Second)
+		fmt.Println("4...")
+		time.Sleep(1 * time.Second)
+		fmt.Println("3...")
+		time.Sleep(1 * time.Second)
+		fmt.Println("2...")
+		time.Sleep(1 * time.Second)
+		fmt.Println("1...")
+		fmt.Println("Wiping database...")
+	}
+
 	pool, err := pgxpool.New(context.Background(), dbURL)
 	if err != nil {
 		log.Fatalf("Failed to connect to db: %v", err)
 	}
 	defer pool.Close()
 
-	// Drop tables safely
+	// Drop tables safely (in proper order to respect constraints if any)
 	drops := []string{
+		"DROP TABLE IF EXISTS payments CASCADE;",
+		"DROP TABLE IF EXISTS telemetry CASCADE;",
 		"DROP TABLE IF EXISTS Shipment CASCADE;",
 		"DROP TABLE IF EXISTS GroupAuthority CASCADE;",
 		"DROP TABLE IF EXISTS UserPreference CASCADE;",
 		"DROP TABLE IF EXISTS SystemConfig CASCADE;",
+		"DROP TABLE IF EXISTS companies CASCADE;",
+		"DROP TABLE IF EXISTS schema_migrations CASCADE;",
 		"DROP TABLE IF EXISTS whatsmeow_device CASCADE;",
 		"DROP TABLE IF EXISTS whatsmeow_sessions CASCADE;",
 		"DROP TABLE IF EXISTS whatsmeow_identity CASCADE;",

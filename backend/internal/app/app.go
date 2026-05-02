@@ -42,7 +42,6 @@ type App struct {
 	BotsMu     sync.RWMutex
 	PairLocks  map[uuid.UUID]*sync.Mutex
 	PairMu     sync.Mutex
-	Jobs       chan models.Job
 	WG         sync.WaitGroup
 	Cancel     context.CancelFunc
 	Cron       *scheduler.CronManager
@@ -107,6 +106,9 @@ func (a *App) DeactivateBot(companyID uuid.UUID) error {
 	}
 
 	bot.WA.Disconnect()
+	if bot.Jobs != nil {
+		close(bot.Jobs)
+	}
 	delete(a.Bots, companyID)
 	a.BotsMu.Unlock()
 
@@ -159,7 +161,6 @@ func New(cfg *config.Config) *App {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &App{
 		Cfg:     cfg,
-		Jobs:    make(chan models.Job, cfg.BufferSize),
 		Context: ctx,
 		Cancel:  cancel,
 	}
@@ -256,7 +257,22 @@ func (a *App) initBotForCompany(c db.Company) error {
 		Tier:        c.SubscriptionStatus.String,
 		WA:          waClient,
 		Sender:      sender,
+		Jobs:        make(chan models.Job, a.Cfg.BufferSize),
 	}
+
+	a.WG.Add(1)
+	w := &worker.Worker{
+		ID:              int(c.ID.ID()), // Use simple cast for log tracking
+		Jobs:            bot.Jobs,
+		WG:              &a.WG,
+		Cfg:             a.Cfg,
+		ShipmentUC:      a.ShipmentUC,
+		ConfigUC:        a.ConfigUC,
+		FrontendURL:     a.Cfg.FrontendURL,
+		ShipmentService: a.ShipmentUC.Service,
+		Bots:            a,
+	}
+	go w.Start()
 
 	waClient.AddEventHandler(func(evt interface{}) {
 		a.handleWAEvent(bot, evt)
@@ -289,26 +305,6 @@ func (a *App) initBotForCompany(c db.Company) error {
 }
 
 func (a *App) Run() error {
-	shipmentService := a.ShipmentUC.Service
-
-	// We'll run one worker pool globally that handles jobs from all bots.
-	// The Jobs channel carries the CompanyID, so workers know which bot to use.
-	for i := 1; i <= a.Cfg.WorkerPoolSize; i++ {
-		a.WG.Add(1)
-		w := &worker.Worker{
-			ID:              i,
-			Jobs:            a.Jobs,
-			WG:              &a.WG,
-			Cfg:             a.Cfg,
-			ShipmentUC:      a.ShipmentUC,
-			ConfigUC:        a.ConfigUC,
-			FrontendURL:     a.Cfg.FrontendURL,
-			ShipmentService: shipmentService,
-			Bots:            a, // 'a' implements BotProvider
-		}
-		go w.Start()
-	}
-
 	// The CronManager needs to loop through bots
 	a.Cron = scheduler.NewManager(a.Cfg, a.ShipmentUC, a.ConfigUC, a)
 	a.Cron.Start()
@@ -397,12 +393,23 @@ func (a *App) GeneratePairingCode(ctx context.Context, companyID uuid.UUID, phon
 		return "", fmt.Errorf("failed to connect to WhatsApp: %w", err)
 	}
 
-	code, err := bot.WA.PairPhone(ctx, phone, true, whatsmeow.PairClientChrome, "Chrome (Windows)")
+	// Create a detached context with a 60-second timeout — NOT tied to the HTTP request.
+	// PairPhone spawns a background listener that must outlive this function to receive the
+	// pairing payload from WhatsApp. The cleanup goroutine guarantees cancel() is always
+	// called once the context expires, reclaiming the timer goroutine and satisfying go vet.
+	pairCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	go func() {
+		<-pairCtx.Done()
+		cancel()
+	}()
+
+	code, err := bot.WA.PairPhone(pairCtx, phone, true, whatsmeow.PairClientChrome, "Chrome (Windows)")
 	if err != nil {
+		cancel()
 		return "", fmt.Errorf("failed to pair phone: %w", err)
 	}
 
-	// Remove any hyphens so the frontend can handle formatting
+	// Strip hyphens — frontend handles visual formatting (e.g. "1234 5678")
 	code = strings.ReplaceAll(code, "-", "")
 
 	return code, nil
@@ -453,7 +460,7 @@ func (a *App) GetQR(ctx context.Context, companyID uuid.UUID) (string, error) {
 }
 
 func (a *App) handleWAEvent(bot *whatsapp.BotInstance, evt interface{}) {
-	whatsapp.HandleEvent(bot, evt, a.Jobs, a.Cfg, a.ConfigUC)
+	whatsapp.HandleEvent(bot, evt, bot.Jobs, a.Cfg, a.ConfigUC)
 
 	switch evt.(type) {
 	case *events.Connected, *events.PairSuccess:
@@ -469,6 +476,9 @@ func (a *App) handleWAEvent(bot *whatsapp.BotInstance, evt interface{}) {
 				_ = a.ConfigUC.UpdateCompanyWhatsAppPhone(context.Background(), bot.CompanyID, phone)
 			}
 		}
+		// Reset reconnect counter on successful connection
+		bot.ReconnectCount = 0
+		bot.LastReconnect = time.Now()
 	case *events.LoggedOut:
 		logger.Warn().Str("company", bot.CompanyID.String()).Msg("WhatsApp Logged Out — deactivating bot (other tenants unaffected)")
 		err := a.ConfigUC.UpdateCompanyAuthStatus(context.Background(), bot.CompanyID, "pending")
@@ -479,9 +489,26 @@ func (a *App) handleWAEvent(bot *whatsapp.BotInstance, evt interface{}) {
 		_ = a.DeactivateBot(bot.CompanyID)
 	case *events.Disconnected:
 		// Temporary disconnect (network blip) — attempt reconnect after delay
-		logger.Warn().Str("company", bot.CompanyID.String()).Msg("WhatsApp Disconnected — will attempt reconnect in 30s")
+		if bot.ReconnectCount >= 5 {
+			logger.Error().Str("company", bot.CompanyID.String()).Msg("WhatsApp auto-reconnect reached max retries (5). Manual intervention required.")
+			return
+		}
+
+		bot.ReconnectCount++
+		delay := time.Duration(bot.ReconnectCount*30) * time.Second
+		logger.Warn().Str("company", bot.CompanyID.String()).Int("retry", bot.ReconnectCount).Msgf("WhatsApp Disconnected — will attempt reconnect in %v", delay)
+		
 		go func() {
-			time.Sleep(30 * time.Second)
+			time.Sleep(delay)
+			
+			// Check if a pairing attempt is currently in progress
+			pairLock := a.getPairLock(bot.CompanyID)
+			if !pairLock.TryLock() {
+				logger.Info().Str("company", bot.CompanyID.String()).Msg("Skipping auto-reconnect — pairing in progress")
+				return
+			}
+			pairLock.Unlock()
+
 			a.BotsMu.RLock()
 			_, stillActive := a.Bots[bot.CompanyID]
 			a.BotsMu.RUnlock()
@@ -516,11 +543,14 @@ func (a *App) Shutdown() error {
 		}
 	}
 
-	// 2. Disconnect WhatsApp
+	// 2. Disconnect WhatsApp and stop per-bot workers
 	for _, bot := range a.GetAllBots() {
 		bot.WA.Disconnect()
+		if bot.Jobs != nil {
+			close(bot.Jobs)
+		}
 	}
-	logger.Info().Msg("All WhatsApp clients disconnected")
+	logger.Info().Msg("All WhatsApp clients disconnected and workers stopped")
 
 	// 3. Stop Scheduler
 	if a.Cron != nil {
@@ -530,9 +560,6 @@ func (a *App) Shutdown() error {
 
 	// 4. Close Receipt Queue (drain goroutines)
 	receipt.Shutdown()
-
-	// 5. Close Worker Channel and Wait
-	close(a.Jobs)
 
 	// Create a channel to wait for workers
 	done := make(chan struct{})
