@@ -5,10 +5,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
@@ -56,43 +54,35 @@ func GetBarePhone(jid string) string {
 	return match
 }
 
-var (
-	authCache         sync.Map // Map[string]bool (GroupJID -> isAuthorized)
-	participantsCache sync.Map // Map[string]map[string]bool (GroupJID -> BarePhone -> isAdmin)
-	identityCache     struct {
-		sync.RWMutex
-		botPhone string
-		botLID   string
-	}
-	cacheLastClear time.Time
-	cacheMu        sync.Mutex
-)
-
+// Global caches removed to support multi-tenancy. State is now held per bot in BotInstance.
 const maxCacheAge = 1 * time.Hour
 
-func checkCacheCleanup() {
-	cacheMu.Lock()
-	defer cacheMu.Unlock()
-	if time.Since(cacheLastClear) > maxCacheAge {
+func checkCacheCleanup(bot *BotInstance) {
+	bot.CacheMu.Lock()
+	defer bot.CacheMu.Unlock()
+	if time.Since(bot.CacheLastClear) > maxCacheAge {
 		logger.Info().Msg("[RBAC] Clearing participant and authority caches (TTL reached)")
-		authCache.Clear()
-		participantsCache.Clear()
-		cacheLastClear = time.Now()
+		bot.AuthCache.Clear()
+		bot.ParticipantsCache.Clear()
+		bot.CacheLastClear = time.Now()
 	}
 }
 
-func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.Job, cfg *config.Config, configUC *config.Usecase, companyID uuid.UUID) {
+func HandleEvent(bot *BotInstance, evt interface{}, queue chan<- models.Job, cfg *config.Config, configUC *config.Usecase) {
+	client := bot.WA
+	companyID := bot.CompanyID
+
 	switch v := evt.(type) {
 	case *events.JoinedGroup:
 		logger.Info().Str("chat", v.JID.String()).Msg("[RBAC EVENT] Joined group, re-verifying authority")
-		verifyGroupAuthority(client, configUC, companyID, v.JID)
+		verifyGroupAuthority(bot, configUC, v.JID)
 
 	case *events.GroupInfo:
 		logger.Info().Str("chat", v.JID.String()).Msg("[RBAC EVENT] Group info updated, re-verifying authority")
-		verifyGroupAuthority(client, configUC, companyID, v.JID)
+		verifyGroupAuthority(bot, configUC, v.JID)
 
 	case *events.Message:
-		checkCacheCleanup()
+		checkCacheCleanup(bot)
 		text := ""
 		if v.Message.GetConversation() != "" {
 			text = v.Message.GetConversation()
@@ -112,22 +102,22 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 		senderPhone := GetBarePhone(v.Info.Sender.User)
 
 		// 1. Identify Bot Identity (Phone & LID) from cache or store
-		identityCache.RLock()
-		botPhone := identityCache.botPhone
-		botLID := identityCache.botLID
-		identityCache.RUnlock()
+		bot.IdentityCache.RLock()
+		botPhone := bot.IdentityCache.BotPhone
+		botLID := bot.IdentityCache.BotLID
+		bot.IdentityCache.RUnlock()
 
 		if botPhone == "" && client.Store.ID != nil {
 			botPhone = GetBarePhone(client.Store.ID.User)
-			identityCache.Lock()
-			identityCache.botPhone = botPhone
-			identityCache.Unlock()
+			bot.IdentityCache.Lock()
+			bot.IdentityCache.BotPhone = botPhone
+			bot.IdentityCache.Unlock()
 		}
 		if botLID == "" {
 			botLID, _ = configUC.GetSystemConfig(context.Background(), companyID, "bot_lid")
-			identityCache.Lock()
-			identityCache.botLID = botLID
-			identityCache.Unlock()
+			bot.IdentityCache.Lock()
+			bot.IdentityCache.BotLID = botLID
+			bot.IdentityCache.Unlock()
 		}
 
 		// 2. Persistent Bot LID Mapping (Update cache if found)
@@ -136,9 +126,9 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 			newLID := GetBarePhone(v.Info.Sender.User)
 			if newLID != "" && newLID != botLID {
 				botLID = newLID
-				identityCache.Lock()
-				identityCache.botLID = botLID
-				identityCache.Unlock()
+				bot.IdentityCache.Lock()
+				bot.IdentityCache.BotLID = botLID
+				bot.IdentityCache.Unlock()
 				_ = configUC.SetSystemConfig(context.Background(), companyID, "bot_lid", botLID)
 			}
 		}
@@ -148,11 +138,11 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 
 		if isGroup {
 			// FAST CHECK: Use in-memory Go Map (sync.Map)
-			if val, ok := authCache.Load(chatJID.String()); ok {
+			if val, ok := bot.AuthCache.Load(chatJID.String()); ok {
 				isAuthorized = val.(bool)
 			} else {
 				// Not in memory? Re-verify and populate cache
-				isAuthorized = verifyGroupAuthority(client, configUC, companyID, chatJID)
+				isAuthorized = verifyGroupAuthority(bot, configUC, chatJID)
 			}
 
 			// DIAGNOSTIC LOG (As requested: non-blocking, just log)
@@ -168,21 +158,21 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 				} else if strings.HasPrefix(text, "!") || strings.HasPrefix(text, "#") {
 					// Check Cache First
 					senderBare := GetBarePhone(v.Info.Sender.User)
-					if groupAdmins, ok := participantsCache.Load(chatJID.String()); ok {
+					if groupAdmins, ok := bot.ParticipantsCache.Load(chatJID.String()); ok {
 						admins := groupAdmins.(map[string]bool)
 						if isAdminEntry, exist := admins[senderBare]; exist {
 							isSenderAdmin = isAdminEntry
 						} else {
 							// If not in cache, re-verify (group might have changed)
-							verifyGroupAuthority(client, configUC, companyID, chatJID)
-							if groupAdminsNew, okNew := participantsCache.Load(chatJID.String()); okNew {
+							verifyGroupAuthority(bot, configUC, chatJID)
+							if groupAdminsNew, okNew := bot.ParticipantsCache.Load(chatJID.String()); okNew {
 								isSenderAdmin = groupAdminsNew.(map[string]bool)[senderBare]
 							}
 						}
 					} else {
 						// No cache? Re-verify
-						verifyGroupAuthority(client, configUC, companyID, chatJID)
-						if groupAdminsNew, okNew := participantsCache.Load(chatJID.String()); okNew {
+						verifyGroupAuthority(bot, configUC, chatJID)
+						if groupAdminsNew, okNew := bot.ParticipantsCache.Load(chatJID.String()); okNew {
 							isSenderAdmin = groupAdminsNew.(map[string]bool)[senderBare]
 						}
 					}
@@ -244,17 +234,20 @@ func HandleEvent(client *whatsmeow.Client, evt interface{}, queue chan<- models.
 }
 
 // verifyGroupAuthority performs a real-time check. Updates both DB and in-memory cache.
-func verifyGroupAuthority(client *whatsmeow.Client, configUC *config.Usecase, companyID uuid.UUID, chat types.JID) bool {
+func verifyGroupAuthority(bot *BotInstance, configUC *config.Usecase, chat types.JID) bool {
+	client := bot.WA
+	companyID := bot.CompanyID
+
 	resp, err := client.GetGroupInfo(context.Background(), chat)
 	if err != nil {
 		logger.Error().Err(err).Str("chat", chat.String()).Msg("[RBAC EVENT] Failed to fetch group info")
 		return false
 	}
 
-	identityCache.RLock()
-	botPhone := identityCache.botPhone
-	botLID := identityCache.botLID
-	identityCache.RUnlock()
+	bot.IdentityCache.RLock()
+	botPhone := bot.IdentityCache.BotPhone
+	botLID := bot.IdentityCache.BotLID
+	bot.IdentityCache.RUnlock()
 
 	if botPhone == "" && client.Store.ID != nil {
 		botPhone = GetBarePhone(client.Store.ID.User)
@@ -277,8 +270,8 @@ func verifyGroupAuthority(client *whatsmeow.Client, configUC *config.Usecase, co
 	}
 
 	// Update Memory AND Database
-	authCache.Store(chat.String(), isAuth)
-	participantsCache.Store(chat.String(), admins)
+	bot.AuthCache.Store(chat.String(), isAuth)
+	bot.ParticipantsCache.Store(chat.String(), admins)
 	configUC.SetGroupAuthority(context.Background(), companyID, chat.String(), isAuth)
 
 	logger.Info().

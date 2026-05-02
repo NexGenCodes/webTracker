@@ -96,16 +96,23 @@ export default function DashboardClient({ initialCompanyData, initialStats, user
         queryKey: ['shipments', companyId],
         queryFn: async () => {
             if (!companyId) return { total: 0, active: 0, delivered: 0 };
-            const { data, error } = await supabase
-                .from('shipment')
-                .select('status')
-                .eq('company_id', companyId);
+            const [
+                { count: totalCount, error: totalError },
+                { count: activeCount },
+                { count: deliveredCount }
+            ] = await Promise.all([
+                supabase.from('shipment').select('*', { count: 'exact', head: true }).eq('company_id', companyId),
+                supabase.from('shipment').select('*', { count: 'exact', head: true }).eq('company_id', companyId).in('status', ['pending', 'intransit', 'outfordelivery']),
+                supabase.from('shipment').select('*', { count: 'exact', head: true }).eq('company_id', companyId).eq('status', 'delivered')
+            ]);
 
-            if (error) throw error;
+            if (totalError) throw totalError;
 
-            const active = data.filter(s => s.status !== 'DELIVERED' && s.status !== 'CANCELED').length;
-            const delivered = data.filter(s => s.status === 'DELIVERED').length;
-            return { total: data.length, active, delivered };
+            return { 
+                total: totalCount || 0, 
+                active: activeCount || 0, 
+                delivered: deliveredCount || 0 
+            };
         },
         initialData: initialStats,
         staleTime: 1000 * 60 * 5, // 5 minutes

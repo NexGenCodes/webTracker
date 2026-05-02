@@ -453,7 +453,7 @@ func (a *App) GetQR(ctx context.Context, companyID uuid.UUID) (string, error) {
 }
 
 func (a *App) handleWAEvent(bot *whatsapp.BotInstance, evt interface{}) {
-	whatsapp.HandleEvent(bot.WA, evt, a.Jobs, a.Cfg, a.ConfigUC, bot.CompanyID)
+	whatsapp.HandleEvent(bot, evt, a.Jobs, a.Cfg, a.ConfigUC)
 
 	switch evt.(type) {
 	case *events.Connected, *events.PairSuccess:

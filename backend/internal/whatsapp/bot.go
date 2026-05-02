@@ -3,6 +3,7 @@ package whatsapp
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"go.mau.fi/whatsmeow"
@@ -17,6 +18,18 @@ type BotInstance struct {
 	Sender      *Sender
 	CurrentQR   string
 	QRMu        sync.RWMutex
+
+	AuthCache         sync.Map // Map[string]bool (GroupJID -> isAuthorized)
+	ParticipantsCache sync.Map // Map[string]map[string]bool (GroupJID -> BarePhone -> isAdmin)
+	IdentityCache     IdentityCacheData
+	CacheLastClear    time.Time
+	CacheMu           sync.Mutex
+}
+
+type IdentityCacheData struct {
+	sync.RWMutex
+	BotPhone string
+	BotLID   string
 }
 
 type BotProvider interface {
