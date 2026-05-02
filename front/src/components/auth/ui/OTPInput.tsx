@@ -38,7 +38,7 @@ export function OTPInput({ otp, setOtp }: OTPInputProps) {
     };
 
     return (
-        <div className="flex justify-center gap-3 w-full" onPaste={handleOTPPaste}>
+        <div className="flex justify-center gap-1.5 sm:gap-3 w-full" onPaste={handleOTPPaste}>
             {otp.map((digit, i) => (
                 <input
                     key={i}
@@ -49,7 +49,7 @@ export function OTPInput({ otp, setOtp }: OTPInputProps) {
                     value={digit}
                     onChange={(e) => handleOTPChange(i, e.target.value)}
                     onKeyDown={(e) => handleOTPKeyDown(i, e)}
-                    className="w-12 h-14 text-center text-2xl font-black bg-surface border-2 border-border rounded-xl focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none transition-all duration-200 text-text-main"
+                    className="w-10 sm:w-12 h-12 sm:h-14 text-center text-xl sm:text-2xl font-black bg-surface border-2 border-border rounded-xl focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none transition-all duration-200 text-text-main"
                     autoFocus={i === 0}
                 />
             ))}

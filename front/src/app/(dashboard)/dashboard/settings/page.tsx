@@ -283,7 +283,7 @@ export default function SettingsPage() {
                                 id="settings-disconnect-bot"
                                 onClick={handleDisconnectBot}
                                 disabled={isDisconnecting}
-                                className="px-6 py-3 bg-error/10 hover:bg-error text-error hover:text-white border border-error/20 rounded-xl font-black text-xs uppercase tracking-widest whitespace-nowrap shadow-sm transition-all duration-200 active:scale-95 flex items-center gap-2 shrink-0"
+                                className="px-6 py-3 bg-error/10 hover:bg-error text-error hover:text-white border border-error/20 rounded-xl font-black text-xs uppercase tracking-widest whitespace-nowrap shadow-sm transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 shrink-0 w-full sm:w-auto"
                             >
                                 {isDisconnecting ? <Loader2 size={16} className="animate-spin" /> : "Disconnect Bot"}
                             </button>
@@ -304,7 +304,7 @@ export default function SettingsPage() {
                                     <button
                                         id="settings-delete-account-trigger"
                                         onClick={() => setShowDeleteConfirm(true)}
-                                        className="px-6 py-3 bg-error/10 hover:bg-error text-error hover:text-white border border-error/20 rounded-xl font-black text-xs uppercase tracking-widest whitespace-nowrap shadow-sm transition-all duration-200 active:scale-95 flex items-center gap-2 shrink-0"
+                                        className="px-6 py-3 bg-error/10 hover:bg-error text-error hover:text-white border border-error/20 rounded-xl font-black text-xs uppercase tracking-widest whitespace-nowrap shadow-sm transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 shrink-0 w-full sm:w-auto"
                                     >
                                         <Trash2 size={14} /> Delete Account
                                     </button>
@@ -324,12 +324,12 @@ export default function SettingsPage() {
                                         placeholder="Type company name here..."
                                         className="input-premium w-full !bg-surface/50 focus:!bg-surface !border-error/30 focus:!border-error"
                                     />
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                                         <button
                                             id="delete-account-confirm"
                                             onClick={handleDeleteAccount}
                                             disabled={isDeleting || deleteConfirmText !== settingsForm.name}
-                                            className="px-6 py-3 bg-error hover:bg-error/90 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-error/20 transition-all duration-200 active:scale-95 flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                                            className="px-6 py-3 bg-error hover:bg-error/90 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-error/20 transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed w-full sm:w-auto"
                                         >
                                             {isDeleting ? (
                                                 <><Loader2 size={14} className="animate-spin" /> Deleting…</>
@@ -341,7 +341,7 @@ export default function SettingsPage() {
                                             id="delete-account-cancel"
                                             onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); }}
                                             disabled={isDeleting}
-                                            className="px-6 py-3 bg-surface hover:bg-surface-muted text-text-main border border-border rounded-xl font-black text-xs uppercase tracking-widest transition-all duration-200 active:scale-95"
+                                            className="px-6 py-3 bg-surface hover:bg-surface-muted text-text-main border border-border rounded-xl font-black text-xs uppercase tracking-widest transition-all duration-200 active:scale-95 flex items-center justify-center w-full sm:w-auto"
                                         >
                                             Cancel
                                         </button>
