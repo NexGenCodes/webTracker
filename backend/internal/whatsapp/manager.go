@@ -128,21 +128,58 @@ func (m *Manager) LogoutBot(companyID uuid.UUID) error {
 		return err
 	}
 
-	if !bot.GetWAClient().IsConnected() {
-		_ = bot.GetWAClient().Connect()
-		time.Sleep(2 * time.Second)
+	client := bot.GetWAClient()
+	if !client.IsConnected() {
+		_ = client.Connect()
+		// Wait for connection and authentication (up to 5 seconds)
+		for i := 0; i < 10; i++ {
+			if client.IsConnected() && client.Store.ID != nil {
+				break
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
 	}
 
-	err = bot.GetWAClient().Logout(context.Background())
+	// Try to logout to unpair on the phone side
+	err = client.Logout(context.Background())
 	if err != nil {
 		logger.Warn().Err(err).Str("company_id", companyID.String()).Msg("Failed to send logout to WhatsApp")
-		if bot.GetWAClient().Store != nil {
-			_ = bot.GetWAClient().Store.Delete(context.Background())
+		// If logout failed but we have a store, at least delete it locally
+		if client.Store != nil {
+			_ = client.Store.Delete(context.Background())
 		}
 	}
 
 	_ = m.ConfigUC.UpdateCompanyAuthStatus(context.Background(), companyID, "pending")
+	_ = m.ConfigUC.UpdateCompanyWhatsAppPhone(context.Background(), companyID, "")
 	return m.DeactivateBot(companyID)
+}
+
+func (m *Manager) PurgeBot(companyID uuid.UUID) error {
+	// 1. Try a clean logout if the bot is active
+	_ = m.LogoutBot(companyID)
+
+	// 2. Get company data to find the phone number
+	company, err := m.ConfigUC.GetCompanyByID(context.Background(), companyID)
+	if err != nil {
+		return err
+	}
+
+	// 3. If a phone exists, forcefully delete its device from the SQL store
+	if company.WhatsappPhone.Valid && company.WhatsappPhone.String != "" {
+		jid := types.NewJID(company.WhatsappPhone.String, "s.whatsapp.net")
+		device, err := m.WAStore.GetDevice(context.Background(), jid)
+		if err == nil && device != nil {
+			err = device.Delete(context.Background())
+			if err != nil {
+				logger.Error().Err(err).Str("phone", company.WhatsappPhone.String).Msg("Failed to purge WhatsApp device from store")
+			} else {
+				logger.Info().Str("phone", company.WhatsappPhone.String).Msg("WhatsApp device purged from store")
+			}
+		}
+	}
+
+	return nil
 }
 
 func (m *Manager) InitBotForCompany(c db.Company) error {
