@@ -3,8 +3,33 @@ package shipment
 import (
 	"math/rand"
 	"strings"
+	"sync"
 	"time"
 )
+
+var (
+	locationCache = make(map[string]*time.Location)
+	locMutex      sync.RWMutex
+)
+
+func loadLocation(name string) (*time.Location, error) {
+	locMutex.RLock()
+	loc, ok := locationCache[name]
+	locMutex.RUnlock()
+	if ok {
+		return loc, nil
+	}
+
+	loc, err := time.LoadLocation(name)
+	if err != nil {
+		return nil, err
+	}
+
+	locMutex.Lock()
+	locationCache[name] = loc
+	locMutex.Unlock()
+	return loc, nil
+}
 
 // Service defines the interface for shipment utilities.
 // Scheduling logic is fully handled here in pure Go, ensuring
@@ -82,7 +107,7 @@ func (c *Calculator) CalculateDeparture(now time.Time, adminTZ string) time.Time
 	if adminTZ == "" {
 		adminTZ = "Africa/Lagos"
 	}
-	loc, err := time.LoadLocation(adminTZ)
+	loc, err := loadLocation(adminTZ)
 	if err != nil {
 		loc = time.FixedZone("WAT", 3600) // Nigeria fallback
 	}
@@ -108,7 +133,7 @@ func (c *Calculator) CalculateDeparture(now time.Time, adminTZ string) time.Time
 func (c *Calculator) CalculateArrival(departure time.Time, senderCountry, receiverCountry string) (time.Time, time.Time) {
 	// Resolve destination timezone
 	recipientTZ := c.ResolveTimezone(receiverCountry)
-	loc, err := time.LoadLocation(recipientTZ)
+	loc, err := loadLocation(recipientTZ)
 	if err != nil {
 		loc = time.UTC
 	}

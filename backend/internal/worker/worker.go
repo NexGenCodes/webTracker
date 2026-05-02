@@ -5,11 +5,13 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"regexp"
 	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
 
+	"golang.org/x/sync/errgroup"
 
 	"webtracker-bot/internal/commands"
 	"webtracker-bot/internal/config"
@@ -21,7 +23,13 @@ import (
 	"webtracker-bot/internal/receipt"
 	"webtracker-bot/internal/shipment"
 	"webtracker-bot/internal/utils"
+)
 
+var (
+	senderPattern   = regexp.MustCompile(`(?i)sender|origin|from|absender|remetente|remitente`)
+	receiverPattern = regexp.MustCompile(`(?i)receiver|reciver|receive|recieve|resiver|recever|consignee|destinatario|destinatário|empfänger|destinataire`)
+	phonePattern    = regexp.MustCompile(`(?i)phone|mobile|mob|tel|num|contact|telephone|mobil|number|ph|cell|whatsapp|handy`)
+	namePattern     = regexp.MustCompile(`(?i)name|nombre|nome|nom`)
 )
 
 type Worker struct {
@@ -61,8 +69,42 @@ func (w *Worker) process(job models.Job) {
 		return
 	}
 
-	// 1. Fetch Language
-	langStr, _ := w.ConfigUC.GetUserLanguage(context.Background(), job.CompanyID, job.SenderJID.String())
+	// 1. Fetch Metadata in Parallel
+	var (
+		langStr    string
+		existingID string
+		company    db.Company
+		remaining  int64 = -1 // -1 means not checked yet
+	)
+
+	g, gctx := errgroup.WithContext(context.Background())
+
+	// A. User Language
+	g.Go(func() error {
+		langStr, _ = w.ConfigUC.GetUserLanguage(gctx, job.CompanyID, job.SenderJID.String())
+		return nil
+	})
+
+	// B. Duplicate Check
+	g.Go(func() error {
+		// Use a local copy of receiver phone for checking later, but we need the manifest first
+		// Wait, duplicate check needs RecipientPhone which comes from parsing.
+		// So we can only parallelize things that don't depend on parsing yet.
+		return nil
+	})
+
+	// C. Billing Status
+	g.Go(func() error {
+		var err error
+		company, err = w.ConfigUC.GetCompanyByID(gctx, job.CompanyID)
+		return err
+	})
+
+	if err := g.Wait(); err != nil {
+		logger.Error().Err(err).Str("company", job.CompanyID.String()).Msg("Failed to fetch initial metadata")
+		return
+	}
+
 	lang := i18n.Language(langStr)
 
 	// A. Initial Feedback (Typing)
@@ -192,23 +234,36 @@ func (w *Worker) process(job models.Job) {
 		newShipment.Weight = 15.0 // Fallback if parser didn't extract weight
 	}
 
-	// 5b. Deduplication Check (Strict Phone Match)
-	if existingID, err := w.ShipmentUC.FindSimilar(context.Background(), job.CompanyID, job.SenderJID.String(), newShipment.RecipientPhone); err == nil && existingID != "" {
+	// 5b. Deduplication & Billing Check in Parallel
+	g, gctx = errgroup.WithContext(context.Background())
+
+	g.Go(func() error {
+		var err error
+		existingID, err = w.ShipmentUC.FindSimilar(gctx, job.CompanyID, job.SenderJID.String(), newShipment.RecipientPhone)
+		return err
+	})
+
+	g.Go(func() error {
+		var err error
+		remaining, err = w.ShipmentUC.CheckShipmentCap(gctx, w.Cfg, job.CompanyID, company.PlanType.String, company.SubscriptionExpiry)
+		return err
+	})
+
+	if err := g.Wait(); err != nil {
+		logger.Error().Err(err).Msg("Failed to perform secondary checks")
+	}
+
+	if existingID != "" {
 		logger.Info().Str("existing_id", existingID).Msg("Duplicate shipment blocked")
 		dupMsg := fmt.Sprintf("⚠️ *SHIPMENT ALREADY EXISTS*\n\nA shipment for this recipient phone is already in the system.\n\n🆔 *%s*\n\n🔹 Use `!edit %s ...` to update.\n🔹 Use `!delete %s` to remove.", existingID, existingID, existingID)
 		sender.Reply(job.ChatJID, job.SenderJID, dupMsg, job.MessageID, job.Text)
 		return
 	}
 
-	// 5c. Billing Limit Check
-	company, err := w.ConfigUC.GetCompanyByID(context.Background(), job.CompanyID)
-	if err == nil {
-		remaining, err := w.ShipmentUC.CheckShipmentCap(context.Background(), w.Cfg, job.CompanyID, company.PlanType.String, company.SubscriptionExpiry)
-		if err == nil && remaining == 0 {
-			logger.Info().Str("company_id", job.CompanyID.String()).Msg("Shipment blocked: billing limit reached")
-			sender.Reply(job.ChatJID, job.SenderJID, "⚠️ *SHIPMENT BLOCKED*\n\nYour monthly shipment limit has been reached or your subscription has expired.\n\nPlease contact your administrator to upgrade your plan via the dashboard.", job.MessageID, job.Text)
-			return
-		}
+	if remaining == 0 {
+		logger.Info().Str("company_id", job.CompanyID.String()).Msg("Shipment blocked: billing limit reached")
+		sender.Reply(job.ChatJID, job.SenderJID, "⚠️ *SHIPMENT BLOCKED*\n\nYour monthly shipment limit has been reached or your subscription has expired.\n\nPlease contact your administrator to upgrade your plan via the dashboard.", job.MessageID, job.Text)
+		return
 	}
 
 	// Generate schedule dates using the new Smart Anchor Algorithm (A & B)
@@ -282,33 +337,10 @@ func (w *Worker) generateAndSendReceipt(bot models.BotInstance, job models.Job, 
 }
 
 func (w *Worker) isPotentialManifest(text string) (bool, bool) {
-	lower := strings.ToLower(text)
-
-	// Sender Check
-	hasSender := strings.Contains(lower, "sender") || strings.Contains(lower, "origin") || strings.Contains(lower, "from")
-
-	// Receiver Variants Check
-	hasReceiver := false
-	receiverKeywords := []string{"receiver", "reciver", "receive", "recieve", "resiver", "recever", "receivers", "recievers", "reciever"}
-	for _, kw := range receiverKeywords {
-		if strings.Contains(lower, kw) {
-			hasReceiver = true
-			break
-		}
-	}
-
-	// Phone Variants Check
-	hasPhone := false
-	phoneKeywords := []string{"phone", "mobile", "mob", "tel", "num", "contact", "telephone", "mobil", "number"}
-	for _, kw := range phoneKeywords {
-		if strings.Contains(lower, kw) {
-			hasPhone = true
-			break
-		}
-	}
-
-	// Name Check
-	hasName := strings.Contains(lower, "name")
+	hasSender := senderPattern.MatchString(text)
+	hasReceiver := receiverPattern.MatchString(text)
+	hasPhone := phonePattern.MatchString(text)
+	hasName := namePattern.MatchString(text)
 
 	// Strict: All 4
 	if hasSender && hasReceiver && hasPhone && hasName {

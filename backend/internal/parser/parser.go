@@ -82,7 +82,7 @@ var (
 )
 
 func init() {
-	footerRe = regexp.MustCompile(`(?im)^[\s_*]{3,}$|(?i)\b(?:thank\s*you|regards|best|sincerely|kind\s*regards|thanks|saludos)\b`)
+	footerRe = regexp.MustCompile(`(?im)^[ \t_*]{3,}$|(?i)\b(?:thank\s*you|regards|best|sincerely|kind\s*regards|thanks|saludos)\b`)
 	senderLabels = regexp.MustCompile(`(?i)\b(?:sender[s']*|sendr|origin|from|shippr|shipper|sent by)\b`)
 
 	// Pre-compile all regex maps to save CPU on the VPS
@@ -323,14 +323,33 @@ func extractEntity(text, pattern string) string {
 }
 
 func CleanText(text string) string {
-	text = strings.ReplaceAll(text, "\r\n", "\n")
-	text = strings.ReplaceAll(text, "\r", "\n")
-	
-	lines := strings.Split(text, "\n")
-	for i, l := range lines {
-		lines[i] = strings.TrimSpace(l)
+	if text == "" {
+		return ""
 	}
-	return strings.Join(lines, "\n")
+
+	var sb strings.Builder
+	sb.Grow(len(text))
+
+	start := 0
+	for i := 0; i < len(text); i++ {
+		if text[i] == '\n' || text[i] == '\r' {
+			line := strings.TrimSpace(text[start:i])
+			if line != "" || (sb.Len() > 0 && sb.String()[sb.Len()-1] != '\n') {
+				sb.WriteString(line)
+				sb.WriteByte('\n')
+			}
+			if text[i] == '\r' && i+1 < len(text) && text[i+1] == '\n' {
+				i++
+			}
+			start = i + 1
+		}
+	}
+	
+	if start < len(text) {
+		sb.WriteString(strings.TrimSpace(text[start:]))
+	}
+
+	return strings.TrimSpace(sb.String())
 }
 
 func ParseAI(text, apiKey string) (models.Manifest, error) {

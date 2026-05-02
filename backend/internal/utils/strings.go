@@ -5,6 +5,10 @@ import (
 	"strings"
 )
 
+var (
+	nonAlphaReg = regexp.MustCompile("[^a-zA-Z]")
+)
+
 // GenerateAbbreviation creates a 3-letter abbreviation from a company name
 // for use as a tracking ID prefix. Returns "AWB" for empty/invalid inputs.
 func GenerateAbbreviation(name string) string {
@@ -13,8 +17,7 @@ func GenerateAbbreviation(name string) string {
 		return "AWB"
 	}
 
-	reg := regexp.MustCompile("[^a-zA-Z]")
-	clean := reg.ReplaceAllString(name, "")
+	clean := nonAlphaReg.ReplaceAllString(name, "")
 	if clean == "" {
 		return "AWB"
 	}
