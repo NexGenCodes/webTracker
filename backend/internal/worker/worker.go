@@ -142,6 +142,7 @@ func (w *Worker) process(job models.Job) {
 		logger.Warn().
 			Str("jid", job.SenderJID.String()).
 			Strs("missing_fields", missing).
+			Str("raw_text", job.Text).
 			Msg("Information incomplete after parsing")
 
 		// Specifically list the exact missing fields
@@ -298,7 +299,7 @@ func (w *Worker) isPotentialManifest(text string) (bool, bool) {
 
 	// Phone Variants Check
 	hasPhone := false
-	phoneKeywords := []string{"phone", "mobile", "tel", "num", "contact", "telephone", "mobil", "number"}
+	phoneKeywords := []string{"phone", "mobile", "mob", "tel", "num", "contact", "telephone", "mobil", "number"}
 	for _, kw := range phoneKeywords {
 		if strings.Contains(lower, kw) {
 			hasPhone = true

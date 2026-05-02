@@ -26,8 +26,8 @@ var (
 	aiCircuitBreaker = NewCircuitBreaker(3, 30*time.Second, 120*time.Second)
 )
 
-var stopLabels = `(?i)(?:receiver|reciver|sender|sendr|phone|mobile|tel|num|contact|address|addr|country|nation|state|city|id|passport|email|cargo|item|content|weight|wgt|name|to|from|origin|dest|destination|poids|remetente|absender|empfänger|destinataire|expéditeur)`
-var labelSep = `[\s]*[:\-]+[\s]*`
+var stopLabels = `(?i)(?:receiver|reciver|reciever|sender|sendr|phone|mobile|mob|tel|num|contact|address|addr|country|nation|state|city|id|passport|email|cargo|item|content|weight|wgt|name|to|from|origin|dest|destination|poids|remetente|absender|empfänger|destinataire|expéditeur)`
+var labelSep = `[\s]*[:\-=>]+[\s]*`
 
 type anchor struct {
 	field    string
@@ -50,18 +50,18 @@ type uncompiledLabelMap struct {
 
 func GetLabelMappings() []uncompiledLabelMap {
 	return []uncompiledLabelMap{
-		{"ReceiverName", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|rcvr|consignee|destinatario|destinatário|dirección|empfänger|destinataire|namen?)[s']*\b(?:\s+is)?[\s\-:]+name\b[\s\-:]*`, 2},
-		{"ReceiverName", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|rcvr|consignee|destinatario|destinatário|empfänger|destinataire|to)\b(?:\s+is)?[\s\-:]*`, 2},
+		{"ReceiverName", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|reciever|rcvr|consignee|destinatario|destinatário|dirección|empfänger|destinataire|namen?)[s']*\b(?:\s+is)?[\s\-:]+name\b[\s\-:]*`, 2},
+		{"ReceiverName", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|reciever|rcvr|consignee|destinatario|destinatário|empfänger|destinataire|to)\b(?:\s+is)?[\s\-:]*`, 2},
 		{"ReceiverName", `(?i)\bname\b(?:\s+is)?[\s\-:]*`, 1},
-		{"ReceiverPhone", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee|destinatario|destinatário|empfänger)[s']*\b[\s\-:]+\b(?:phone|mobile|teléfono|telephon|telefone|tel|num|contact|telephone|mobil|number|ph|cell|whatsapp|handy|nr)\b[\s\-:]*`, 2},
-		{"ReceiverPhone", `(?i)\b(?:phone|mobile|teléfono|telephon|telefone|tel|num|contact|telephone|mobil|number|ph|cell|whatsapp|handy|nr)\b[\s\-:]*`, 1},
-		{"ReceiverAddress", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee|destinatario|destinatário|empfänger)[s']*\b[\s\-:]+\b(?:address|addr|street|location|addres|addrs|dir|direction|dirección|morada|adresse|straße|strasse)\b[\s\-:]*`, 2},
+		{"ReceiverPhone", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|reciever|rcvr|to|consignment|consignee|destinatario|destinatário|empfänger)[s']*\b[\s\-:]+\b(?:phone|mobile|mob|teléfono|telephon|telefone|tel|num|contact|telephone|mobil|number|ph|cell|whatsapp|handy|nr)\b[\s\-:]*`, 2},
+		{"ReceiverPhone", `(?i)\b(?:phone|mobile|mob|teléfono|telephon|telefone|tel|num|contact|telephone|mobil|number|ph|cell|whatsapp|handy|nr)\b[\s\-:]*`, 1},
+		{"ReceiverAddress", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|reciever|rcvr|to|consignment|consignee|destinatario|destinatário|empfänger)[s']*\b[\s\-:]+\b(?:address|addr|street|location|addres|addrs|dir|direction|dirección|morada|adresse|straße|strasse)\b[\s\-:]*`, 2},
 		{"ReceiverAddress", `(?i)\b(?:address|addr|street|location|addres|addrs|dir|direction|dirección|morada|adresse|straße|strasse)\b[\s\-:]*`, 1},
-		{"ReceiverCountry", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee|destinatario|destinatário|empfänger)[s']*\b[\s\-:]+\b(?:country|nation|state|city|pais|land|dest|destination|país|stadt|land|ort)\b[\s\-:]*`, 2},
+		{"ReceiverCountry", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|reciever|rcvr|to|consignment|consignee|destinatario|destinatário|empfänger)[s']*\b[\s\-:]+\b(?:country|nation|state|city|pais|land|dest|destination|país|stadt|land|ort)\b[\s\-:]*`, 2},
 		{"ReceiverCountry", `(?i)\b(?:country|nation|state|city|pais|land|dest|destination|país|stadt|land|ort)\b[\s\-:]*`, 2},
 		{"ReceiverID", `(?i)\b(?:id|passport|passport\s*num|id\s*num|identity|identification|tin|nin|ssn|dni|passaporte|ausweis)\b[\s\-:]*`, 1},
-		{"ReceiverID", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee)[s']*\b[\s\-:]+\b(?:id|passport|passport\s*num|id\s*num|identity|identification|tin|nin|ssn)\b[\s\-:]*`, 2},
-		{"ReceiverEmail", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|rcvr|to|consignment|consignee)[s']*\b[\s\-:]+\b(?:email|mail|e-mail)\b[\s\-:]*`, 2},
+		{"ReceiverID", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|reciever|rcvr|to|consignment|consignee)[s']*\b[\s\-:]+\b(?:id|passport|passport\s*num|id\s*num|identity|identification|tin|nin|ssn)\b[\s\-:]*`, 2},
+		{"ReceiverEmail", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|reciever|rcvr|to|consignment|consignee)[s']*\b[\s\-:]+\b(?:email|mail|e-mail)\b[\s\-:]*`, 2},
 		{"ReceiverEmail", `(?i)\b(?:email|mail|e-mail)\b[\s\-:]*`, 1},
 		{"SenderName", `(?i)\b(?:sender|sendr|from|shippr|shipper|sent by|remetente|remitente|absender)[s']*\b[\s\-:]+name\b[\s\-:]*`, 2},
 		{"SenderName", `(?i)\b(?:sender|sendr|from|shippr|shipper|sent by|remetente|remitente|absender)[s']*\b[\s\-:]*`, 2},
@@ -139,7 +139,7 @@ func ParseRegex(text string) models.Manifest {
 	}
 
 	if m.ReceiverPhone == "" {
-		m.ReceiverPhone = extractEntity(receiverZone, `(?i)(?:phone|mobile|tel|num|contact|telephone|mobil|number|ph|cell|whatsapp)?[\s\-:]*([\+\d \t\-\(\).]{7,}\d)`)
+		m.ReceiverPhone = extractEntity(receiverZone, `(?i)(?:phone|mobile|mob|tel|num|contact|telephone|mobil|number|ph|cell|whatsapp)?[\s\-:]*([\+\d \t\-\(\).]{7,}\d)`)
 	}
 	if m.ReceiverEmail == "" {
 		m.ReceiverEmail = extractEntity(text, `([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})`)
@@ -243,7 +243,7 @@ func findAnchors(text string, mappings []labelMap) []anchor {
 		for _, match := range matches {
 			anchorStart := match[0]
 			anchorText := text[match[0]:match[1]]
-			isStartOfLine := anchorStart == 0 || text[anchorStart-1] == '\n' || (anchorStart > 1 && text[anchorStart-1] == ' ' && text[anchorStart-2] == '\n')
+			isStartOfLine := anchorStart == 0 || text[anchorStart-1] == '\n'
 			hasStrongSep := regexp.MustCompile(labelSep).MatchString(anchorText)
 
 			if isStartOfLine || hasStrongSep || lm.priority > 1 {
@@ -323,7 +323,12 @@ func extractEntity(text, pattern string) string {
 func CleanText(text string) string {
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\r", "\n")
-	return text
+	
+	lines := strings.Split(text, "\n")
+	for i, l := range lines {
+		lines[i] = strings.TrimSpace(l)
+	}
+	return strings.Join(lines, "\n")
 }
 
 func ParseAI(text, apiKey string) (models.Manifest, error) {
