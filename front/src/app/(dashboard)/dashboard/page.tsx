@@ -23,18 +23,22 @@ export default async function DashboardPage() {
         redirect('/auth');
     }
 
-    // Fetch initial stats
-    const { data: shipments } = await supabase
-        .from('shipment')
-        .select('status')
-        .eq('company_id', user.company_id);
+    // Fetch initial stats using COUNT to avoid memory/performance issues
+    const [
+        { count: totalCount },
+        { count: activeCount },
+        { count: deliveredCount }
+    ] = await Promise.all([
+        supabase.from('shipment').select('*', { count: 'exact', head: true }).eq('company_id', user.company_id),
+        supabase.from('shipment').select('*', { count: 'exact', head: true }).eq('company_id', user.company_id).in('status', ['pending', 'intransit', 'outfordelivery']),
+        supabase.from('shipment').select('*', { count: 'exact', head: true }).eq('company_id', user.company_id).eq('status', 'delivered')
+    ]);
 
-    let stats = { total: 0, active: 0, delivered: 0 };
-    if (shipments) {
-        const active = shipments.filter(s => s.status !== 'DELIVERED' && s.status !== 'CANCELED').length;
-        const delivered = shipments.filter(s => s.status === 'DELIVERED').length;
-        stats = { total: shipments.length, active, delivered };
-    }
+    const stats = {
+        total: totalCount || 0,
+        active: activeCount || 0,
+        delivered: deliveredCount || 0
+    };
 
     return (
         <DashboardClient 
