@@ -216,6 +216,10 @@ func (a *App) LogoutBot(companyID uuid.UUID) error {
 	return a.BotManager.LogoutBot(companyID)
 }
 
+func (a *App) PurgeBot(companyID uuid.UUID) error {
+	return a.BotManager.PurgeBot(companyID)
+}
+
 func (a *App) GeneratePairingCode(ctx context.Context, companyID uuid.UUID, phone string) (string, error) {
 	return a.BotManager.GeneratePairingCode(ctx, companyID, phone)
 }

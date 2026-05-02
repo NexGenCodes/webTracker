@@ -39,6 +39,7 @@ type BotProvider interface {
 	GeneratePairingCode(ctx context.Context, companyID uuid.UUID, phone string) (string, error)
 	GetQR(ctx context.Context, companyID uuid.UUID) (string, error)
 	LogoutBot(companyID uuid.UUID) error
+	PurgeBot(companyID uuid.UUID) error
 }
 
 type ShipmentUsecase interface {

@@ -141,15 +141,16 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
     useEffect(() => {
         if (!isOpen || !companyId) return;
 
-        // Fallback: check if already active via props (e.g. from React Query)
-        if (companyData?.auth_status === 'active' && pairStatus === 'waiting') {
+        // 1. Check if already active via props (updated by DashboardClient's subscription)
+        if (companyData?.auth_status === 'active' && (pairStatus === 'waiting' || pairStatus === 'idle')) {
             handleConnected();
         }
 
-        // Initialize Supabase Realtime
+        // 2. Supabase Realtime Subscription (Ensures snappy UI update)
         const supabase = createClient();
+        const channelName = `company_status_modal_${companyId}`;
         const channel = supabase
-            .channel(`company_status_${companyId}`)
+            .channel(channelName)
             .on(
                 'postgres_changes',
                 {
@@ -159,17 +160,15 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
                     filter: `id=eq.${companyId}`,
                 },
                 (payload) => {
-                    console.log('[Realtime] Received company update:', payload.new);
-                    if (payload.new.auth_status === 'active' && pairStatus === 'waiting') {
+                    console.log('[Realtime Modal] Row updated:', payload.new);
+                    if (payload.new.auth_status === 'active') {
                         handleConnected();
                     }
                 }
             )
             .subscribe((status) => {
                 if (status === 'SUBSCRIBED') {
-                    console.log('[Realtime] Subscribed to company status changes successfully.');
-                } else if (status === 'CHANNEL_ERROR') {
-                    console.error('[Realtime] Subscription failed. Check RLS or JWT config.');
+                    console.log('[Realtime Modal] Active');
                 }
             });
 
@@ -429,10 +428,23 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
                                                 <p className="text-sm font-black text-success uppercase tracking-widest">Connected!</p>
                                             </>
                                         ) : (
-                                            <>
-                                                <Loader2 size={16} className="animate-spin text-accent" />
-                                                <p className="text-sm font-bold text-text-muted">Waiting for connection...</p>
-                                            </>
+                                            <div className="flex flex-col items-center gap-2">
+                                                <div className="flex items-center gap-3">
+                                                    <Loader2 size={16} className="animate-spin text-accent" />
+                                                    <p className="text-sm font-bold text-text-muted">Waiting for connection...</p>
+                                                </div>
+                                                <button 
+                                                    onClick={() => {
+                                                        const supabase = createClient();
+                                                        supabase.from('companies').select('auth_status').eq('id', companyId).single().then(({ data }) => {
+                                                            if (data?.auth_status === 'active') handleConnected();
+                                                        });
+                                                    }}
+                                                    className="text-[10px] font-black uppercase tracking-widest text-accent hover:underline flex items-center gap-1"
+                                                >
+                                                    <RefreshCw size={10} /> Check Status Manually
+                                                </button>
+                                            </div>
                                         )}
                                     </div>
                                 </div>

@@ -138,8 +138,8 @@ func (h *CompanyHandler) deleteCompany(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing or invalid company_id"})
 	}
 
-	// Try to logout the bot first (best-effort, ignore errors)
-	_ = h.bots.LogoutBot(companyID)
+	// Purge the bot and its paired device from the store
+	_ = h.bots.PurgeBot(companyID)
 
 	// Delete all company data
 	if err := h.configUC.DeleteCompany(c.Context(), companyID); err != nil {
