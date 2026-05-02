@@ -4,14 +4,15 @@ import { SupabaseClient } from '@supabase/supabase-js'
 let browserClient: SupabaseClient | null = null;
 let lastJwtValue = '';
 
-export function createClient() {
-  let jwtValue = '';
-  if (typeof document !== 'undefined') {
-    const match = document.cookie.match(/(?:^|; )jwt=([^;]*)/);
-    if (match) {
-      jwtValue = match[1];
-    }
-  }
+/**
+ * Creates or returns the singleton Supabase browser client.
+ * 
+ * Since the JWT cookie is HttpOnly (not readable by JS), the token
+ * must be passed from a server-rendered prop or fetched via a server action.
+ * If no token is provided, falls back to the existing singleton.
+ */
+export function createClient(jwt?: string) {
+  const jwtValue = jwt || '';
 
   // If we already have a client and the JWT hasn't changed, return the singleton
   if (browserClient && jwtValue === lastJwtValue) {

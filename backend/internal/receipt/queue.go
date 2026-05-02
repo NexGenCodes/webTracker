@@ -8,7 +8,6 @@ import (
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/shipment"
-	"webtracker-bot/internal/whatsapp"
 )
 
 // Job represents a receipt rendering job.
@@ -17,8 +16,8 @@ type Job struct {
 	TrackingID  string
 	Language    i18n.Language
 	CompanyName string
-	ShipmentUC  *shipment.Usecase
-	Sender      *whatsapp.Sender
+	ShipmentUC  models.ShipmentUsecase
+	Sender      models.WhatsAppSender
 	RenderMode  string // "legacy" or "default"
 }
 

@@ -65,7 +65,7 @@ SELECT jid FROM GroupAuthority WHERE company_id = $1 AND is_authorized = true;
 -- name: CountAuthorizedGroups :one
 SELECT COUNT(*) FROM GroupAuthority WHERE company_id = $1 AND is_authorized = true;
 
--- name: RunAgedCleanup :exec
+-- name: RunAgedCleanup :execresult
 DELETE FROM Shipment 
 WHERE company_id = $1 AND ((status = 'delivered' AND updated_at < $2) OR (created_at < $3));
 
@@ -87,6 +87,9 @@ UPDATE Shipment SET status = $3, destination = $4, updated_at = CURRENT_TIMESTAM
 
 -- name: DeleteShipment :exec
 DELETE FROM Shipment WHERE company_id = $1 AND tracking_id = $2;
+
+-- name: BulkDeleteShipments :execresult
+DELETE FROM Shipment WHERE company_id = $1 AND tracking_id = ANY($2::text[]);
 
 -- name: DeleteDeliveredShipments :exec
 DELETE FROM Shipment WHERE company_id = $1 AND status = 'delivered';

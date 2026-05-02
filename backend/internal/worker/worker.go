@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"webtracker-bot/internal/api"
+
 	"webtracker-bot/internal/commands"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/database/db"
@@ -21,14 +21,14 @@ import (
 	"webtracker-bot/internal/receipt"
 	"webtracker-bot/internal/shipment"
 	"webtracker-bot/internal/utils"
-	"webtracker-bot/internal/whatsapp"
+
 )
 
 type Worker struct {
 	ID              int
-	Bots            whatsapp.BotProvider
-	ShipmentUC      *shipment.Usecase
-	ConfigUC        *config.Usecase
+	Bots            models.BotProvider
+	ShipmentUC      models.ShipmentUsecase
+	ConfigUC        models.ConfigUsecase
 	Jobs            <-chan models.Job
 	WG              *sync.WaitGroup
 	Cfg             *config.Config
@@ -66,23 +66,25 @@ func (w *Worker) process(job models.Job) {
 	lang := i18n.Language(langStr)
 
 	// A. Initial Feedback (Typing)
-	bot.Sender.SetTyping(job.ChatJID, true)
-	defer bot.Sender.SetTyping(job.ChatJID, false)
+	sender := bot.GetSender()
+	sender.SetTyping(job.ChatJID, true)
+	defer sender.SetTyping(job.ChatJID, false)
 
 	// 2. Check for Commands
 	ctx := utils.WithValues(context.Background(), job.SenderJID.String(), job.SenderPhone, job.IsAdmin, job.ChatJID.String(), job.MessageID, job.Text)
 
 	botPhone := ""
-	if bot.WA != nil && bot.WA.Store != nil && bot.WA.Store.ID != nil {
-		botPhone = whatsapp.GetBarePhone(bot.WA.Store.ID.User)
+	wa := bot.GetWAClient()
+	if wa != nil && wa.Store != nil && wa.Store.ID != nil {
+		botPhone = utils.GetBarePhone(wa.Store.ID.User)
 	}
 
-	dispatcher := commands.NewDispatcher(w.Cfg, w.ShipmentUC, w.ConfigUC, bot.Sender, bot.Prefix, bot.CompanyName, botPhone, w.Cfg.AdminTimezone, bot.Tier)
+	dispatcher := commands.NewDispatcher(w.Cfg, w.ShipmentUC, w.ConfigUC, sender, bot.GetPrefix(), bot.GetCompanyName(), botPhone, w.Cfg.AdminTimezone, bot.GetTier())
 	if res, ok := dispatcher.Dispatch(ctx, job.CompanyID, job.Text); ok {
 		if len(res.Image) > 0 {
-			bot.Sender.SendImage(job.ChatJID, job.SenderJID, res.Image, res.Message, job.MessageID, job.Text)
+			sender.SendImage(job.ChatJID, job.SenderJID, res.Image, res.Message, job.MessageID, job.Text)
 		} else if res.Message != "" {
-			bot.Sender.Reply(job.ChatJID, job.SenderJID, res.Message, job.MessageID, job.Text)
+			sender.Reply(job.ChatJID, job.SenderJID, res.Message, job.MessageID, job.Text)
 		}
 
 		// If it was an edit, we need to regenerate the receipt
@@ -96,7 +98,7 @@ func (w *Worker) process(job models.Job) {
 	// X. Extract Document Text (if any)
 	if job.RawMessage != nil && job.RawMessage.Message.GetDocumentMessage() != nil {
 		doc := job.RawMessage.Message.GetDocumentMessage()
-		data, err := bot.WA.Download(context.Background(), doc)
+		data, err := wa.Download(context.Background(), doc)
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to download document message")
 		} else {
@@ -147,7 +149,7 @@ func (w *Worker) process(job models.Job) {
 			"The system could not parse the following required fields:\n" +
 			"• " + strings.Join(missing, "\n• ") + "\n" +
 			"━━━━━━━━━━━━━━━━━━━━━━━\n\n_Please provide the missing data to proceed._"
-		bot.Sender.Reply(job.ChatJID, job.SenderJID, msg, job.MessageID, job.Text)
+		sender.Reply(job.ChatJID, job.SenderJID, msg, job.MessageID, job.Text)
 		return
 	}
 	logger.GlobalVitals.IncParseSuccess()
@@ -193,17 +195,17 @@ func (w *Worker) process(job models.Job) {
 	if existingID, err := w.ShipmentUC.FindSimilar(context.Background(), job.CompanyID, job.SenderJID.String(), newShipment.RecipientPhone); err == nil && existingID != "" {
 		logger.Info().Str("existing_id", existingID).Msg("Duplicate shipment blocked")
 		dupMsg := fmt.Sprintf("⚠️ *SHIPMENT ALREADY EXISTS*\n\nA shipment for this recipient phone is already in the system.\n\n🆔 *%s*\n\n🔹 Use `!edit %s ...` to update.\n🔹 Use `!delete %s` to remove.", existingID, existingID, existingID)
-		bot.Sender.Reply(job.ChatJID, job.SenderJID, dupMsg, job.MessageID, job.Text)
+		sender.Reply(job.ChatJID, job.SenderJID, dupMsg, job.MessageID, job.Text)
 		return
 	}
 
 	// 5c. Billing Limit Check
 	company, err := w.ConfigUC.GetCompanyByID(context.Background(), job.CompanyID)
 	if err == nil {
-		remaining, err := api.CheckShipmentCap(context.Background(), w.Cfg, w.ShipmentUC, job.CompanyID, company.PlanType.String, company.SubscriptionExpiry)
+		remaining, err := w.ShipmentUC.CheckShipmentCap(context.Background(), w.Cfg, job.CompanyID, company.PlanType.String, company.SubscriptionExpiry)
 		if err == nil && remaining == 0 {
 			logger.Info().Str("company_id", job.CompanyID.String()).Msg("Shipment blocked: billing limit reached")
-			bot.Sender.Reply(job.ChatJID, job.SenderJID, "⚠️ *SHIPMENT BLOCKED*\n\nYour monthly shipment limit has been reached or your subscription has expired.\n\nPlease contact your administrator to upgrade your plan via the dashboard.", job.MessageID, job.Text)
+			sender.Reply(job.ChatJID, job.SenderJID, "⚠️ *SHIPMENT BLOCKED*\n\nYour monthly shipment limit has been reached or your subscription has expired.\n\nPlease contact your administrator to upgrade your plan via the dashboard.", job.MessageID, job.Text)
 			return
 		}
 	}
@@ -236,11 +238,11 @@ func (w *Worker) process(job models.Job) {
 		Cost:                 sql.NullFloat64{Float64: newShipment.Cost, Valid: true},
 	}
 
-	trackingID, err := w.ShipmentUC.CreateWithPrefix(context.Background(), job.CompanyID, dbShip, bot.Prefix)
+	trackingID, err := w.ShipmentUC.CreateWithPrefix(context.Background(), job.CompanyID, dbShip, bot.GetPrefix())
 	if err != nil {
 		logger.GlobalVitals.IncInsertFailure()
 		logger.Error().Err(err).Str("jid", job.SenderJID.String()).Msg("Failed to insert shipment information")
-		bot.Sender.Reply(job.ChatJID, job.SenderJID, "❌ *SYSTEM ERROR*\n_Saving information failed. Please contact your admin._", job.MessageID, job.Text)
+		sender.Reply(job.ChatJID, job.SenderJID, "❌ *SYSTEM ERROR*\n_Saving information failed. Please contact your admin._", job.MessageID, job.Text)
 		return
 	}
 	logger.GlobalVitals.IncInsertSuccess()
@@ -263,17 +265,17 @@ func (w *Worker) process(job models.Job) {
 	if m.IsAI {
 		trackingMsg += "\n\n_✨ Parsed by AI_"
 	}
-	bot.Sender.Reply(job.ChatJID, job.SenderJID, trackingMsg, job.MessageID, job.Text)
+	sender.Reply(job.ChatJID, job.SenderJID, trackingMsg, job.MessageID, job.Text)
 }
 
-func (w *Worker) generateAndSendReceipt(bot *whatsapp.BotInstance, job models.Job, id string, lang i18n.Language) {
+func (w *Worker) generateAndSendReceipt(bot models.BotInstance, job models.Job, id string, lang i18n.Language) {
 	receipt.Enqueue(receipt.Job{
 		Msg:         job,
 		TrackingID:  id,
 		Language:    lang,
-		CompanyName: bot.CompanyName,
+		CompanyName: bot.GetCompanyName(),
 		ShipmentUC:  w.ShipmentUC,
-		Sender:      bot.Sender,
+		Sender:      bot.GetSender(),
 		RenderMode:  "default",
 	})
 }

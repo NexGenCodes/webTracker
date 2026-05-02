@@ -6,7 +6,7 @@ if (!JWT_PUBLIC_KEY_RAW) {
   console.error('CRITICAL: NEXT_PUBLIC_JWT_PUBLIC_KEY environment variable is not set. Auth will reject all tokens.');
 }
 
-let publicKey: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+let publicKey: CryptoKey | null = null;
 async function getPublicKey() {
   if (!publicKey && JWT_PUBLIC_KEY_RAW) {
     publicKey = await importSPKI(JWT_PUBLIC_KEY_RAW, 'ES256');

@@ -9,12 +9,11 @@ export function useRegister(
     setError: (msg: string | null) => void,
     setEmailCache: (email: string) => void,
     setRegisterStep: (step: 'credentials' | 'otp') => void,
-    registerStep: 'credentials' | 'otp'
+    _registerStep: 'credentials' | 'otp'
 ) {
     const [isPending, startTransition] = useTransition();
     const { refreshAuth } = useMultiTenant();
 
-    const [otpToken, setOtpToken] = useState<string | null>(null);
     const [otpTimer, setOtpTimer] = useState(0);
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -58,18 +57,12 @@ export function useRegister(
                 password: data.password
             });
 
-            if (!result.success) {
-                setError(result.error || 'Registration failed. Please try again.');
-                return;
-            }
-
-            if (result.data?.otp_token) {
-                setOtpToken(result.data.otp_token);
+            if (result.success) {
                 setEmailCache(data.email);
                 setRegisterStep('otp');
                 startOtpTimer();
             } else {
-                setError('Failed to receive OTP verification token.');
+                setError(result.error || 'Registration failed. Please try again.');
             }
         });
     };
@@ -79,17 +72,15 @@ export function useRegister(
             setError('Please enter all 6 digits.');
             return;
         }
-        if (!otpToken) {
-            setError('Missing verification token. Please start over.');
-            setRegisterStep('credentials');
-            return;
-        }
 
         setError(null);
         startTransition(async () => {
-            const result = await verifyOtpAction(fullOtp, otpToken);
+            const result = await verifyOtpAction(fullOtp);
 
             if (!result.success) {
+                if (result.error?.includes('expired')) {
+                    setRegisterStep('credentials');
+                }
                 setError(result.error || 'Verification failed. Please check the code and try again.');
                 return;
             }

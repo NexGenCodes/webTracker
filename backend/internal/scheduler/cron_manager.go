@@ -9,10 +9,9 @@ import (
 
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/logger"
+	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/notif"
 	"webtracker-bot/internal/shipment"
-
-	"webtracker-bot/internal/whatsapp"
 
 	"github.com/google/uuid"
 	"github.com/robfig/cron/v3"
@@ -25,12 +24,12 @@ type CronManager struct {
 	cfg       *config.Config
 	shipUC    *shipment.Usecase
 	configUC  *config.Usecase
-	bots      whatsapp.BotProvider
+	bots      models.BotProvider
 	locks     map[string]*sync.Mutex
 	mu        sync.RWMutex
 }
 
-func NewManager(cfg *config.Config, shipUC *shipment.Usecase, configUC *config.Usecase, bots whatsapp.BotProvider) *CronManager {
+func NewManager(cfg *config.Config, shipUC *shipment.Usecase, configUC *config.Usecase, bots models.BotProvider) *CronManager {
 	// Use seconds precision for robfig/cron/v3
 	c := cron.New(cron.WithSeconds())
 	return &CronManager{
@@ -44,7 +43,7 @@ func NewManager(cfg *config.Config, shipUC *shipment.Usecase, configUC *config.U
 }
 
 func (m *CronManager) Start() {
-	m.addJob("The Pulse (Status Updates)", "0 * * * * *", m.handlePulse)
+	m.addJob("The Pulse (Status Updates)", "0 */5 * * * *", m.handlePulse)
 	m.addJob("Daily Stats Report", "0 0 8 * * *", m.handleDailyStats)
 	m.addJob("Daily Pruning", "0 0 0 * * *", m.handlePruning)
 	m.addJob("Health Check", "0 */10 * * * *", m.handleHealthCheck)
@@ -120,8 +119,8 @@ func (m *CronManager) handlePulse() {
 					continue
 				}
 
-				go func(t shipment.TransitionResult, b *whatsapp.BotInstance) {
-					notif.SendStatusAlert(ctx, b.WA, m.cfg, b.CompanyName, t.UserJID, t.TrackingID, t.NewStatus, t.RecipientEmail)
+				go func(t shipment.TransitionResult, b models.BotInstance) {
+					notif.SendStatusAlert(ctx, b.GetWAClient(), m.cfg, b.GetCompanyName(), t.UserJID, t.TrackingID, t.NewStatus, t.RecipientEmail)
 				}(t, bot)
 			}
 		}
@@ -152,14 +151,14 @@ func (m *CronManager) handleDailyStats() {
 			continue
 		}
 
-		go func(cid uuid.UUID, b *whatsapp.BotInstance) {
+		go func(cid uuid.UUID, b models.BotInstance) {
 			groups, _ := m.configUC.GetAuthorizedGroups(ctx, cid)
 			for _, g := range groups {
 				jid, _ := types.ParseJID(g)
 				msgContent := &waProto.Message{
 					Conversation: &msg,
 				}
-				b.WA.SendMessage(ctx, jid, msgContent)
+				b.GetWAClient().SendMessage(ctx, jid, msgContent)
 			}
 		}(companyID, bot)
 	}

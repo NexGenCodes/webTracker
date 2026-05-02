@@ -6,11 +6,13 @@ package db
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/google/uuid"
 )
 
 type Querier interface {
+	BulkDeleteShipments(ctx context.Context, arg BulkDeleteShipmentsParams) (sql.Result, error)
 	BulkUpdateStatus(ctx context.Context, arg BulkUpdateStatusParams) error
 	CountAuthorizedGroups(ctx context.Context, companyID uuid.UUID) (int64, error)
 	CountCreatedSince(ctx context.Context, arg CountCreatedSinceParams) (int64, error)
@@ -41,7 +43,7 @@ type Querier interface {
 	ListShipments(ctx context.Context, arg ListShipmentsParams) ([]Shipment, error)
 	RecordEvent(ctx context.Context, arg RecordEventParams) error
 	RecordPayment(ctx context.Context, arg RecordPaymentParams) (int32, error)
-	RunAgedCleanup(ctx context.Context, arg RunAgedCleanupParams) error
+	RunAgedCleanup(ctx context.Context, arg RunAgedCleanupParams) (sql.Result, error)
 	SetCompanyPassword(ctx context.Context, arg SetCompanyPasswordParams) error
 	SetGroupAuthority(ctx context.Context, arg SetGroupAuthorityParams) error
 	SetSystemConfig(ctx context.Context, arg SetSystemConfigParams) error

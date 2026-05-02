@@ -35,6 +35,7 @@ interface DashboardClientProps {
     initialStats: { total: number; active: number; delivered: number };
     user: { email: string; company_name: string; plan_type: string } | null;
     companyId: string;
+    jwt?: string;
 }
 
 // --- CONSTANTS & EXTRACTED COMPONENTS (Phase 1 Fixes) ---
@@ -66,14 +67,14 @@ const StatusBadge = ({ status }: { status: string }) => {
     );
 };
 
-export default function DashboardClient({ initialCompanyData, initialStats, user, companyId }: DashboardClientProps) {
+export default function DashboardClient({ initialCompanyData, initialStats, user, companyId, jwt }: DashboardClientProps) {
     const router = useRouter();
     const queryClient = useQueryClient();
     const [activeTab, setActiveTab] = useState<Tab>('overview');
     const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
 
-    // Stable supabase browser client (createBrowserClient is a singleton internally)
-    const supabase = createClient();
+    // Stable supabase browser client — JWT passed from server (httpOnly cookie)
+    const supabase = createClient(jwt);
 
     // --- PHASE 2: REACT QUERY FETCHING ---
     const { data: companyData, isError: companyError } = useQuery({

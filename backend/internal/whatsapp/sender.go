@@ -21,6 +21,9 @@ func NewSender(client *whatsmeow.Client, companyName string) *Sender {
 	return &Sender{Client: client, CompanyName: companyName}
 }
 
+func (s *Sender) GetWAClient() *whatsmeow.Client { return s.Client }
+func (s *Sender) GetCompanyName() string          { return s.CompanyName }
+
 const BotFooter = "\n\n_🤖Bot_"
 
 func (s *Sender) Reply(chat, sender types.JID, text string, quotedID string, quotedText string) {
