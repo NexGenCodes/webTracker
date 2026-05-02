@@ -297,7 +297,10 @@ export default function DashboardClient({ initialCompanyData, initialStats, user
                 onClose={() => setIsConnectModalOpen(false)}
                 companyId={companyId || ''}
                 companyData={companyData || null}
-                onSuccess={() => queryClient.invalidateQueries({ queryKey: ['company', companyId] })}
+                onSuccess={() => {
+                    queryClient.invalidateQueries({ queryKey: ['company', companyId] });
+                    router.refresh();
+                }}
             />
         </div>
     );

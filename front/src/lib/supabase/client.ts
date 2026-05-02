@@ -12,6 +12,10 @@ let lastJwtValue = '';
  * If no token is provided, falls back to the existing singleton.
  */
 export function createClient(jwt?: string) {
+  if (!jwt && browserClient) {
+    return browserClient;
+  }
+
   const jwtValue = jwt || '';
 
   // If we already have a client and the JWT hasn't changed, return the singleton
