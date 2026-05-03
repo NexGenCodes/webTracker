@@ -90,6 +90,7 @@ CREATE INDEX IF NOT EXISTS idx_telemetry_company_created ON telemetry(company_id
 -- Enable RLS
 ALTER TABLE companies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE shipment ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
 
 -- Companies: each tenant reads only their own row
 DROP POLICY IF EXISTS "tenant_read_own_company" ON companies;
@@ -102,6 +103,12 @@ DROP POLICY IF EXISTS "tenant_read_own_shipments" ON shipment;
 CREATE POLICY "tenant_read_own_shipments" ON shipment 
   FOR SELECT TO authenticated 
   USING (company_id = (auth.jwt() ->> 'company_id')::uuid);
+  
+-- Payments: each tenant reads only their own payments
+DROP POLICY IF EXISTS "tenant_read_own_payments" ON payments;
+CREATE POLICY "tenant_read_own_payments" ON payments
+  FOR SELECT TO authenticated
+  USING (company_id = (auth.jwt() ->> 'company_id')::uuid);
 
 -- Shipments: anon users can read shipments (for public tracking page)
 DROP POLICY IF EXISTS "anon_read_shipment_by_tracking" ON shipment;
@@ -112,6 +119,7 @@ CREATE POLICY "anon_read_shipment_by_tracking" ON shipment
 -- Add shipment and companies to Realtime publication
 ALTER TABLE shipment REPLICA IDENTITY FULL;
 ALTER TABLE companies REPLICA IDENTITY FULL;
+ALTER TABLE payments REPLICA IDENTITY FULL;
 
 DO $$
 BEGIN
@@ -127,6 +135,13 @@ BEGIN
     WHERE pubname = 'supabase_realtime' AND tablename = 'companies'
   ) THEN
     ALTER PUBLICATION supabase_realtime ADD TABLE companies;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND tablename = 'payments'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE payments;
   END IF;
 END
 $$;

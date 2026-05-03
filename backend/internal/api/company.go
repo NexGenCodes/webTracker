@@ -327,8 +327,32 @@ func (h *CompanyHandler) paystackWebhook(c *fiber.Ctx) error {
 					return c.SendStatus(fiber.StatusUnauthorized)
 				}
 
-				// Record the payment to guarantee idempotency
+				planType := event.Data.Metadata.Plan
+
+				// Verify the amount paid matches the plan price
+				dbPlan, dbErr := h.configUC.GetPlanByID(c.Context(), planType)
+				var expectedPrice float64
+				if dbErr == nil {
+					expectedPrice = float64(dbPlan.BasePrice)
+				} else {
+					staticPlan, staticErr := payment.GetPlanByID(planType)
+					if staticErr != nil {
+						staticPlan = payment.PlanPro
+					}
+					expectedPrice = float64(staticPlan.Price)
+				}
+
 				amountInNaira := float64(event.Data.Amount) / 100.0
+				if amountInNaira < expectedPrice {
+					logger.Error().
+						Float64("paid", amountInNaira).
+						Float64("expected", expectedPrice).
+						Str("company", companyIDStr).
+						Msg("Insufficient payment amount for plan")
+					return c.SendStatus(fiber.StatusBadRequest)
+				}
+
+				// Record the payment to guarantee idempotency
 				id, err := h.configUC.RecordPayment(c.Context(), companyID, event.Data.Reference, amountInNaira, "success")
 				if err != nil {
 					logger.Error().Err(err).Str("reference", event.Data.Reference).Msg("Failed to record payment")
@@ -340,7 +364,6 @@ func (h *CompanyHandler) paystackWebhook(c *fiber.Ctx) error {
 					return c.SendStatus(fiber.StatusOK)
 				}
 
-				planType := event.Data.Metadata.Plan
 				err = h.configUC.UpdateCompanySubscriptionStatus(c.Context(), companyID, "active", planType)
 				if err != nil {
 					logger.Error().Err(err).Str("company_id", companyIDStr).Msg("Failed to update subscription status on payment")

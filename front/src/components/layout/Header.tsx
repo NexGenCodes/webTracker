@@ -26,7 +26,7 @@ export const Header: React.FC<HeaderProps> = ({ showNav = true, className }) => 
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
     useEffect(() => {
-        const handleScroll = () => setScrolled(window.scrollY > 20);
+        const handleScroll = () => setScrolled(window.scrollY > 0);
         window.addEventListener('scroll', handleScroll);
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
@@ -52,8 +52,8 @@ export const Header: React.FC<HeaderProps> = ({ showNav = true, className }) => 
 
     return (
         <header className={cn(
-            "sticky top-0 z-[1000] transition-all duration-500",
-            scrolled || mobileMenuOpen ? "py-4 bg-surface border-b border-border shadow-md" : "py-6 md:py-8",
+            "sticky top-0 z-[1000] transition-all duration-200 ease-in-out",
+            scrolled || mobileMenuOpen ? "py-4 bg-surface/95 backdrop-blur-md border-b border-border shadow-md" : "py-6 md:py-8",
             className
         )}>
             {/* Scroll Progress Bar */}

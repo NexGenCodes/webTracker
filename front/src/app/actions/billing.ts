@@ -3,6 +3,7 @@
 import { getApiUrl } from '@/lib/utils';
 import { getServerSession } from '@/lib/auth';
 import { ActionResult } from './auth';
+import { revalidatePath } from 'next/cache';
 import * as Sentry from '@sentry/nextjs';
 
 export interface PlanData {
@@ -17,6 +18,14 @@ export interface PlanData {
     trial_key?: string;
     btn_key: string;
     features: string[];
+}
+
+export interface PaymentData {
+    id: number;
+    reference: string;
+    amount: number;
+    status: string;
+    created_at: string;
 }
 
 export async function getPlansAction(): Promise<ActionResult<PlanData[]>> {
@@ -126,10 +135,41 @@ export async function checkPaymentStatusAction(): Promise<ActionResult<{ status:
 
         if (res.ok) {
             const data = await res.json();
+            if (data.status === 'active') {
+                revalidatePath('/dashboard/billing');
+            }
             return { success: true, data: { status: data.status || 'pending' } };
         }
 
         return { success: false, error: 'Failed to check payment status.' };
+    } catch (error) {
+        Sentry.captureException(error);
+        return { success: false, error: 'Network error.' };
+    }
+}
+
+export async function getPaymentHistoryAction(): Promise<ActionResult<PaymentData[]>> {
+    try {
+        const session = await getServerSession();
+        if (!session?.user?.company_id) {
+            return { success: false, error: 'Unauthorized.' };
+        }
+
+        const res = await fetch(`${getApiUrl()}/api/company/payments`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${session.token}`,
+                'Content-Type': 'application/json'
+            },
+            cache: 'no-store'
+        });
+
+        const resData = await res.json();
+        if (!res.ok) {
+            return { success: false, error: resData.error || 'Failed to fetch payment history.' };
+        }
+
+        return { success: true, data: resData };
     } catch (error) {
         Sentry.captureException(error);
         return { success: false, error: 'Network error.' };

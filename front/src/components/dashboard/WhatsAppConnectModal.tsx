@@ -87,7 +87,7 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
             setTimeout(() => {
                 onSuccess();
                 onClose();
-            }, 2500);
+            }, 1000);
             return 'connected';
         });
         setPairError('');
@@ -137,16 +137,20 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
         };
     }, [isOpen, connectMode, pairStatus, handleFetchQR]);
 
-    // Handle pairing modal success state when auth_status changes to active (via Realtime)
+
+
+    // 1. Handle pairing modal success state via props (updated by DashboardClient)
     useEffect(() => {
         if (!isOpen || !companyId) return;
-
-        // 1. Check if already active via props (updated by DashboardClient's subscription)
         if (companyData?.auth_status === 'active' && (pairStatus === 'waiting' || pairStatus === 'idle')) {
             handleConnected();
         }
+    }, [isOpen, companyId, companyData?.auth_status, pairStatus, handleConnected]);
 
-        // 2. Supabase Realtime Subscription (Ensures snappy UI update)
+    // 2. Supabase Realtime Subscription (Ensures snappy UI update independently)
+    useEffect(() => {
+        if (!isOpen || !companyId) return;
+
         const supabase = createClient();
         const channelName = `company_status_modal_${companyId}`;
         const channel = supabase
@@ -175,7 +179,7 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [companyId, companyData?.auth_status, isOpen, pairStatus, handleConnected]);
+    }, [isOpen, companyId, handleConnected]);
 
     useEffect(() => {
         let copyTimer: NodeJS.Timeout;
@@ -390,11 +394,11 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
                                         </p>
                                     </div>
 
-                                    <div className="flex justify-center gap-1 sm:gap-2 md:gap-3">
+                                    <div className="flex justify-center items-center gap-1 sm:gap-2 md:gap-3 w-full">
                                         {pairingCode.split('').map((char, i) => (
                                             <React.Fragment key={i}>
-                                                {i === 4 && <div className="w-2 sm:w-4 flex items-center justify-center text-border font-black text-lg sm:text-2xl">-</div>}
-                                                <div className="w-8 h-10 sm:w-10 sm:h-14 md:w-12 md:h-16 bg-surface border border-border/50 rounded-lg sm:rounded-xl flex items-center justify-center text-xl sm:text-2xl md:text-3xl font-black text-accent shadow-inner">
+                                                {i === 4 && <div className="w-2 sm:w-4 flex items-center justify-center text-border font-black text-lg sm:text-2xl shrink-0">-</div>}
+                                                <div className="flex-1 max-w-[2.5rem] sm:max-w-[3rem] aspect-[4/5] bg-surface border border-border/50 rounded-lg sm:rounded-xl flex items-center justify-center text-lg sm:text-2xl md:text-3xl font-black text-accent shadow-inner">
                                                     {char}
                                                 </div>
                                             </React.Fragment>

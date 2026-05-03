@@ -3,15 +3,16 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { registerSchema, RegisterForm } from '@/lib/validations/auth';
 import { registerIntentAction, verifyOtpAction } from '@/app/actions/auth';
+import { useRouter } from 'next/navigation';
 import { useMultiTenant } from '@/components/providers/MultiTenantProvider';
 
 export function useRegister(
     setError: (msg: string | null) => void,
     setEmailCache: (email: string) => void,
-    setRegisterStep: (step: 'credentials' | 'otp') => void,
-    _registerStep: 'credentials' | 'otp'
+    setRegisterStep: (step: 'credentials' | 'otp') => void
 ) {
     const [isPending, startTransition] = useTransition();
+    const router = useRouter();
     const { refreshAuth } = useMultiTenant();
 
     const [otpTimer, setOtpTimer] = useState(0);
@@ -86,7 +87,7 @@ export function useRegister(
             }
 
             await refreshAuth();
-            window.location.href = '/dashboard';
+            router.push('/dashboard');
         });
     };
 

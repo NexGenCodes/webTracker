@@ -76,14 +76,27 @@ func GetLabelMappings() []uncompiledLabelMap{
 }
 
 var (
-	footerRe     *regexp.Regexp
-	senderLabels *regexp.Regexp
-	compiledMaps []labelMap
+	footerRe           *regexp.Regexp
+	senderLabels       *regexp.Regexp
+	compiledMaps       []labelMap
+	weightCleanRe      *regexp.Regexp
+	stopLabelsRe       *regexp.Regexp
+	expressLogisticsRe *regexp.Regexp
+	dashesRe           *regexp.Regexp
+	phoneLinesRe       *regexp.Regexp
+	weightLinesRe      *regexp.Regexp
 )
 
 func init() {
 	footerRe = regexp.MustCompile(`(?im)^[ \t_*]{3,}$|(?i)\b(?:thank\s*you|regards|best|sincerely|kind\s*regards|thanks|saludos)\b`)
 	senderLabels = regexp.MustCompile(`(?i)\b(?:sender[s']*|sendr|origin|from|shippr|shipper|sent by)\b`)
+
+	weightCleanRe = regexp.MustCompile(`([\d.]+)`)
+	stopLabelsRe = regexp.MustCompile(`(?i)`+stopLabels)
+	expressLogisticsRe = regexp.MustCompile(`^(?i)express\s*logistics|shipping|document`)
+	dashesRe = regexp.MustCompile(`^[\-]+$`)
+	phoneLinesRe = regexp.MustCompile(`(?i)(?:\+?\d[\d\s\-\(\)]{7,}\d)`)
+	weightLinesRe = regexp.MustCompile(`(?i)(?:^|\s)([\d.,]+)\s*(?:kg|kgs|kilos|kg's)\b`)
 
 	// Pre-compile all regex maps to save CPU on the VPS
 	rawMaps := GetLabelMappings()
@@ -127,8 +140,7 @@ func ParseRegex(text string) models.Manifest {
 	if weightStr, ok := results["Weight"]; ok {
 		cleanWeight := strings.ReplaceAll(weightStr, ",", ".")
 		cleanWeight = strings.ReplaceAll(cleanWeight, " ", "")
-		re := regexp.MustCompile(`([\d.]+)`)
-		if match := re.FindString(cleanWeight); match != "" {
+		if match := weightCleanRe.FindString(cleanWeight); match != "" {
 			if w, err := strconv.ParseFloat(match, 64); err == nil {
 				m.Weight = w
 			}
@@ -174,25 +186,23 @@ func ParseRegex(text string) models.Manifest {
 
 		if m.ReceiverName == "" && len(cleanLines) > 0 {
 			for _, cl := range cleanLines {
-				if len(cl) < 40 && !regexp.MustCompile(`(?i)`+stopLabels).MatchString(cl) && !regexp.MustCompile(`^(?i)express\s*logistics|shipping|document`).MatchString(cl) && !regexp.MustCompile(`^[\-]+$`).MatchString(cl) {
+				if len(cl) < 40 && !stopLabelsRe.MatchString(cl) && !expressLogisticsRe.MatchString(cl) && !dashesRe.MatchString(cl) {
 					m.ReceiverName = cl
 					break
 				}
 			}
 		}
 		if m.ReceiverPhone == "" {
-			phoneRe := regexp.MustCompile(`(?i)(?:\+?\d[\d\s\-\(\)]{7,}\d)`)
 			for _, cl := range cleanLines {
-				if match := phoneRe.FindString(cl); match != "" {
+				if match := phoneLinesRe.FindString(cl); match != "" {
 					m.ReceiverPhone = match
 					break
 				}
 			}
 		}
 		if m.Weight == 0 {
-			weightRe := regexp.MustCompile(`(?i)(?:^|\s)([\d.,]+)\s*(?:kg|kgs|kilos|kg's)\b`)
 			for _, cl := range cleanLines {
-				if match := weightRe.FindStringSubmatch(cl); len(match) > 1 {
+				if match := weightLinesRe.FindStringSubmatch(cl); len(match) > 1 {
 					cleanWeight := strings.ReplaceAll(match[1], ",", ".")
 					cleanWeight = strings.ReplaceAll(cleanWeight, " ", "")
 					if w, err := strconv.ParseFloat(cleanWeight, 64); err == nil {

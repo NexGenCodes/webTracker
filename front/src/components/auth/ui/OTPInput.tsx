@@ -49,7 +49,7 @@ export function OTPInput({ otp, setOtp }: OTPInputProps) {
                     value={digit}
                     onChange={(e) => handleOTPChange(i, e.target.value)}
                     onKeyDown={(e) => handleOTPKeyDown(i, e)}
-                    className="w-10 sm:w-12 h-12 sm:h-14 text-center text-xl sm:text-2xl font-black bg-surface border-2 border-border rounded-xl focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none transition-all duration-200 text-text-main"
+                    className="flex-1 max-w-[3rem] h-12 sm:h-14 text-center text-lg sm:text-2xl font-black bg-surface border-2 border-border rounded-xl focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none transition-all duration-200 text-text-main"
                     autoFocus={i === 0}
                 />
             ))}

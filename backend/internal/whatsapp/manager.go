@@ -3,6 +3,7 @@ package whatsapp
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -124,8 +125,16 @@ func (m *Manager) DeactivateBot(companyID uuid.UUID) error {
 
 func (m *Manager) LogoutBot(companyID uuid.UUID) error {
 	// 1. Update Database immediately to "pending" to provide fast UI feedback
-	_ = m.ConfigUC.UpdateCompanyAuthStatus(context.Background(), companyID, "pending")
-	_ = m.ConfigUC.UpdateCompanyWhatsAppPhone(context.Background(), companyID, "")
+	err := m.ConfigUC.UpdateCompanyAuthStatus(context.Background(), companyID, "pending")
+	if err != nil {
+		logger.Error().Err(err).Str("company_id", companyID.String()).Msg("Failed to update auth status to pending")
+		return fmt.Errorf("failed to update auth status: %w", err)
+	}
+	
+	err = m.ConfigUC.UpdateCompanyWhatsAppPhone(context.Background(), companyID, "")
+	if err != nil {
+		logger.Error().Err(err).Str("company_id", companyID.String()).Msg("Failed to clear WhatsApp phone")
+	}
 
 	// 2. Try to find the bot in memory for a clean remote logout
 	bot, err := m.GetBot(companyID)
@@ -209,7 +218,11 @@ func (m *Manager) InitBotForCompany(c db.Company) error {
 		device = m.WAStore.NewDevice()
 	}
 
-	waClient := NewClientForDevice(device)
+	companyName := strings.ToUpper(c.Name.String)
+	if companyName == "" {
+		companyName = "AIRWAYBILL"
+	}
+	waClient := NewClientForDevice(device, companyName)
 	prefix := "AWB"
 	if c.TrackingPrefix.Valid && c.TrackingPrefix.String != "" {
 		prefix = c.TrackingPrefix.String
@@ -241,6 +254,7 @@ func (m *Manager) InitBotForCompany(c db.Company) error {
 		FrontendURL:     m.Cfg.FrontendURL,
 		ShipmentService: m.ShipmentUC.GetService(),
 		Bots:            m,
+		Context:         m.Context,
 	}
 	go w.Start()
 
@@ -348,7 +362,12 @@ func (m *Manager) GeneratePairingCode(ctx context.Context, companyID uuid.UUID, 
 	pairCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	return bot.GetWAClient().PairPhone(pairCtx, phone, true, whatsmeow.PairClientChrome, "Chrome (Windows)")
+	displayName := strings.ToUpper(bot.GetCompanyName())
+	if displayName == "" {
+		displayName = "AIRWAYBILL"
+	}
+
+	return bot.GetWAClient().PairPhone(pairCtx, phone, true, whatsmeow.PairClientChrome, fmt.Sprintf("%s (Windows)", displayName))
 }
 
 func (m *Manager) GetQR(ctx context.Context, companyID uuid.UUID) (string, error) {

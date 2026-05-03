@@ -42,6 +42,7 @@ type Worker struct {
 	Cfg             *config.Config
 	FrontendURL     string
 	ShipmentService shipment.Service
+	Context         context.Context
 }
 
 func (w *Worker) Start() {
@@ -77,7 +78,7 @@ func (w *Worker) process(job models.Job) {
 		remaining  int64 = -1 // -1 means not checked yet
 	)
 
-	g, gctx := errgroup.WithContext(context.Background())
+	g, gctx := errgroup.WithContext(w.Context)
 
 	// A. User Language
 	g.Go(func() error {
@@ -113,7 +114,7 @@ func (w *Worker) process(job models.Job) {
 	defer sender.SetTyping(job.ChatJID, false)
 
 	// 2. Check for Commands
-	ctx := utils.WithValues(context.Background(), job.SenderJID.String(), job.SenderPhone, job.IsAdmin, job.ChatJID.String(), job.MessageID, job.Text)
+	ctx := utils.WithValues(w.Context, job.SenderJID.String(), job.SenderPhone, job.IsAdmin, job.ChatJID.String(), job.MessageID, job.Text)
 
 	botPhone := ""
 	wa := bot.GetWAClient()
@@ -140,7 +141,7 @@ func (w *Worker) process(job models.Job) {
 	// X. Extract Document Text (if any)
 	if job.RawMessage != nil && job.RawMessage.Message.GetDocumentMessage() != nil {
 		doc := job.RawMessage.Message.GetDocumentMessage()
-		data, err := wa.Download(context.Background(), doc)
+		data, err := wa.Download(w.Context, doc)
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to download document message")
 		} else {
@@ -235,7 +236,7 @@ func (w *Worker) process(job models.Job) {
 	}
 
 	// 5b. Deduplication & Billing Check in Parallel
-	g, gctx = errgroup.WithContext(context.Background())
+	g, gctx = errgroup.WithContext(w.Context)
 
 	g.Go(func() error {
 		var err error
@@ -294,7 +295,7 @@ func (w *Worker) process(job models.Job) {
 		Cost:                 sql.NullFloat64{Float64: newShipment.Cost, Valid: true},
 	}
 
-	trackingID, err := w.ShipmentUC.CreateWithPrefix(context.Background(), job.CompanyID, dbShip, bot.GetPrefix())
+	trackingID, err := w.ShipmentUC.CreateWithPrefix(w.Context, job.CompanyID, dbShip, bot.GetPrefix())
 	if err != nil {
 		logger.GlobalVitals.IncInsertFailure()
 		logger.Error().Err(err).Str("jid", job.SenderJID.String()).Msg("Failed to insert shipment information")

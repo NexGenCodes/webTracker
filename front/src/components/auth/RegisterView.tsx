@@ -31,7 +31,7 @@ export function RegisterView({
     setError,
     successMessage
 }: RegisterViewProps) {
-    const { form, onRegisterIntent, verifyOtp, loading, otpTimer } = useRegister(setError, setEmailCache, setRegisterStep, registerStep);
+    const { form, onRegisterIntent, verifyOtp, loading, otpTimer } = useRegister(setError, setEmailCache, setRegisterStep);
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const { dict } = useI18n();
 

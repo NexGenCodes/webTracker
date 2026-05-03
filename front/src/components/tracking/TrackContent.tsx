@@ -126,7 +126,7 @@ export function TrackContent({ initialId: propId }: TrackProps) {
     if (!shippingData?.trackingNumber) return;
 
     const supabase = createClient();
-    const channel = supabase
+        const channel = supabase
       .channel(`tracking-${shippingData.trackingNumber}`)
       .on(
         'postgres_changes',

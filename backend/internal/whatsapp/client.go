@@ -10,7 +10,7 @@ import (
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/utils"
-	
+
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/store"
 	"go.mau.fi/whatsmeow/store/sqlstore"
@@ -19,6 +19,7 @@ import (
 	waLog "go.mau.fi/whatsmeow/util/log"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"google.golang.org/protobuf/proto"
 )
 
 func NewStore(dsn string) (*sqlstore.Container, error) {
@@ -37,9 +38,16 @@ func NewStore(dsn string) (*sqlstore.Container, error) {
 	return container, nil
 }
 
-func NewClientForDevice(device *store.Device) *whatsmeow.Client {
+func NewClientForDevice(device *store.Device, name string) *whatsmeow.Client {
+	name = strings.ToUpper(strings.TrimSpace(name))
+	if name == "" {
+		name = "AIRWAYBILL"
+	}
+	// Set custom device properties to identify the bot on the user's phone
+	store.DeviceProps.Os = proto.String(name)
+	
 	client := whatsmeow.NewClient(device, waLog.Stdout("whatsapp", "INFO", true))
-	logger.Info().Msg("WhatsApp client initialized and session loaded")
+	logger.Info().Str("device_name", name).Msg("WhatsApp client initialized with custom DeviceProps")
 	return client
 }
 

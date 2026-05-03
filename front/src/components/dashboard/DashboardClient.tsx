@@ -14,6 +14,7 @@ import { OverviewTab } from './OverviewTab';
 import { WhatsAppTab } from './WhatsAppTab';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Image from 'next/image';
+import toast from 'react-hot-toast';
 
 type Tab = 'overview' | 'whatsapp';
 
@@ -110,10 +111,10 @@ export default function DashboardClient({ initialCompanyData, initialStats, user
 
             if (totalError) throw totalError;
 
-            return { 
-                total: totalCount || 0, 
-                active: activeCount || 0, 
-                delivered: deliveredCount || 0 
+            return {
+                total: totalCount || 0,
+                active: activeCount || 0,
+                delivered: deliveredCount || 0
             };
         },
         initialData: initialStats,
@@ -298,6 +299,10 @@ export default function DashboardClient({ initialCompanyData, initialStats, user
                 companyId={companyId || ''}
                 companyData={companyData || null}
                 onSuccess={() => {
+                    toast.success('WhatsApp connected successfully!', {
+                        icon: '🚀',
+                        duration: 5000,
+                    });
                     queryClient.invalidateQueries({ queryKey: ['company', companyId] });
                     router.refresh();
                 }}
