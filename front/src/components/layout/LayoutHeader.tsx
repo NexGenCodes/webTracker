@@ -104,7 +104,7 @@ export function LayoutHeader() {
                 </header>
 
                 {/* Mobile Navigation Overlay */}
-                <MobileNavOverlay isOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} zIndex="z-[999]">
+                <MobileNavOverlay isOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} zIndex="z-[9999]">
                     <nav className="flex flex-col gap-2">
                         {dashboardNavLinks.map((link, i) => {
                             const isActive = pathname === link.href || (link.href !== '/dashboard' && pathname?.startsWith(link.href));

@@ -51,11 +51,12 @@ export const Header: React.FC<HeaderProps> = ({ showNav = true, className }) => 
     ];
 
     return (
-        <header className={cn(
-            "sticky top-0 z-[1000] transition-all duration-200 ease-in-out",
-            scrolled || mobileMenuOpen ? "py-4 bg-surface/95 backdrop-blur-md border-b border-border shadow-md" : "py-6 md:py-8",
-            className
-        )}>
+        <>
+            <header className={cn(
+                "sticky top-0 z-[1000] transition-all duration-200 ease-in-out",
+                scrolled || mobileMenuOpen ? "py-4 bg-surface/95 backdrop-blur-md border-b border-border shadow-md" : "py-6 md:py-8",
+                className
+            )}>
             {/* Scroll Progress Bar */}
             <motion.div
                 className="absolute bottom-0 left-0 right-0 h-[2px] bg-accent origin-left"
@@ -126,9 +127,10 @@ export const Header: React.FC<HeaderProps> = ({ showNav = true, className }) => 
                     )}
                 </div>
             </div>
+        </header>
 
-            {/* Mobile Navigation Overlay */}
-            <MobileNavOverlay isOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} zIndex="z-[120]">
+        {/* Mobile Navigation Overlay */}
+        <MobileNavOverlay isOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} zIndex="z-[9999]">
                 <nav className="flex flex-col gap-4">
                     {navLinks.map((link, i) => {
                         const isActive = pathname === link.href;
@@ -197,6 +199,6 @@ export const Header: React.FC<HeaderProps> = ({ showNav = true, className }) => 
                     </div>
                 </motion.div>
             </MobileNavOverlay>
-        </header >
+        </>
     );
 };
