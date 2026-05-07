@@ -137,13 +137,13 @@ func (m *Manager) DeactivateBot(companyID uuid.UUID) error {
 // LogoutBot unpairs the bot device and marks it as pending.
 func (m *Manager) LogoutBot(companyID uuid.UUID) error {
 	// 1. Update Database immediately to "pending" to provide fast UI feedback
-	err := m.ConfigUC.UpdateCompanyAuthStatus(context.Background(), companyID, "pending")
+	err := m.ConfigUC.UpdateCompanyAuthStatus(m.Context, companyID, "pending")
 	if err != nil {
 		logger.Error().Err(err).Str("company_id", companyID.String()).Msg("Failed to update auth status to pending")
 		return fmt.Errorf("failed to update auth status: %w", err)
 	}
 
-	err = m.ConfigUC.UpdateCompanyWhatsAppPhone(context.Background(), companyID, "")
+	err = m.ConfigUC.UpdateCompanyWhatsAppPhone(m.Context, companyID, "")
 	if err != nil {
 		logger.Error().Err(err).Str("company_id", companyID.String()).Msg("Failed to clear WhatsApp phone")
 	}
@@ -170,7 +170,7 @@ func (m *Manager) LogoutBot(companyID uuid.UUID) error {
 
 	// 3. Try to logout (remote unpair)
 	if client.IsConnected() && client.Store.ID != nil {
-		err = client.Logout(context.Background())
+		err = client.Logout(m.Context)
 		if err != nil {
 			logger.Warn().Err(err).Str("company_id", companyID.String()).Msg("Failed to send remote logout signal")
 		}
@@ -178,7 +178,7 @@ func (m *Manager) LogoutBot(companyID uuid.UUID) error {
 
 	// 4. Forcefully delete local store session regardless of remote logout success
 	if client.Store != nil {
-		_ = client.Store.Delete(context.Background())
+		_ = client.Store.Delete(m.Context)
 	}
 
 	return m.DeactivateBot(companyID)
@@ -190,7 +190,7 @@ func (m *Manager) PurgeBot(companyID uuid.UUID) error {
 	_ = m.LogoutBot(companyID)
 
 	// 2. Get company data to find the phone number
-	company, err := m.ConfigUC.GetCompanyByID(context.Background(), companyID)
+	company, err := m.ConfigUC.GetCompanyByID(m.Context, companyID)
 	if err != nil {
 		return err
 	}
@@ -200,7 +200,7 @@ func (m *Manager) PurgeBot(companyID uuid.UUID) error {
 		jid := types.NewJID(company.WhatsappPhone.String, "s.whatsapp.net")
 		device, err := m.WAStore.GetDevice(context.Background(), jid)
 		if err == nil && device != nil {
-			err = device.Delete(context.Background())
+			err = device.Delete(m.Context)
 			if err != nil {
 				logger.Error().Err(err).Str("phone", company.WhatsappPhone.String).Msg("Failed to purge WhatsApp device from store")
 			} else {
@@ -224,7 +224,7 @@ func (m *Manager) InitBotForCompany(c db.Company) error {
 
 	if phone != "" {
 		jid := types.NewJID(phone, "s.whatsapp.net")
-		device, err = m.WAStore.GetDevice(context.Background(), jid)
+		device, err = m.WAStore.GetDevice(m.Context, jid)
 		if err != nil || device == nil {
 			device = m.WAStore.NewDevice()
 		}
@@ -277,7 +277,7 @@ func (m *Manager) InitBotForCompany(c db.Company) error {
 	})
 
 	if waClient.Store.ID == nil {
-		qrChan, _ := waClient.GetQRChannel(context.Background())
+		qrChan, _ := waClient.GetQRChannel(m.Context)
 		go func() {
 			for evt := range qrChan {
 				bot.QRMu.Lock()
@@ -312,11 +312,11 @@ func (m *Manager) HandleWAEvent(bot *BotInstance, evt interface{}) {
 
 	switch evt.(type) {
 	case *events.Connected, *events.PairSuccess:
-		_ = m.ConfigUC.UpdateCompanyAuthStatus(context.Background(), bot.CompanyID, "active")
+		_ = m.ConfigUC.UpdateCompanyAuthStatus(m.Context, bot.CompanyID, "active")
 		if bot.GetWAClient().Store != nil && bot.GetWAClient().Store.ID != nil {
 			phone := utils.GetBarePhone(bot.GetWAClient().Store.ID.User)
 			if phone != "" {
-				_ = m.ConfigUC.UpdateCompanyWhatsAppPhone(context.Background(), bot.CompanyID, phone)
+				_ = m.ConfigUC.UpdateCompanyWhatsAppPhone(m.Context, bot.CompanyID, phone)
 			}
 		}
 		bot.ReconnectCount = 0
@@ -326,13 +326,13 @@ func (m *Manager) HandleWAEvent(bot *BotInstance, evt interface{}) {
 		m.startKeepalive(bot)
 
 	case *events.LoggedOut:
-		_ = m.ConfigUC.UpdateCompanyAuthStatus(context.Background(), bot.CompanyID, "pending")
+		_ = m.ConfigUC.UpdateCompanyAuthStatus(m.Context, bot.CompanyID, "pending")
 		_ = m.DeactivateBot(bot.CompanyID)
 	case *events.Disconnected:
 		const maxRetries = 15
 
 		if bot.ReconnectCount >= maxRetries {
-			_ = m.ConfigUC.UpdateCompanyAuthStatus(context.Background(), bot.CompanyID, "disconnected")
+			_ = m.ConfigUC.UpdateCompanyAuthStatus(m.Context, bot.CompanyID, "disconnected")
 			logger.Error().Str("company_id", bot.CompanyID.String()).Msg("Bot exhausted all reconnect attempts — marked disconnected")
 			return
 		}
@@ -341,7 +341,7 @@ func (m *Manager) HandleWAEvent(bot *BotInstance, evt interface{}) {
 
 		// Update DB to reflect reconnecting state (only on first attempt to avoid write spam)
 		if bot.ReconnectCount == 1 {
-			_ = m.ConfigUC.UpdateCompanyAuthStatus(context.Background(), bot.CompanyID, "reconnecting")
+			_ = m.ConfigUC.UpdateCompanyAuthStatus(m.Context, bot.CompanyID, "reconnecting")
 		}
 
 		// Exponential backoff with jitter: base * 2^attempt + random(0..base)
@@ -382,7 +382,7 @@ func (m *Manager) GeneratePairingCode(ctx context.Context, companyID uuid.UUID, 
 	mu.Lock()
 	bot, err := m.GetBot(companyID)
 	if err != nil {
-		company, err := m.ConfigUC.GetCompanyByID(context.Background(), companyID)
+		company, err := m.ConfigUC.GetCompanyByID(m.Context, companyID)
 		if err != nil {
 			mu.Unlock()
 			return "", err
@@ -403,7 +403,7 @@ func (m *Manager) GeneratePairingCode(ctx context.Context, companyID uuid.UUID, 
 		return "", err
 	}
 
-	pairCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	pairCtx, cancel := context.WithTimeout(m.Context, 60*time.Second)
 	defer cancel()
 
 	displayName := strings.ToUpper(bot.GetCompanyName())
@@ -420,7 +420,7 @@ func (m *Manager) GetQR(ctx context.Context, companyID uuid.UUID) (string, error
 	mu.Lock()
 	bot, err := m.GetBot(companyID)
 	if err != nil {
-		company, err := m.ConfigUC.GetCompanyByID(context.Background(), companyID)
+		company, err := m.ConfigUC.GetCompanyByID(m.Context, companyID)
 		if err != nil {
 			mu.Unlock()
 			return "", err
@@ -528,7 +528,7 @@ func (m *Manager) LivenessCheck() {
 				entry.Bot.ReconnectCount = 0
 				if err := client.Connect(); err != nil {
 					logger.Error().Err(err).Str("company_id", entry.ID.String()).Msg("[LivenessCheck] Reconnect failed")
-					_ = m.ConfigUC.UpdateCompanyAuthStatus(context.Background(), entry.ID, "disconnected")
+					_ = m.ConfigUC.UpdateCompanyAuthStatus(m.Context, entry.ID, "disconnected")
 				}
 				mu.Unlock()
 				// Jitter to prevent Thundering Herd during a mass network drop
