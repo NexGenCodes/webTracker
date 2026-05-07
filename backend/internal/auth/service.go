@@ -2,14 +2,15 @@ package auth
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"crypto/rand"
 	"database/sql"
 	"errors"
 	"fmt"
 	"math/big"
+	"os"
 	"strings"
 	"time"
-	"os"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -24,18 +25,37 @@ import (
 
 // Service handles authentication business logic
 type Service struct {
-	cfg     *config.Config
-	queries db.Querier
-	mailer  *notif.Mailer
+	cfg        *config.Config
+	queries    db.Querier
+	mailer     *notif.Mailer
+	privateKey *ecdsa.PrivateKey // Cached at init to avoid per-request disk reads
 }
 
 // NewService creates a new auth service
 func NewService(cfg *config.Config, queries db.Querier) *Service {
-	return &Service{
+	s := &Service{
 		cfg:     cfg,
 		queries: queries,
 		mailer:  notif.NewMailer(cfg),
 	}
+
+	// Pre-load and cache the ECDSA private key at init
+	if cfg.JWTPrivateKeyPath != "" {
+		keyBytes, err := os.ReadFile(cfg.JWTPrivateKeyPath)
+		if err != nil {
+			logger.Error().Err(err).Str("path", cfg.JWTPrivateKeyPath).Msg("Failed to read JWT private key — JWT signing will fail")
+		} else {
+			parsedKey, err := jwt.ParseECPrivateKeyFromPEM(keyBytes)
+			if err != nil {
+				logger.Error().Err(err).Msg("Failed to parse JWT private key — JWT signing will fail")
+			} else {
+				s.privateKey = parsedKey
+				logger.Info().Msg("JWT private key cached successfully")
+			}
+		}
+	}
+
+	return s
 }
 
 // GenerateOTP creates a 6 digit code and sends it via email, returning the stateless token
@@ -207,17 +227,14 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (*AuthResponse, s
 	}, token, nil
 }
 
-// InitiatePasswordReset starts the password reset flow by sending an OTP
+// InitiatePasswordReset starts the password reset flow by sending an OTP.
+// Always returns a token regardless of whether the email exists to prevent enumeration.
 func (s *Service) InitiatePasswordReset(ctx context.Context, email string) (string, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 
-	// Check if user exists
-	_, err := s.queries.GetCompanyByEmail(ctx, email)
-	if err != nil {
-		// We return a token even if user doesn't exist to prevent email enumeration,
-		// but we don't send an email. Or better, just return error for this specific app.
-		return "", errors.New("no account found with this email")
-	}
+	// Check if user exists — but never reveal the result to the caller
+	company, err := s.queries.GetCompanyByEmail(ctx, email)
+	userExists := err == nil && company.ID != uuid.Nil
 
 	// Generate 6 digit OTP securely
 	n, err := rand.Int(rand.Reader, big.NewInt(1000000))
@@ -226,8 +243,13 @@ func (s *Service) InitiatePasswordReset(ctx context.Context, email string) (stri
 	}
 	otp := fmt.Sprintf("%06d", n.Int64())
 
-	logger.Info().Str("email", email).Msg("Sending password reset email")
-	s.mailer.SendAsync(notif.PasswordResetEmail(email, otp))
+	// Only send the email if the account actually exists
+	if userExists {
+		logger.Info().Str("email", email).Msg("Sending password reset email")
+		s.mailer.SendAsync(notif.PasswordResetEmail(email, otp))
+	} else {
+		logger.Info().Str("email", email).Msg("Password reset requested for non-existent email — returning dummy token")
+	}
 
 	hashedOTP, err := bcrypt.GenerateFromPassword([]byte(otp), bcrypt.DefaultCost)
 	if err != nil {
@@ -297,18 +319,8 @@ func (s *Service) CompletePasswordReset(ctx context.Context, req ResetPasswordRe
 }
 
 func (s *Service) generateJWT(companyID uuid.UUID, companyName, email, planType, authStatus string) (string, error) {
-	if s.cfg.JWTPrivateKeyPath == "" {
-		return "", errors.New("JWT_PRIVATE_KEY_PATH is not configured")
-	}
-
-	keyBytes, err := os.ReadFile(s.cfg.JWTPrivateKeyPath)
-	if err != nil {
-		return "", fmt.Errorf("failed to read private key from %s: %w", s.cfg.JWTPrivateKeyPath, err)
-	}
-
-	privateKey, err := jwt.ParseECPrivateKeyFromPEM(keyBytes)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse private key: %w", err)
+	if s.privateKey == nil {
+		return "", errors.New("JWT private key is not loaded — check JWT_PRIVATE_KEY_PATH")
 	}
 
 	role := "authenticated"
@@ -334,5 +346,5 @@ func (s *Service) generateJWT(companyID uuid.UUID, companyName, email, planType,
 
 	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
 	token.Header["kid"] = "3ac00c7e-2058-4c54-8cf1-54ebca7a67f1"
-	return token.SignedString(privateKey)
+	return token.SignedString(s.privateKey)
 }

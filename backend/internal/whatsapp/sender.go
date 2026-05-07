@@ -2,7 +2,7 @@ package whatsapp
 
 import (
 	"context"
-	"math/rand"
+	"math/rand/v2"
 	"time"
 
 	"webtracker-bot/internal/logger"
@@ -77,7 +77,7 @@ func (s *Sender) startWorker() {
 			}
 
 			// Anti-Spam Jitter: 300–1000 ms to avoid WhatsApp rate-limiting.
-			jitter := time.Duration(300+rand.Intn(700)) * time.Millisecond
+			jitter := time.Duration(300+rand.IntN(700)) * time.Millisecond
 
 			senderLog.Trace().
 				Str("company", s.CompanyName).

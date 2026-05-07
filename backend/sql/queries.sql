@@ -238,5 +238,20 @@ SELECT
     (SELECT COUNT(*) FROM Shipment WHERE created_at >= CURRENT_DATE) as shipments_today,
     (SELECT jsonb_object_agg(plan_type, count) FROM (SELECT plan_type, COUNT(*) as count FROM companies GROUP BY plan_type) t) as plan_distribution,
     (SELECT jsonb_object_agg(subscription_status, count) FROM (SELECT subscription_status, COUNT(*) as count FROM companies GROUP BY subscription_status) t) as subscription_distribution;
+
 -- name: GetCompanyPayments :many
 SELECT * FROM payments WHERE company_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3;
+
+-- name: UpdateCompanyWhatsAppPhone :exec
+UPDATE companies SET whatsapp_phone = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2;
+
+-- name: DeleteCompany :exec
+DELETE FROM companies WHERE id = $1;
+
+-- name: UpdateCompanySubscriptionWithPlan :exec
+UPDATE companies
+SET subscription_status = $2,
+    subscription_expiry = GREATEST(COALESCE(subscription_expiry, '0001-01-01 00:00:00'::timestamp), CURRENT_TIMESTAMP) + INTERVAL '30 days',
+    plan_type = COALESCE(NULLIF(sqlc.arg(plan_type)::text, ''), plan_type),
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1;

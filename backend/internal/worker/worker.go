@@ -106,6 +106,16 @@ func (w *Worker) process(job models.Job) {
 
 	lang := i18n.Language(langStr)
 
+	// Subscription Guard: Block expired or inactive tenants from using the bot
+	if company.SubscriptionStatus.String != "active" && company.SubscriptionStatus.String != "trialing" {
+		logger.Info().Str("company_id", job.CompanyID.String()).Str("status", company.SubscriptionStatus.String).Msg("Ignoring message from inactive subscription")
+		return
+	}
+	if company.SubscriptionExpiry.Valid && company.SubscriptionExpiry.Time.Before(time.Now()) {
+		logger.Info().Str("company_id", job.CompanyID.String()).Msg("Ignoring message from expired subscription")
+		return
+	}
+
 	// A. Initial Feedback (Typing)
 	sender := bot.GetSender()
 	sender.SetTyping(job.ChatJID, true)

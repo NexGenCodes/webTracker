@@ -1,7 +1,6 @@
 package api
 
 import (
-	"log"
 	"strings"
 
 	"database/sql"
@@ -9,12 +8,13 @@ import (
 	"webtracker-bot/internal/auth"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/database/db"
+	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/shipment"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
-	"github.com/gofiber/fiber/v2/middleware/logger"
+	fiberlogger "github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gofiber/fiber/v2/middleware/timeout"
 )
@@ -48,7 +48,7 @@ func NewServer(cfg *config.Config, shipmentUC *shipment.Usecase, configUC *confi
 
 	// Global Middlewares
 	app.Use(recover.New())
-	app.Use(logger.New())
+	app.Use(fiberlogger.New())
 
 	// Exploit Probe Filtering Middleware
 	app.Use(func(c *fiber.Ctx) error {
@@ -144,12 +144,12 @@ func (s *Server) SetupRoutes() {
 
 func (s *Server) Start(port string) error {
 	s.SetupRoutes()
-	log.Printf("Starting HTTP REST API on port %s", port)
+	logger.Info().Str("port", port).Msg("Starting HTTP REST API")
 	return s.app.Listen(":" + port)
 }
 
 func (s *Server) Stop() error {
-	log.Println("Stopping HTTP REST API...")
+	logger.Info().Msg("Stopping HTTP REST API...")
 	return s.app.Shutdown()
 }
 

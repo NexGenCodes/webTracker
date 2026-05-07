@@ -5,10 +5,9 @@ import (
 	"image/color"
 	_ "image/png"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"path/filepath"
 	"sync"
-	"time"
 
 	"webtracker-bot/internal/i18n"
 	"webtracker-bot/internal/shipment"
@@ -49,7 +48,6 @@ var (
 
 func InitReceiptRenderer(opt bool) error {
 	useOptimized = opt
-	rand.Seed(time.Now().UnixNano())
 	return EnsureFontsDownloader()
 }
 
@@ -217,7 +215,7 @@ func drawSecurityFoilPro(dc *gg.Context, x, y float64) {
 func drawLinearBarcodePro(dc *gg.Context, x, y, w, h float64) {
 	dc.SetColor(ColorDarkText)
 	for i := 0.0; i < w; i += 6 {
-		bw := 1.0 + float64(rand.Intn(4))
+		bw := 1.0 + float64(rand.IntN(4))
 		dc.DrawRectangle(x-w/2+i, y-h/2, bw, h)
 		dc.Fill()
 	}
@@ -272,4 +270,3 @@ func drawWarningV9(dc *gg.Context, x, y, w, h float64) {
 		dc.DrawStringAnchored("• ANTI-TAMPER SEAL PROTECTED", x+w/2, y+165, 0.5, 0.5)
 	}
 }
-

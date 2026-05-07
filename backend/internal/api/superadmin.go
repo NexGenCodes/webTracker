@@ -46,9 +46,6 @@ func (h *SuperAdminHandler) deleteCompany(c *fiber.Ctx) error {
 
 	actor := c.Locals("user").(*auth.JWTClaims).Email
 
-	// Audit log
-	_ = h.configUC.LogAudit(c.Context(), actor, "delete_company", companyID, map[string]interface{}{"company_id": idStr})
-
 	// Purge bot
 	_ = h.bots.PurgeBot(companyID)
 
@@ -56,6 +53,9 @@ func (h *SuperAdminHandler) deleteCompany(c *fiber.Ctx) error {
 	if err := h.configUC.DeleteCompany(c.Context(), companyID); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
+
+	// Audit log — recorded AFTER successful deletion
+	_ = h.configUC.LogAudit(c.Context(), actor, "delete_company", companyID, map[string]interface{}{"company_id": idStr})
 
 	return c.JSON(fiber.Map{"success": true})
 }
@@ -74,12 +74,13 @@ func (h *SuperAdminHandler) updatePlan(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
-	actor := c.Locals("user").(*auth.JWTClaims).Email
-	_ = h.configUC.LogAudit(c.Context(), actor, "change_plan", companyID, map[string]interface{}{"new_plan": req.PlanType})
-
 	if err := h.configUC.UpdateCompanyPlan(c.Context(), companyID, req.PlanType); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
+
+	// Audit log — recorded AFTER successful update
+	actor := c.Locals("user").(*auth.JWTClaims).Email
+	_ = h.configUC.LogAudit(c.Context(), actor, "change_plan", companyID, map[string]interface{}{"new_plan": req.PlanType})
 
 	return c.JSON(fiber.Map{"success": true})
 }
@@ -99,15 +100,16 @@ func (h *SuperAdminHandler) updateSubscription(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
+	if err := h.configUC.UpdateCompanySubscription(c.Context(), companyID, req.Status, req.Expiry); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	// Audit log — recorded AFTER successful update
 	actor := c.Locals("user").(*auth.JWTClaims).Email
 	_ = h.configUC.LogAudit(c.Context(), actor, "update_subscription", companyID, map[string]interface{}{
 		"status": req.Status,
 		"expiry": req.Expiry,
 	})
-
-	if err := h.configUC.UpdateCompanySubscription(c.Context(), companyID, req.Status, req.Expiry); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
-	}
 
 	return c.JSON(fiber.Map{"success": true})
 }

@@ -116,25 +116,11 @@ func (u *Usecase) UpdateCompanyAuthStatus(ctx context.Context, companyID uuid.UU
 }
 
 func (u *Usecase) UpdateCompanySubscriptionStatus(ctx context.Context, companyID uuid.UUID, subStatus, planType string) error {
-	// Use manual SQL to ensure we EXTEND the expiry if it's already in the future
-	// Also update plan_type if provided (from payment metadata)
-	query := `UPDATE companies 
-		 SET subscription_status = $1, 
-		     subscription_expiry = GREATEST(subscription_expiry, CURRENT_TIMESTAMP) + INTERVAL '30 days',
-		     updated_at = CURRENT_TIMESTAMP`
-	args := []interface{}{subStatus}
-
-	if planType != "" {
-		query += `, plan_type = $3`
-		query += ` WHERE id = $2`
-		args = append(args, companyID, planType)
-	} else {
-		query += ` WHERE id = $2`
-		args = append(args, companyID)
-	}
-
-	_, err := u.pool.ExecContext(ctx, query, args...)
-	return err
+	return u.repo.UpdateCompanySubscriptionWithPlan(ctx, db.UpdateCompanySubscriptionWithPlanParams{
+		ID:                 companyID,
+		SubscriptionStatus: sql.NullString{String: subStatus, Valid: subStatus != ""},
+		PlanType:           planType,
+	})
 }
 
 func (u *Usecase) CreateCompany(ctx context.Context, name, adminEmail, setupToken string) (db.Company, error) {
@@ -159,24 +145,15 @@ func (u *Usecase) RecordPayment(ctx context.Context, companyID uuid.UUID, refere
 	return id, err
 }
 
-// UpdateCompanyWhatsAppPhone updates the WhatsApp phone for a company.
-// Uses direct SQL to avoid SQLC regeneration requirement.
 func (u *Usecase) UpdateCompanyWhatsAppPhone(ctx context.Context, companyID uuid.UUID, phone string) error {
-	_, err := u.pool.ExecContext(ctx,
-		"UPDATE companies SET whatsapp_phone = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2",
-		phone, companyID,
-	)
-	return err
+	return u.repo.UpdateCompanyWhatsAppPhone(ctx, db.UpdateCompanyWhatsAppPhoneParams{
+		WhatsappPhone: sql.NullString{String: phone, Valid: phone != ""},
+		ID:            companyID,
+	})
 }
 
-// DeleteCompany permanently removes a company and all its associated data.
-// The database schema handles cascading deletes for child tables (ON DELETE CASCADE).
 func (u *Usecase) DeleteCompany(ctx context.Context, companyID uuid.UUID) error {
-	_, err := u.pool.ExecContext(ctx, "DELETE FROM companies WHERE id = $1", companyID)
-	if err != nil {
-		return fmt.Errorf("failed to delete company: %w", err)
-	}
-	return nil
+	return u.repo.DeleteCompany(ctx, companyID)
 }
 
 func (uc *Usecase) GetActivePlans(ctx context.Context) ([]db.GetActivePlansRow, error) {
@@ -231,20 +208,10 @@ func (u *Usecase) UpdateCompanySubscription(ctx context.Context, companyID uuid.
 }
 
 func (u *Usecase) GetCompanyPayments(ctx context.Context, companyID uuid.UUID, limit, offset int32) ([]db.Payment, error) {
-	rows, err := u.pool.QueryContext(ctx, "SELECT id, company_id, reference, amount, status, created_at FROM payments WHERE company_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3", companyID, limit, offset)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var payments []db.Payment
-	for rows.Next() {
-		var p db.Payment
-		if err := rows.Scan(&p.ID, &p.CompanyID, &p.Reference, &p.Amount, &p.Status, &p.CreatedAt); err != nil {
-			return nil, err
-		}
-		payments = append(payments, p)
-	}
-	return payments, nil
+	return u.repo.GetCompanyPayments(ctx, db.GetCompanyPaymentsParams{
+		CompanyID: uuid.NullUUID{UUID: companyID, Valid: true},
+		Limit:     limit,
+		Offset:    offset,
+	})
 }
 

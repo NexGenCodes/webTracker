@@ -21,6 +21,7 @@ type Querier interface {
 	CountShipmentsByStatus(ctx context.Context, companyID uuid.NullUUID) (CountShipmentsByStatusRow, error)
 	CreateCompany(ctx context.Context, arg CreateCompanyParams) (Company, error)
 	CreateShipment(ctx context.Context, arg CreateShipmentParams) error
+	DeleteCompany(ctx context.Context, id uuid.UUID) error
 	DeleteDeliveredShipments(ctx context.Context, companyID uuid.NullUUID) error
 	DeleteShipment(ctx context.Context, arg DeleteShipmentParams) error
 	FindSimilarShipment(ctx context.Context, arg FindSimilarShipmentParams) (string, error)
@@ -61,6 +62,8 @@ type Querier interface {
 	UpdateCompanySettings(ctx context.Context, arg UpdateCompanySettingsParams) error
 	UpdateCompanySubscription(ctx context.Context, arg UpdateCompanySubscriptionParams) error
 	UpdateCompanySubscriptionStatus(ctx context.Context, arg UpdateCompanySubscriptionStatusParams) error
+	UpdateCompanySubscriptionWithPlan(ctx context.Context, arg UpdateCompanySubscriptionWithPlanParams) error
+	UpdateCompanyWhatsAppPhone(ctx context.Context, arg UpdateCompanyWhatsAppPhoneParams) error
 	UpdatePlanPrice(ctx context.Context, arg UpdatePlanPriceParams) error
 	UpdateShipmentDynamic(ctx context.Context, arg UpdateShipmentDynamicParams) error
 	UpdateShipmentStatus(ctx context.Context, arg UpdateShipmentStatusParams) error

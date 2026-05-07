@@ -7,7 +7,7 @@ import (
 	"image/jpeg"
 	_ "image/png"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"strings"
 	"time"
 

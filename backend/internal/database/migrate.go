@@ -4,10 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"sort"
 
 	web_sql "webtracker-bot/sql"
+	"webtracker-bot/internal/logger"
 )
 
 // RunMigrations runs all embedded database migrations in an idempotent manner.
@@ -53,7 +53,7 @@ func RunMigrations(ctx context.Context, db *sql.DB) error {
 			continue // Already applied
 		}
 
-		log.Printf("Applying migration: %s...\n", fileName)
+		logger.Info().Str("migration", fileName).Msg("Applying migration...")
 		
 		content, err := web_sql.MigrationsFS.ReadFile("migrations/" + fileName)
 		if err != nil {
@@ -81,7 +81,7 @@ func RunMigrations(ctx context.Context, db *sql.DB) error {
 			return fmt.Errorf("failed to commit migration %s: %w", fileName, err)
 		}
 		
-		log.Printf("Successfully applied %s\n", fileName)
+		logger.Info().Str("migration", fileName).Msg("Successfully applied migration")
 	}
 
 	return nil

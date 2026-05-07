@@ -232,6 +232,15 @@ func (q *Queries) CreateShipment(ctx context.Context, arg CreateShipmentParams) 
 	return err
 }
 
+const deleteCompany = `-- name: DeleteCompany :exec
+DELETE FROM companies WHERE id = $1
+`
+
+func (q *Queries) DeleteCompany(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deleteCompany, id)
+	return err
+}
+
 const deleteDeliveredShipments = `-- name: DeleteDeliveredShipments :exec
 DELETE FROM Shipment WHERE company_id = $1 AND status = 'delivered'
 `
@@ -1327,6 +1336,40 @@ type UpdateCompanySubscriptionStatusParams struct {
 
 func (q *Queries) UpdateCompanySubscriptionStatus(ctx context.Context, arg UpdateCompanySubscriptionStatusParams) error {
 	_, err := q.db.ExecContext(ctx, updateCompanySubscriptionStatus, arg.ID, arg.SubscriptionStatus)
+	return err
+}
+
+const updateCompanySubscriptionWithPlan = `-- name: UpdateCompanySubscriptionWithPlan :exec
+UPDATE companies
+SET subscription_status = $2,
+    subscription_expiry = GREATEST(subscription_expiry, CURRENT_TIMESTAMP) + INTERVAL '30 days',
+    plan_type = COALESCE(NULLIF($3::text, ''), plan_type),
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+`
+
+type UpdateCompanySubscriptionWithPlanParams struct {
+	ID                 uuid.UUID      `json:"id"`
+	SubscriptionStatus sql.NullString `json:"subscription_status"`
+	PlanType           string         `json:"plan_type"`
+}
+
+func (q *Queries) UpdateCompanySubscriptionWithPlan(ctx context.Context, arg UpdateCompanySubscriptionWithPlanParams) error {
+	_, err := q.db.ExecContext(ctx, updateCompanySubscriptionWithPlan, arg.ID, arg.SubscriptionStatus, arg.PlanType)
+	return err
+}
+
+const updateCompanyWhatsAppPhone = `-- name: UpdateCompanyWhatsAppPhone :exec
+UPDATE companies SET whatsapp_phone = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2
+`
+
+type UpdateCompanyWhatsAppPhoneParams struct {
+	WhatsappPhone sql.NullString `json:"whatsapp_phone"`
+	ID            uuid.UUID      `json:"id"`
+}
+
+func (q *Queries) UpdateCompanyWhatsAppPhone(ctx context.Context, arg UpdateCompanyWhatsAppPhoneParams) error {
+	_, err := q.db.ExecContext(ctx, updateCompanyWhatsAppPhone, arg.WhatsappPhone, arg.ID)
 	return err
 }
 

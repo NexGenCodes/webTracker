@@ -1,7 +1,7 @@
 package shipment
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"strings"
 	"sync"
 	"time"
@@ -48,24 +48,33 @@ var _ Service = (*Calculator)(nil)
 
 // CountryTimezoneMap maps country names to IANA timezone identifiers.
 var CountryTimezoneMap = map[string]string{
+	// Africa
 	"nigeria":        "Africa/Lagos",
+	"ghana":          "Africa/Accra",
+	"benin":          "Africa/Porto-Novo",
+	"togo":           "Africa/Lome",
+	"south africa":   "Africa/Johannesburg",
+	"kenya":          "Africa/Nairobi",
+	"egypt":          "Africa/Cairo",
+	"ethiopia":       "Africa/Addis_Ababa",
+	"cameroon":       "Africa/Douala",
+	"senegal":        "Africa/Dakar",
+	"tanzania":       "Africa/Dar_es_Salaam",
+	"morocco":        "Africa/Casablanca",
+	"ivory coast":    "Africa/Abidjan",
+	"cote d'ivoire":  "Africa/Abidjan",
+
+	// Americas
 	"usa":            "America/New_York",
 	"united states":  "America/New_York",
-	"uk":             "Europe/London",
-	"united kingdom": "Europe/London",
-	"germany":        "Europe/Berlin",
-	"spain":          "Europe/Madrid",
+	"canada":         "America/Toronto",
 	"mexico":         "America/Mexico_City",
+	"brazil":         "America/Sao_Paulo",
 	"argentina":      "America/Argentina/Buenos_Aires",
 	"colombia":       "America/Bogota",
 	"chile":          "America/Santiago",
 	"peru":           "America/Lima",
 	"venezuela":      "America/Caracas",
-	"china":          "Asia/Shanghai",
-	"dubai":          "Asia/Dubai",
-	"uae":            "Asia/Dubai",
-	"ghana":          "Africa/Accra",
-	"afghanistan":    "Asia/Kabul",
 	"honduras":       "America/Tegucigalpa",
 	"guatemala":      "America/Guatemala",
 	"ecuador":        "America/Guayaquil",
@@ -73,10 +82,55 @@ var CountryTimezoneMap = map[string]string{
 	"paraguay":       "America/Asuncion",
 	"uruguay":        "America/Montevideo",
 	"panama":         "America/Panama",
-	"benin":          "Africa/Porto-Novo",
-	"togo":           "Africa/Lome",
-	"pakistan":       "Asia/Karachi",
+	"costa rica":     "America/Costa_Rica",
+	"dominican republic": "America/Santo_Domingo",
+	"jamaica":        "America/Jamaica",
+
+	// Europe
+	"uk":             "Europe/London",
+	"united kingdom": "Europe/London",
+	"germany":        "Europe/Berlin",
+	"france":         "Europe/Paris",
+	"spain":          "Europe/Madrid",
+	"italy":          "Europe/Rome",
+	"netherlands":    "Europe/Amsterdam",
+	"belgium":        "Europe/Brussels",
+	"portugal":       "Europe/Lisbon",
+	"switzerland":    "Europe/Zurich",
+	"sweden":         "Europe/Stockholm",
+	"norway":         "Europe/Oslo",
+	"poland":         "Europe/Warsaw",
 	"turkey":         "Europe/Istanbul",
+	"russia":         "Europe/Moscow",
+	"ukraine":        "Europe/Kiev",
+	"ireland":        "Europe/Dublin",
+	"greece":         "Europe/Athens",
+
+	// Asia & Middle East
+	"china":          "Asia/Shanghai",
+	"india":          "Asia/Kolkata",
+	"japan":          "Asia/Tokyo",
+	"south korea":    "Asia/Seoul",
+	"indonesia":      "Asia/Jakarta",
+	"malaysia":       "Asia/Kuala_Lumpur",
+	"singapore":      "Asia/Singapore",
+	"thailand":       "Asia/Bangkok",
+	"vietnam":        "Asia/Ho_Chi_Minh",
+	"philippines":    "Asia/Manila",
+	"pakistan":        "Asia/Karachi",
+	"bangladesh":     "Asia/Dhaka",
+	"dubai":          "Asia/Dubai",
+	"uae":            "Asia/Dubai",
+	"saudi arabia":   "Asia/Riyadh",
+	"qatar":          "Asia/Qatar",
+	"afghanistan":    "Asia/Kabul",
+	"israel":         "Asia/Jerusalem",
+	"iraq":           "Asia/Baghdad",
+	"iran":           "Asia/Tehran",
+
+	// Oceania
+	"australia":      "Australia/Sydney",
+	"new zealand":    "Pacific/Auckland",
 }
 
 // ResolveTimezone attempts to find a valid timezone for a country name with fuzzy matching
@@ -142,12 +196,12 @@ func (c *Calculator) CalculateArrival(departure time.Time, senderCountry, receiv
 	arrivalDate := departure.In(loc).Add(24 * time.Hour)
 
 	// 2. Set arrival time to a random window between 9:00 AM and 4:00 PM local time
-	hour := 9 + rand.Intn(7) // 9, 10, 11, 12, 13, 14, 15
-	minute := rand.Intn(60)
+	hour := 9 + rand.IntN(7) // 9, 10, 11, 12, 13, 14, 15
+	minute := rand.IntN(60)
 	arrival := time.Date(arrivalDate.Year(), arrivalDate.Month(), arrivalDate.Day(), hour, minute, 0, 0, loc).UTC()
 
 	// 3. Out for delivery is always 3-6 hours before final arrival
-	outfordelivery := arrival.Add(-time.Duration(3+rand.Intn(3)) * time.Hour)
+	outfordelivery := arrival.Add(-time.Duration(3+rand.IntN(3)) * time.Hour)
 
 	return arrival, outfordelivery
 }
