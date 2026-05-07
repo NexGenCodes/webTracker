@@ -32,6 +32,7 @@ var (
 	namePattern     = regexp.MustCompile(`(?i)name|nombre|nome|nom`)
 )
 
+// Worker processes incoming WhatsApp messages and executes commands.
 type Worker struct {
 	ID              int
 	Bots            models.BotProvider
@@ -45,19 +46,24 @@ type Worker struct {
 	Context         context.Context
 }
 
+// Start begins processing jobs from the queue.
 func (w *Worker) Start() {
 	defer w.WG.Done()
 	logger.Info().Int("worker_id", w.ID).Msg("Worker started")
 
+	sem := make(chan struct{}, 10) // Bounded concurrency: max 10 concurrent jobs
+
 	for job := range w.Jobs {
-		func() {
+		sem <- struct{}{}
+		go func(j models.Job) {
 			defer func() {
+				<-sem
 				if r := recover(); r != nil {
 					logger.Error().Msgf("Worker %d panicked: %v\n%s", w.ID, r, string(debug.Stack()))
 				}
 			}()
-			w.process(job)
-		}()
+			w.process(j)
+		}(job)
 	}
 }
 
@@ -86,15 +92,7 @@ func (w *Worker) process(job models.Job) {
 		return nil
 	})
 
-	// B. Duplicate Check
-	g.Go(func() error {
-		// Use a local copy of receiver phone for checking later, but we need the manifest first
-		// Wait, duplicate check needs RecipientPhone which comes from parsing.
-		// So we can only parallelize things that don't depend on parsing yet.
-		return nil
-	})
-
-	// C. Billing Status
+	// B. Billing Status
 	g.Go(func() error {
 		var err error
 		company, err = w.ConfigUC.GetCompanyByID(gctx, job.CompanyID)
@@ -171,7 +169,9 @@ func (w *Worker) process(job models.Job) {
 	// BUT the regex struggled to extract all the required fields.
 	// If it's just a partial message, we skip AI and immediately report the missing fields.
 	if isManifest && (m.ReceiverName == "" || m.ReceiverPhone == "" || m.ReceiverAddress == "" || m.SenderName == "" || m.ReceiverCountry == "") {
-		if aiM, err := parser.ParseAI(job.Text, w.Cfg.GeminiAPIKey); err == nil {
+		aiCtx, aiCancel := context.WithTimeout(w.Context, 7*time.Second)
+		defer aiCancel()
+		if aiM, err := parser.ParseAI(aiCtx, job.Text, w.Cfg.GeminiAPIKey); err == nil {
 			m.Merge(aiM)
 			m.IsAI = true
 		}
@@ -232,10 +232,10 @@ func (w *Worker) process(job models.Job) {
 		newShipment.Destination = "Local Delivery"
 	}
 	if newShipment.Weight <= 0 {
-		newShipment.Weight = 15.0 // Fallback if parser didn't extract weight
+		newShipment.Weight = 15.0
 	}
 
-	// 5b. Deduplication & Billing Check in Parallel
+	//  Deduplication & Billing Check in Parallel
 	g, gctx = errgroup.WithContext(w.Context)
 
 	g.Go(func() error {
@@ -270,7 +270,6 @@ func (w *Worker) process(job models.Job) {
 	// Generate schedule dates using the new Smart Anchor Algorithm (A & B)
 	now := time.Now().UTC()
 	departure := w.ShipmentService.CalculateDeparture(now, w.Cfg.AdminTimezone)
-	// Enforce "Afghanistan" as sender as per user request
 	arrival, outForDelivery := w.ShipmentService.CalculateArrival(departure, newShipment.Origin, newShipment.Destination)
 
 	dbShip := &db.Shipment{
@@ -304,7 +303,7 @@ func (w *Worker) process(job models.Job) {
 	}
 	logger.GlobalVitals.IncInsertSuccess()
 
-	// 7, 8, 9. Generate and send receipt
+	// Generate and send receipt
 	w.generateAndSendReceipt(bot, job, trackingID, lang)
 
 	logger.Info().

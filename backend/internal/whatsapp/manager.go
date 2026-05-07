@@ -23,6 +23,7 @@ import (
 	"go.mau.fi/whatsmeow/types/events"
 )
 
+// Manager orchestrates multiple BotInstances across different companies.
 type Manager struct {
 	Cfg        *config.Config
 	ShipmentUC models.ShipmentUsecase
@@ -36,6 +37,7 @@ type Manager struct {
 	Context    context.Context
 }
 
+// NewManager creates a new multi-tenant WhatsApp manager.
 func NewManager(ctx context.Context, cfg *config.Config, shipUC models.ShipmentUsecase, configUC models.ConfigUsecase, store *sqlstore.Container, wg *sync.WaitGroup) *Manager {
 	return &Manager{
 		Cfg:        cfg,
@@ -60,6 +62,7 @@ func (m *Manager) getPairLock(companyID uuid.UUID) *sync.Mutex {
 	return mu
 }
 
+// GetBot retrieves a bot instance for a specific company.
 func (m *Manager) GetBot(companyID uuid.UUID) (models.BotInstance, error) {
 	m.BotsMu.RLock()
 	defer m.BotsMu.RUnlock()
@@ -70,6 +73,7 @@ func (m *Manager) GetBot(companyID uuid.UUID) (models.BotInstance, error) {
 	return bot, nil
 }
 
+// GetAllBots returns all currently active bot instances.
 func (m *Manager) GetAllBots() []models.BotInstance {
 	m.BotsMu.RLock()
 	defer m.BotsMu.RUnlock()
@@ -80,6 +84,7 @@ func (m *Manager) GetAllBots() []models.BotInstance {
 	return bots
 }
 
+// ActivateBot initializes and starts a bot for a company.
 func (m *Manager) ActivateBot(ctx context.Context, companyID uuid.UUID) error {
 	company, err := m.ConfigUC.GetCompanyByID(ctx, companyID)
 	if err != nil {
@@ -104,12 +109,18 @@ func (m *Manager) ActivateBot(ctx context.Context, companyID uuid.UUID) error {
 	return m.InitBotForCompany(company)
 }
 
+// DeactivateBot stops and removes a bot from memory.
 func (m *Manager) DeactivateBot(companyID uuid.UUID) error {
 	m.BotsMu.Lock()
 	bot, exists := m.Bots[companyID]
 	if !exists {
 		m.BotsMu.Unlock()
 		return fmt.Errorf("bot not found")
+	}
+
+	// Cancel keepalive goroutine first
+	if bot.KeepaliveCancel != nil {
+		bot.KeepaliveCancel()
 	}
 
 	bot.GetWAClient().Disconnect()
@@ -123,6 +134,7 @@ func (m *Manager) DeactivateBot(companyID uuid.UUID) error {
 	return nil
 }
 
+// LogoutBot unpairs the bot device and marks it as pending.
 func (m *Manager) LogoutBot(companyID uuid.UUID) error {
 	// 1. Update Database immediately to "pending" to provide fast UI feedback
 	err := m.ConfigUC.UpdateCompanyAuthStatus(context.Background(), companyID, "pending")
@@ -130,7 +142,7 @@ func (m *Manager) LogoutBot(companyID uuid.UUID) error {
 		logger.Error().Err(err).Str("company_id", companyID.String()).Msg("Failed to update auth status to pending")
 		return fmt.Errorf("failed to update auth status: %w", err)
 	}
-	
+
 	err = m.ConfigUC.UpdateCompanyWhatsAppPhone(context.Background(), companyID, "")
 	if err != nil {
 		logger.Error().Err(err).Str("company_id", companyID.String()).Msg("Failed to clear WhatsApp phone")
@@ -172,6 +184,7 @@ func (m *Manager) LogoutBot(companyID uuid.UUID) error {
 	return m.DeactivateBot(companyID)
 }
 
+// PurgeBot forcefully deletes a bot's session from the database.
 func (m *Manager) PurgeBot(companyID uuid.UUID) error {
 	// 1. Try a clean logout if the bot is active
 	_ = m.LogoutBot(companyID)
@@ -199,6 +212,7 @@ func (m *Manager) PurgeBot(companyID uuid.UUID) error {
 	return nil
 }
 
+// InitBotForCompany initializes a new bot instance based on company config.
 func (m *Manager) InitBotForCompany(c db.Company) error {
 	var device *store.Device
 	var err error
@@ -292,6 +306,7 @@ func (m *Manager) InitBotForCompany(c db.Company) error {
 	return nil
 }
 
+// HandleWAEvent proxies events to the specific bot instance.
 func (m *Manager) HandleWAEvent(bot *BotInstance, evt interface{}) {
 	HandleEvent(bot, evt, bot.Jobs, m.Cfg, m.ConfigUC)
 
@@ -306,33 +321,62 @@ func (m *Manager) HandleWAEvent(bot *BotInstance, evt interface{}) {
 		}
 		bot.ReconnectCount = 0
 		bot.LastReconnect = time.Now()
+
+		// Start keepalive goroutine to prevent idle disconnects
+		m.startKeepalive(bot)
+
 	case *events.LoggedOut:
 		_ = m.ConfigUC.UpdateCompanyAuthStatus(context.Background(), bot.CompanyID, "pending")
 		_ = m.DeactivateBot(bot.CompanyID)
 	case *events.Disconnected:
-		if bot.ReconnectCount >= 5 {
+		const maxRetries = 15
+
+		if bot.ReconnectCount >= maxRetries {
+			_ = m.ConfigUC.UpdateCompanyAuthStatus(context.Background(), bot.CompanyID, "disconnected")
+			logger.Error().Str("company_id", bot.CompanyID.String()).Msg("Bot exhausted all reconnect attempts — marked disconnected")
 			return
 		}
+
 		bot.ReconnectCount++
-		delay := time.Duration(bot.ReconnectCount*30) * time.Second
+
+		// Update DB to reflect reconnecting state (only on first attempt to avoid write spam)
+		if bot.ReconnectCount == 1 {
+			_ = m.ConfigUC.UpdateCompanyAuthStatus(context.Background(), bot.CompanyID, "reconnecting")
+		}
+
+		// Exponential backoff with jitter: base * 2^attempt + random(0..base)
+		base := 5 * time.Second
+		backoff := base * (1 << min(bot.ReconnectCount-1, 6))        // cap exponent at 6 → max ~320s
+		jitter := time.Duration(time.Now().UnixNano() % int64(base)) // 0..5s jitter
+		delay := backoff + jitter
+
+		logger.Info().
+			Str("company_id", bot.CompanyID.String()).
+			Int("attempt", bot.ReconnectCount).
+			Dur("delay", delay).
+			Msg("Scheduling reconnect with exponential backoff")
+
 		go func() {
 			time.Sleep(delay)
 			mu := m.getPairLock(bot.CompanyID)
 			if !mu.TryLock() {
 				return
 			}
-			mu.Unlock()
+			defer mu.Unlock()
 
 			m.BotsMu.RLock()
 			_, stillActive := m.Bots[bot.CompanyID]
 			m.BotsMu.RUnlock()
 			if stillActive && bot.GetWAClient().Store != nil && bot.GetWAClient().Store.ID != nil {
-				_ = bot.GetWAClient().Connect()
+				if err := bot.GetWAClient().Connect(); err != nil {
+					logger.Warn().Err(err).Str("company_id", bot.CompanyID.String()).Int("attempt", bot.ReconnectCount).Msg("Reconnect attempt failed")
+				}
 			}
 		}()
 	}
 }
 
+// GeneratePairingCode generates a pairing code for a companion device.
 func (m *Manager) GeneratePairingCode(ctx context.Context, companyID uuid.UUID, phone string) (string, error) {
 	mu := m.getPairLock(companyID)
 	mu.Lock()
@@ -370,6 +414,7 @@ func (m *Manager) GeneratePairingCode(ctx context.Context, companyID uuid.UUID, 
 	return bot.GetWAClient().PairPhone(pairCtx, phone, true, whatsmeow.PairClientChrome, fmt.Sprintf("%s (Windows)", displayName))
 }
 
+// GetQR retrieves the current pairing QR code for the bot.
 func (m *Manager) GetQR(ctx context.Context, companyID uuid.UUID) (string, error) {
 	mu := m.getPairLock(companyID)
 	mu.Lock()
@@ -401,14 +446,85 @@ func (m *Manager) GetQR(ctx context.Context, companyID uuid.UUID) (string, error
 		if code != "" {
 			return code, nil
 		}
-		
+
 		// If we've waited a bit and still no code, try refreshing the QR channel
 		if i == 5 {
 			logger.Info().Str("company", companyID.String()).Msg("Retrying QR generation...")
 		}
-		
+
 		time.Sleep(500 * time.Millisecond)
 	}
 
-	return "", fmt.Errorf("QR code not available yet. Please try again in a moment.")
+	return "", fmt.Errorf("qr code not available yet, please try again in a moment")
+}
+
+// startKeepalive sends a presence broadcast every 4 minutes to prevent
+// WhatsApp from killing the connection due to inactivity.
+// Each call cancels any prior keepalive for this bot (idempotent).
+func (m *Manager) startKeepalive(bot *BotInstance) {
+	// Cancel any existing keepalive for this bot
+	if bot.KeepaliveCancel != nil {
+		bot.KeepaliveCancel()
+	}
+
+	ctx, cancel := context.WithCancel(m.Context)
+	bot.KeepaliveCancel = cancel
+
+	go func() {
+		ticker := time.NewTicker(4 * time.Minute)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				client := bot.GetWAClient()
+				if client == nil || !client.IsConnected() {
+					continue
+				}
+				if err := client.SendPresence(context.Background(), types.PresenceAvailable); err != nil {
+					logger.Warn().Err(err).Str("company_id", bot.CompanyID.String()).Msg("Keepalive presence failed")
+				}
+			}
+		}
+	}()
+}
+
+// LivenessCheck audits all active bots and corrects auth_status if
+// a bot is tracked as "active" in the DB but is actually disconnected.
+// Called by the cron scheduler.
+func (m *Manager) LivenessCheck() {
+	m.BotsMu.RLock()
+	var snapshot []struct {
+		ID  uuid.UUID
+		Bot *BotInstance
+	}
+	for id, bot := range m.Bots {
+		snapshot = append(snapshot, struct {
+			ID  uuid.UUID
+			Bot *BotInstance
+		}{id, bot})
+	}
+	m.BotsMu.RUnlock()
+
+	go func() {
+		for _, entry := range snapshot {
+			client := entry.Bot.GetWAClient()
+			if client == nil {
+				continue
+			}
+
+			if !client.IsConnected() && client.Store != nil && client.Store.ID != nil {
+				logger.Warn().Str("company_id", entry.ID.String()).Msg("[LivenessCheck] Bot disconnected — attempting reconnect")
+				entry.Bot.ReconnectCount = 0
+				if err := client.Connect(); err != nil {
+					logger.Error().Err(err).Str("company_id", entry.ID.String()).Msg("[LivenessCheck] Reconnect failed")
+					_ = m.ConfigUC.UpdateCompanyAuthStatus(context.Background(), entry.ID, "disconnected")
+				}
+				// Jitter to prevent Thundering Herd during a mass network drop
+				time.Sleep(200 * time.Millisecond)
+			}
+		}
+	}()
 }

@@ -207,10 +207,13 @@ export function TrackContent({ initialId: propId }: TrackProps) {
 
               {shippingData.status === 'CANCELED' ? (
                 <ShipmentTerminalState type="canceled" dict={dict} />
-              ) : shippingData.isArchived ? (
-                <ShipmentTerminalState type="delivered" dict={dict} />
               ) : (
                 <>
+                  {shippingData.isArchived && (
+                     <div className="mb-12 border-b border-border/50 pb-8">
+                       <ShipmentTerminalState type="delivered" dict={dict} />
+                     </div>
+                  )}
                   <ShipmentMapBar
                     shippingData={shippingData}
                     originCoords={originCoords}

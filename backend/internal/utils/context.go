@@ -9,11 +9,17 @@ import (
 type contextKey string
 
 const (
+	// JIDKey is the context key for the user's JID.
 	JIDKey         contextKey = "jid"
+	// SenderPhoneKey is the context key for the sender's phone number.
 	SenderPhoneKey contextKey = "sender_phone"
+	// IsAdminKey is the context key to indicate if the user is an admin.
 	IsAdminKey     contextKey = "is_admin"
+	// ChatJIDKey is the context key for the chat JID.
 	ChatJIDKey     contextKey = "chat_jid"
+	// MessageIDKey is the context key for the message ID.
 	MessageIDKey   contextKey = "message_id"
+	// TextKey is the context key for the original message text.
 	TextKey        contextKey = "text"
 )
 
@@ -103,12 +109,12 @@ func IsAdmin(ctx context.Context) bool {
 }
 
 // WithValues enriches context with multiple values using typed keys
-func WithValues(ctx context.Context, jid, phone string, isAdmin bool, chatJid, msgId, text string) context.Context {
+func WithValues(ctx context.Context, jid, phone string, isAdmin bool, chatJid, msgID, text string) context.Context {
 	ctx = context.WithValue(ctx, JIDKey, jid)
 	ctx = context.WithValue(ctx, SenderPhoneKey, phone)
 	ctx = context.WithValue(ctx, IsAdminKey, isAdmin)
 	ctx = context.WithValue(ctx, ChatJIDKey, chatJid)
-	ctx = context.WithValue(ctx, MessageIDKey, msgId)
+	ctx = context.WithValue(ctx, MessageIDKey, msgID)
 	ctx = context.WithValue(ctx, TextKey, text)
 	return ctx
 }

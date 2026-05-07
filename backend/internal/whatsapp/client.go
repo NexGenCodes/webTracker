@@ -18,10 +18,11 @@ import (
 	"go.mau.fi/whatsmeow/types/events"
 	waLog "go.mau.fi/whatsmeow/util/log"
 
+	// Import standard pgx driver.
 	_ "github.com/jackc/pgx/v5/stdlib"
-	"google.golang.org/protobuf/proto"
 )
 
+// NewStore initializes a new SQL store for the WhatsApp client.
 func NewStore(dsn string) (*sqlstore.Container, error) {
 	dbLog := waLog.Stdout("Database", "DEBUG", true)
 	if !strings.Contains(dsn, "default_query_exec_mode") {
@@ -38,21 +39,22 @@ func NewStore(dsn string) (*sqlstore.Container, error) {
 	return container, nil
 }
 
+// NewClientForDevice creates a new WhatsApp client bound to the given device.
 func NewClientForDevice(device *store.Device, name string) *whatsmeow.Client {
 	name = strings.ToUpper(strings.TrimSpace(name))
 	if name == "" {
 		name = "AIRWAYBILL"
 	}
-	// Set custom device properties to identify the bot on the user's phone
-	store.DeviceProps.Os = proto.String(name)
-	
+	device.PushName = name
+
 	client := whatsmeow.NewClient(device, waLog.Stdout("whatsapp", "INFO", true))
-	logger.Info().Str("device_name", name).Msg("WhatsApp client initialized with custom DeviceProps")
+	client.EnableAutoReconnect = true
+	client.AutoTrustIdentity = true
+
+	logger.Info().Str("device_name", name).Msg("WhatsApp client initialized")
 	return client
 }
 
-// GetBarePhone extracts only the digits before any device/suffix markers.
-// e.g. "23480...0:12" -> "23480...0"
 
 
 // Global caches removed to support multi-tenancy. State is now held per bot in BotInstance.
@@ -69,6 +71,7 @@ func checkCacheCleanup(bot *BotInstance) {
 	}
 }
 
+// HandleEvent processes incoming WhatsApp events.
 func HandleEvent(bot *BotInstance, evt interface{}, queue chan<- models.Job, cfg *config.Config, configUC models.ConfigUsecase) {
 	client := bot.WA
 	companyID := bot.CompanyID
@@ -140,7 +143,7 @@ func HandleEvent(bot *BotInstance, evt interface{}, queue chan<- models.Job, cfg
 		if isGroup {
 			// FAST CHECK: Use in-memory Go Map (sync.Map)
 			if val, ok := bot.AuthCache.Load(chatJID.String()); ok {
-				isAuthorized = val.(bool)
+				isAuthorized, _ = val.(bool)
 			} else {
 				// Not in memory? Re-verify and populate cache
 				isAuthorized = verifyGroupAuthority(bot, configUC, chatJID)
@@ -160,21 +163,27 @@ func HandleEvent(bot *BotInstance, evt interface{}, queue chan<- models.Job, cfg
 					// Check Cache First
 					senderBare := utils.GetBarePhone(v.Info.Sender.User)
 					if groupAdmins, ok := bot.ParticipantsCache.Load(chatJID.String()); ok {
-						admins := groupAdmins.(map[string]bool)
-						if isAdminEntry, exist := admins[senderBare]; exist {
-							isSenderAdmin = isAdminEntry
-						} else {
-							// If not in cache, re-verify (group might have changed)
-							verifyGroupAuthority(bot, configUC, chatJID)
-							if groupAdminsNew, okNew := bot.ParticipantsCache.Load(chatJID.String()); okNew {
-								isSenderAdmin = groupAdminsNew.(map[string]bool)[senderBare]
+						admins, _ := groupAdmins.(map[string]bool)
+						if admins != nil {
+							if isAdminEntry, exist := admins[senderBare]; exist {
+								isSenderAdmin = isAdminEntry
+							} else {
+								// If not in cache, re-verify (group might have changed)
+								verifyGroupAuthority(bot, configUC, chatJID)
+								if groupAdminsNew, okNew := bot.ParticipantsCache.Load(chatJID.String()); okNew {
+									if newAdmins, ok := groupAdminsNew.(map[string]bool); ok {
+										isSenderAdmin = newAdmins[senderBare]
+									}
+								}
 							}
 						}
 					} else {
 						// No cache? Re-verify
 						verifyGroupAuthority(bot, configUC, chatJID)
 						if groupAdminsNew, okNew := bot.ParticipantsCache.Load(chatJID.String()); okNew {
-							isSenderAdmin = groupAdminsNew.(map[string]bool)[senderBare]
+							if newAdmins, ok := groupAdminsNew.(map[string]bool); ok {
+								isSenderAdmin = newAdmins[senderBare]
+							}
 						}
 					}
 				}

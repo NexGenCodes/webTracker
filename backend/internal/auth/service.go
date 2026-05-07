@@ -20,7 +20,34 @@ import (
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/notif"
 	"webtracker-bot/internal/utils"
+	"sync"
 )
+
+type pendingReg struct {
+	hashedPassword string
+	expiresAt      time.Time
+}
+
+var (
+	pendingRegistrations sync.Map
+	cleanupOnce          sync.Once
+)
+
+func startCleanupRoutine() {
+	go func() {
+		for {
+			time.Sleep(5 * time.Minute)
+			now := time.Now()
+			pendingRegistrations.Range(func(key, value interface{}) bool {
+				reg := value.(pendingReg)
+				if now.After(reg.expiresAt) {
+					pendingRegistrations.Delete(key)
+				}
+				return true
+			})
+		}
+	}()
+}
 
 // Service handles authentication business logic
 type Service struct {
@@ -31,6 +58,7 @@ type Service struct {
 
 // NewService creates a new auth service
 func NewService(cfg *config.Config, queries db.Querier) *Service {
+	cleanupOnce.Do(startCleanupRoutine)
 	return &Service{
 		cfg:     cfg,
 		queries: queries,
@@ -68,11 +96,16 @@ func (s *Service) GenerateOTP(ctx context.Context, companyName, email, password 
 		return "", fmt.Errorf("failed to hash OTP: %w", err)
 	}
 
+	// Store password hash securely in memory
+	pendingRegistrations.Store(email, pendingReg{
+		hashedPassword: string(hashedPassword),
+		expiresAt:      time.Now().Add(10 * time.Minute),
+	})
+
 	// Create Stateless JWT Token
 	claims := OTPClaims{
 		CompanyName:    companyName,
 		Email:          email,
-		HashedPassword: string(hashedPassword),
 		HashedOTP:      string(hashedOTP),
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Minute)),
@@ -104,6 +137,18 @@ func (s *Service) VerifyOTP(ctx context.Context, otp string, otpToken string) (*
 		return nil, "", errors.New("incorrect OTP code")
 	}
 
+	// Retrieve password hash from memory
+	val, ok := pendingRegistrations.Load(claims.Email)
+	if !ok {
+		return nil, "", errors.New("registration session expired on server")
+	}
+	reg := val.(pendingReg)
+	if time.Now().After(reg.expiresAt) {
+		pendingRegistrations.Delete(claims.Email)
+		return nil, "", errors.New("registration session expired on server")
+	}
+	pendingRegistrations.Delete(claims.Email)
+
 	// Create company in DB
 	company, err := s.queries.CreateCompany(ctx, db.CreateCompanyParams{
 		AdminEmail: claims.Email,
@@ -117,7 +162,7 @@ func (s *Service) VerifyOTP(ctx context.Context, otp string, otpToken string) (*
 	// Update password hash immediately
 	err = s.queries.SetCompanyPassword(ctx, db.SetCompanyPasswordParams{
 		ID:                company.ID,
-		AdminPasswordHash: sql.NullString{String: claims.HashedPassword, Valid: true},
+		AdminPasswordHash: sql.NullString{String: reg.hashedPassword, Valid: true},
 	})
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to set company password: %w", err)

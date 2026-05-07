@@ -40,6 +40,7 @@ type BotProvider interface {
 	GetQR(ctx context.Context, companyID uuid.UUID) (string, error)
 	LogoutBot(companyID uuid.UUID) error
 	PurgeBot(companyID uuid.UUID) error
+	LivenessCheck()
 }
 
 type ShipmentUsecase interface {

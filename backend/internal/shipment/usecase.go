@@ -2,17 +2,16 @@ package shipment
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"math/big"
 	"strings"
 	"time"
 
 	"webtracker-bot/internal/database/db"
 	"webtracker-bot/internal/database/dbutil"
 	"webtracker-bot/internal/models"
+	"webtracker-bot/internal/utils"
 
 	"github.com/google/uuid"
 	"github.com/sqlc-dev/pqtype"
@@ -172,12 +171,10 @@ func (u *Usecase) CreateWithPrefix(ctx context.Context, companyID uuid.UUID, s *
 	var err error
 
 	for attempts := 0; attempts < 5; attempts++ {
-		n, randErr := rand.Int(rand.Reader, big.NewInt(1000000000))
-		if randErr != nil {
-			return "", fmt.Errorf("failed to generate random ID: %w", randErr)
+		trackingID, err = utils.GenerateTrackingID(prefix)
+		if err != nil {
+			return "", err
 		}
-		randStr := fmt.Sprintf("%09d", n.Int64())
-		trackingID = fmt.Sprintf("%s-%s", prefix, randStr)
 
 		params := db.CreateShipmentParams{
 			CompanyID:            toNullUUID(companyID),
@@ -242,48 +239,57 @@ func (u *Usecase) GetLastForUser(ctx context.Context, companyID uuid.UUID, userJ
 
 // UpdateField updates a single field on a shipment by name.
 func (u *Usecase) UpdateField(ctx context.Context, companyID uuid.UUID, trackingID, field, value string) error {
+	params := db.UpdateShipmentDynamicParams{
+		CompanyID:  toNullUUID(companyID),
+		TrackingID: trackingID,
+	}
+
 	switch field {
 	case "sender_name":
-		return u.repo.UpdateShipmentFieldSenderName(ctx, db.UpdateShipmentFieldSenderNameParams{CompanyID: toNullUUID(companyID), TrackingID: trackingID, SenderName: dbutil.ToNullString(value)})
+		params.Column3 = value
 	case "sender_phone":
-		return u.repo.UpdateShipmentFieldSenderPhone(ctx, db.UpdateShipmentFieldSenderPhoneParams{CompanyID: toNullUUID(companyID), TrackingID: trackingID, SenderPhone: dbutil.ToNullString(value)})
+		params.Column4 = value
 	case "origin":
-		return u.repo.UpdateShipmentFieldOrigin(ctx, db.UpdateShipmentFieldOriginParams{CompanyID: toNullUUID(companyID), TrackingID: trackingID, Origin: dbutil.ToNullString(value)})
+		params.Column5 = value
 	case "recipient_name":
-		return u.repo.UpdateShipmentFieldRecipientName(ctx, db.UpdateShipmentFieldRecipientNameParams{CompanyID: toNullUUID(companyID), TrackingID: trackingID, RecipientName: dbutil.ToNullString(value)})
+		params.Column6 = value
 	case "recipient_phone":
-		return u.repo.UpdateShipmentFieldRecipientPhone(ctx, db.UpdateShipmentFieldRecipientPhoneParams{CompanyID: toNullUUID(companyID), TrackingID: trackingID, RecipientPhone: dbutil.ToNullString(value)})
+		params.Column7 = value
 	case "recipient_email":
-		return u.repo.UpdateShipmentFieldRecipientEmail(ctx, db.UpdateShipmentFieldRecipientEmailParams{CompanyID: toNullUUID(companyID), TrackingID: trackingID, RecipientEmail: dbutil.ToNullString(value)})
+		params.Column8 = value
 	case "recipient_id":
-		return u.repo.UpdateShipmentFieldRecipientID(ctx, db.UpdateShipmentFieldRecipientIDParams{CompanyID: toNullUUID(companyID), TrackingID: trackingID, RecipientID: dbutil.ToNullString(value)})
+		params.Column9 = value
 	case "recipient_address":
-		return u.repo.UpdateShipmentFieldRecipientAddress(ctx, db.UpdateShipmentFieldRecipientAddressParams{CompanyID: toNullUUID(companyID), TrackingID: trackingID, RecipientAddress: dbutil.ToNullString(value)})
+		params.Column10 = value
 	case "destination":
-		return u.repo.UpdateShipmentFieldDestination(ctx, db.UpdateShipmentFieldDestinationParams{CompanyID: toNullUUID(companyID), TrackingID: trackingID, Destination: dbutil.ToNullString(value)})
+		params.Column11 = value
 	case "cargo_type":
-		return u.repo.UpdateShipmentFieldCargoType(ctx, db.UpdateShipmentFieldCargoTypeParams{CompanyID: toNullUUID(companyID), TrackingID: trackingID, CargoType: dbutil.ToNullString(value)})
+		params.Column12 = value
 	case "scheduled_transit_time":
 		t, err := parseFlexibleTime(value)
 		if err != nil {
 			return fmt.Errorf("invalid time format: %w", err)
 		}
-		return u.repo.UpdateShipmentFieldScheduledTransitTime(ctx, db.UpdateShipmentFieldScheduledTransitTimeParams{CompanyID: toNullUUID(companyID), TrackingID: trackingID, ScheduledTransitTime: dbutil.ToNullTime(t)})
+		params.Column13 = t
 	case "expected_delivery_time":
 		t, err := parseFlexibleTime(value)
 		if err != nil {
 			return fmt.Errorf("invalid time format: %w", err)
 		}
-		return u.repo.UpdateShipmentFieldExpectedDeliveryTime(ctx, db.UpdateShipmentFieldExpectedDeliveryTimeParams{CompanyID: toNullUUID(companyID), TrackingID: trackingID, ExpectedDeliveryTime: dbutil.ToNullTime(t)})
+		params.Column14 = t
 	case "outfordelivery_time":
 		t, err := parseFlexibleTime(value)
 		if err != nil {
 			return fmt.Errorf("invalid time format: %w", err)
 		}
-		return u.repo.UpdateShipmentFieldOutfordeliveryTime(ctx, db.UpdateShipmentFieldOutfordeliveryTimeParams{CompanyID: toNullUUID(companyID), TrackingID: trackingID, OutfordeliveryTime: dbutil.ToNullTime(t)})
+		params.Column15 = t
+	case "status":
+		params.Column16 = value
 	default:
 		return fmt.Errorf("unsupported field: %s", field)
 	}
+
+	return u.repo.UpdateShipmentDynamic(ctx, params)
 }
 
 func parseFlexibleTime(value string) (time.Time, error) {
@@ -390,10 +396,12 @@ func (u *Usecase) GetTelemetryStats(ctx context.Context, companyID uuid.UUID, si
 	return u.repo.GetTelemetryStats(ctx, db.GetTelemetryStatsParams{CompanyID: toNullUUID(companyID), CreatedAt: dbutil.ToNullTime(since)})
 }
 
+// GetRecentEvents fetches the latest telemetry events.
 func (u *Usecase) GetRecentEvents(ctx context.Context, companyID uuid.UUID, limit int32) ([]db.Telemetry, error) {
 	return u.repo.GetRecentEvents(ctx, db.GetRecentEventsParams{CompanyID: toNullUUID(companyID), Limit: limit})
 }
 
+// BulkUpdateStatus updates the status for multiple shipments at once.
 func (u *Usecase) BulkUpdateStatus(ctx context.Context, companyID uuid.UUID, ids []string, status string) error {
 	return u.repo.BulkUpdateStatus(ctx, db.BulkUpdateStatusParams{
 		CompanyID: toNullUUID(companyID),

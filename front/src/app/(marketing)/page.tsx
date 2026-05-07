@@ -1,24 +1,20 @@
-"use client";
-
-import { Suspense, useEffect, useState } from 'react';
 import { MessageSquare, Cpu, Palette } from 'lucide-react';
-import { useI18n } from '@/components/providers/I18nContext';
+import { loadDictionary } from '@/lib/dictionaries';
 import { FeatureCard } from '@/components/landing/FeatureCard';
 import { HeroSection } from '@/components/landing/HeroSection';
 import { TrustMetricsSection } from '@/components/landing/TrustMetricsSection';
 import { HowItWorksSection } from '@/components/landing/HowItWorksSection';
-
 import { GetStartedSection } from '@/components/landing/GetStartedSection';
 
-function HomeContent() {
-  const { dict } = useI18n();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) return null;
+/**
+ * Landing page — Server Component.
+ *
+ * SSR renders the full HTML with the English dictionary so that crawlers
+ * see real content instead of a blank spinner. Client components (animated
+ * counters, user-aware CTAs) hydrate on top and swap locale via context.
+ */
+export default async function Home() {
+  const dict = await loadDictionary('en');
 
   return (
     <main className="min-h-screen flex flex-col items-center overflow-x-hidden relative">
@@ -66,24 +62,10 @@ function HomeContent() {
         {/* 4. How It Works — 3-step pipeline */}
         <HowItWorksSection />
 
-
-
-        {/* 6. CTA — Get Started */}
+        {/* 5. CTA — Get Started */}
         <GetStartedSection />
 
       </div>
     </main>
-  );
-}
-
-export default function Home() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent" />
-      </div>
-    }>
-      <HomeContent />
-    </Suspense>
   );
 }

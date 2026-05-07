@@ -56,19 +56,7 @@ type Querier interface {
 	UpdateCompanySettings(ctx context.Context, arg UpdateCompanySettingsParams) error
 	UpdateCompanySubscriptionStatus(ctx context.Context, arg UpdateCompanySubscriptionStatusParams) error
 	UpdatePlanPrice(ctx context.Context, arg UpdatePlanPriceParams) error
-	UpdateShipmentFieldCargoType(ctx context.Context, arg UpdateShipmentFieldCargoTypeParams) error
-	UpdateShipmentFieldDestination(ctx context.Context, arg UpdateShipmentFieldDestinationParams) error
-	UpdateShipmentFieldExpectedDeliveryTime(ctx context.Context, arg UpdateShipmentFieldExpectedDeliveryTimeParams) error
-	UpdateShipmentFieldOrigin(ctx context.Context, arg UpdateShipmentFieldOriginParams) error
-	UpdateShipmentFieldOutfordeliveryTime(ctx context.Context, arg UpdateShipmentFieldOutfordeliveryTimeParams) error
-	UpdateShipmentFieldRecipientAddress(ctx context.Context, arg UpdateShipmentFieldRecipientAddressParams) error
-	UpdateShipmentFieldRecipientEmail(ctx context.Context, arg UpdateShipmentFieldRecipientEmailParams) error
-	UpdateShipmentFieldRecipientID(ctx context.Context, arg UpdateShipmentFieldRecipientIDParams) error
-	UpdateShipmentFieldRecipientName(ctx context.Context, arg UpdateShipmentFieldRecipientNameParams) error
-	UpdateShipmentFieldRecipientPhone(ctx context.Context, arg UpdateShipmentFieldRecipientPhoneParams) error
-	UpdateShipmentFieldScheduledTransitTime(ctx context.Context, arg UpdateShipmentFieldScheduledTransitTimeParams) error
-	UpdateShipmentFieldSenderName(ctx context.Context, arg UpdateShipmentFieldSenderNameParams) error
-	UpdateShipmentFieldSenderPhone(ctx context.Context, arg UpdateShipmentFieldSenderPhoneParams) error
+	UpdateShipmentDynamic(ctx context.Context, arg UpdateShipmentDynamicParams) error
 	UpdateShipmentStatus(ctx context.Context, arg UpdateShipmentStatusParams) error
 }
 

@@ -44,7 +44,7 @@ export function LayoutHeader() {
     if (isDashboard) {
         return (
             <>
-                <header className="sticky top-0 z-[1000] bg-surface backdrop-blur-md border-b border-border">
+                <header className="sticky top-0 z-[1000] bg-surface/95 backdrop-blur-md border-b border-border shadow-sm">
                     <div className="container-wide flex flex-row justify-between items-center gap-4 py-4">
                         <Logo href="/dashboard" className="cursor-pointer" />
 

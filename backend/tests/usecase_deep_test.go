@@ -130,43 +130,7 @@ func (m *MockQuerier) SetSystemConfig(ctx context.Context, arg db.SetSystemConfi
 func (m *MockQuerier) SetUserLanguage(ctx context.Context, arg db.SetUserLanguageParams) error {
 	return nil
 }
-func (m *MockQuerier) UpdateShipmentFieldCargoType(ctx context.Context, arg db.UpdateShipmentFieldCargoTypeParams) error {
-	return nil
-}
-func (m *MockQuerier) UpdateShipmentFieldDestination(ctx context.Context, arg db.UpdateShipmentFieldDestinationParams) error {
-	return nil
-}
-func (m *MockQuerier) UpdateShipmentFieldExpectedDeliveryTime(ctx context.Context, arg db.UpdateShipmentFieldExpectedDeliveryTimeParams) error {
-	return nil
-}
-func (m *MockQuerier) UpdateShipmentFieldOrigin(ctx context.Context, arg db.UpdateShipmentFieldOriginParams) error {
-	return nil
-}
-func (m *MockQuerier) UpdateShipmentFieldOutfordeliveryTime(ctx context.Context, arg db.UpdateShipmentFieldOutfordeliveryTimeParams) error {
-	return nil
-}
-func (m *MockQuerier) UpdateShipmentFieldRecipientAddress(ctx context.Context, arg db.UpdateShipmentFieldRecipientAddressParams) error {
-	return nil
-}
-func (m *MockQuerier) UpdateShipmentFieldRecipientEmail(ctx context.Context, arg db.UpdateShipmentFieldRecipientEmailParams) error {
-	return nil
-}
-func (m *MockQuerier) UpdateShipmentFieldRecipientID(ctx context.Context, arg db.UpdateShipmentFieldRecipientIDParams) error {
-	return nil
-}
-func (m *MockQuerier) UpdateShipmentFieldRecipientName(ctx context.Context, arg db.UpdateShipmentFieldRecipientNameParams) error {
-	return nil
-}
-func (m *MockQuerier) UpdateShipmentFieldRecipientPhone(ctx context.Context, arg db.UpdateShipmentFieldRecipientPhoneParams) error {
-	return nil
-}
-func (m *MockQuerier) UpdateShipmentFieldScheduledTransitTime(ctx context.Context, arg db.UpdateShipmentFieldScheduledTransitTimeParams) error {
-	return nil
-}
-func (m *MockQuerier) UpdateShipmentFieldSenderName(ctx context.Context, arg db.UpdateShipmentFieldSenderNameParams) error {
-	return nil
-}
-func (m *MockQuerier) UpdateShipmentFieldSenderPhone(ctx context.Context, arg db.UpdateShipmentFieldSenderPhoneParams) error {
+func (m *MockQuerier) UpdateShipmentDynamic(ctx context.Context, arg db.UpdateShipmentDynamicParams) error {
 	return nil
 }
 func (m *MockQuerier) CreateCompany(ctx context.Context, arg db.CreateCompanyParams) (db.Company, error) {

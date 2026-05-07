@@ -2,9 +2,7 @@ package api
 
 import (
 	"context"
-	"crypto/rand"
 	"fmt"
-	"math/big"
 	"strings"
 	"time"
 
@@ -21,6 +19,7 @@ import (
 	"webtracker-bot/internal/notif"
 	"webtracker-bot/internal/parser"
 	"webtracker-bot/internal/shipment"
+	"webtracker-bot/internal/utils"
 
 	"github.com/go-playground/validator/v10"
 )
@@ -142,18 +141,15 @@ func (h *ShipmentHandler) Create(c *fiber.Ctx) error {
 	var params db.CreateShipmentParams
 
 	for attempts := 0; attempts < 5; attempts++ {
-		// Generate a collision-resistant tracking ID
-		randVal, err := rand.Int(rand.Reader, big.NewInt(999999999))
-		if err != nil {
-			logger.Error().Err(err).Msg("Failed to generate random ID")
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to generate ID"})
-		}
-
 		prefix := "AWB"
 		if company.TrackingPrefix.Valid && company.TrackingPrefix.String != "" {
 			prefix = company.TrackingPrefix.String
 		}
-		trackingID = fmt.Sprintf("%s-%09d", prefix, randVal.Int64())
+		trackingID, err = utils.GenerateTrackingID(prefix)
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to generate random ID")
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to generate ID"})
+		}
 		now := time.Now()
 
 		// Use industrial status calculation algorithms instead of hardcoded defaults
@@ -311,7 +307,9 @@ func (h *ShipmentHandler) ParseText(c *fiber.Ctx) error {
 
 	// 2. AI Fallback Parse
 	if m.ReceiverName == "" || m.ReceiverPhone == "" || m.ReceiverAddress == "" {
-		if aiM, err := parser.ParseAI(req.Text, h.cfg.GeminiAPIKey); err == nil {
+		aiCtx, aiCancel := context.WithTimeout(c.Context(), 7*time.Second)
+		defer aiCancel()
+		if aiM, err := parser.ParseAI(aiCtx, req.Text, h.cfg.GeminiAPIKey); err == nil {
 			m.Merge(aiM)
 			m.IsAI = true
 			m.Validate()
@@ -372,13 +370,16 @@ func (h *ShipmentHandler) BulkCreateCSV(c *fiber.Ctx) error {
 		var insertErr error
 
 		for attempts := 0; attempts < 5; attempts++ {
-			randVal, err := rand.Int(rand.Reader, big.NewInt(999999999))
+			prefix := "AWB"
+			if company.TrackingPrefix.Valid && company.TrackingPrefix.String != "" {
+				prefix = company.TrackingPrefix.String
+			}
+			trackingID, err = utils.GenerateTrackingID(prefix)
 			if err != nil {
 				logger.Error().Err(err).Msg("Failed to generate random ID in bulk")
 				insertErr = err
 				break
 			}
-			trackingID = fmt.Sprintf("AWB-%09d", randVal.Int64())
 			now := time.Now()
 
 			departure := h.shipmentUC.Service.CalculateDeparture(now, "Africa/Lagos")
@@ -470,7 +471,8 @@ func (h *ShipmentHandler) BulkUpdateStatus(c *fiber.Ctx) error {
 			cfg := h.cfg
 			shipUC := h.shipmentUC
 			go func() {
-				ctx := context.Background()
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+				defer cancel()
 				for _, id := range ids {
 					if ship, err := shipUC.Track(ctx, companyID, id); err == nil {
 						notif.SendStatusAlert(ctx, bot.GetWAClient(), cfg, bot.GetCompanyName(), ship.UserJid, ship.TrackingID, status, ship.RecipientEmail.String)

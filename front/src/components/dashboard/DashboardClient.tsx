@@ -92,7 +92,8 @@ export default function DashboardClient({ initialCompanyData, initialStats, user
             return data as CompanyData;
         },
         initialData: initialCompanyData,
-        staleTime: 1000 * 60 * 5, // 5 minutes
+        staleTime: 30_000,
+        refetchOnWindowFocus: true,
     });
 
     const { data: shipmentStats, isFetching: fetchingStats } = useQuery({
@@ -118,7 +119,8 @@ export default function DashboardClient({ initialCompanyData, initialStats, user
             };
         },
         initialData: initialStats,
-        staleTime: 1000 * 60 * 5, // 5 minutes
+        staleTime: 30_000,
+        refetchOnWindowFocus: true,
     });
 
     // Handle Authorization Errors
@@ -165,15 +167,27 @@ export default function DashboardClient({ initialCompanyData, initialStats, user
         ? new Date(expiryDateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
         : '—';
 
-    let daysRemaining = 0;
-    let isExpired = false;
-    if (expiryDateString) {
-        daysRemaining = Math.ceil((new Date(expiryDateString).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-        if (daysRemaining < 0) {
-            isExpired = true;
-            daysRemaining = 0;
-        }
-    }
+    const [daysRemaining, setDaysRemaining] = useState(0);
+    const [isExpired, setIsExpired] = useState(false);
+
+    useEffect(() => {
+        if (!expiryDateString) return;
+
+        const updateRemaining = () => {
+            const remaining = Math.ceil((new Date(expiryDateString).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+            if (remaining < 0) {
+                setIsExpired(true);
+                setDaysRemaining(0);
+            } else {
+                setIsExpired(false);
+                setDaysRemaining(remaining);
+            }
+        };
+
+        updateRemaining(); // Initial call
+        const interval = setInterval(updateRemaining, 1000 * 60 * 60); // Update every hour
+        return () => clearInterval(interval);
+    }, [expiryDateString]);
 
     const subscriptionStatus = isExpired ? 'expired' : (companyData?.subscription_status || 'active');
     const overallStatus = whatsappConnected ? subscriptionStatus : 'pending';
@@ -303,8 +317,8 @@ export default function DashboardClient({ initialCompanyData, initialStats, user
                         icon: '🚀',
                         duration: 5000,
                     });
-                    queryClient.invalidateQueries({ queryKey: ['company', companyId] });
-                    router.refresh();
+                    queryClient.refetchQueries({ queryKey: ['company', companyId] });
+                    queryClient.refetchQueries({ queryKey: ['shipments', companyId] });
                 }}
             />
         </div>

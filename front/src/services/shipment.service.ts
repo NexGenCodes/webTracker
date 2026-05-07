@@ -17,11 +17,10 @@ export class ShipmentService {
         try {
             const supabase = await createClient();
 
-            const { data, error } = await supabase
-                .from('shipment')
-                .select('*')
-                .eq('tracking_id', trackingNumber)
+            const { data: rawData, error } = await supabase
+                .rpc('get_public_shipment', { p_tracking_id: trackingNumber })
                 .single();
+            const data = rawData as Record<string, unknown>;
 
             if (error || !data) {
                 if (error?.code === 'PGRST116') return null;

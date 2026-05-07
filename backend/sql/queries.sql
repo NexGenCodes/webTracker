@@ -142,44 +142,27 @@ SELECT
     COUNT(*) FILTER (WHERE status = 'canceled') AS canceled
 FROM Shipment WHERE company_id = $1;
 
--- name: UpdateShipmentFieldSenderName :exec
-UPDATE Shipment SET sender_name = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2;
 
--- name: UpdateShipmentFieldSenderPhone :exec
-UPDATE Shipment SET sender_phone = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2;
 
--- name: UpdateShipmentFieldOrigin :exec
-UPDATE Shipment SET origin = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2;
-
--- name: UpdateShipmentFieldRecipientName :exec
-UPDATE Shipment SET recipient_name = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2;
-
--- name: UpdateShipmentFieldRecipientPhone :exec
-UPDATE Shipment SET recipient_phone = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2;
-
--- name: UpdateShipmentFieldRecipientEmail :exec
-UPDATE Shipment SET recipient_email = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2;
-
--- name: UpdateShipmentFieldRecipientID :exec
-UPDATE Shipment SET recipient_id = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2;
-
--- name: UpdateShipmentFieldRecipientAddress :exec
-UPDATE Shipment SET recipient_address = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2;
-
--- name: UpdateShipmentFieldDestination :exec
-UPDATE Shipment SET destination = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2;
-
--- name: UpdateShipmentFieldCargoType :exec
-UPDATE Shipment SET cargo_type = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2;
-
--- name: UpdateShipmentFieldScheduledTransitTime :exec
-UPDATE Shipment SET scheduled_transit_time = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2;
-
--- name: UpdateShipmentFieldExpectedDeliveryTime :exec
-UPDATE Shipment SET expected_delivery_time = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2;
-
--- name: UpdateShipmentFieldOutfordeliveryTime :exec
-UPDATE Shipment SET outfordelivery_time = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2;
+-- name: UpdateShipmentDynamic :exec
+UPDATE Shipment
+SET 
+  sender_name = COALESCE(NULLIF($3::text, ''), sender_name),
+  sender_phone = COALESCE(NULLIF($4::text, ''), sender_phone),
+  origin = COALESCE(NULLIF($5::text, ''), origin),
+  recipient_name = COALESCE(NULLIF($6::text, ''), recipient_name),
+  recipient_phone = COALESCE(NULLIF($7::text, ''), recipient_phone),
+  recipient_email = COALESCE(NULLIF($8::text, ''), recipient_email),
+  recipient_id = COALESCE(NULLIF($9::text, ''), recipient_id),
+  recipient_address = COALESCE(NULLIF($10::text, ''), recipient_address),
+  destination = COALESCE(NULLIF($11::text, ''), destination),
+  cargo_type = COALESCE(NULLIF($12::text, ''), cargo_type),
+  scheduled_transit_time = COALESCE($13::timestamp, scheduled_transit_time),
+  expected_delivery_time = COALESCE($14::timestamp, expected_delivery_time),
+  outfordelivery_time = COALESCE($15::timestamp, outfordelivery_time),
+  status = COALESCE(NULLIF($16::text, ''), status),
+  updated_at = CURRENT_TIMESTAMP
+WHERE company_id = $1 AND tracking_id = $2;
 
 -- name: RecordEvent :exec
 INSERT INTO Telemetry (company_id, event_type, metadata, created_at)

@@ -2,7 +2,46 @@ package shipment
 
 import (
 	"time"
+	"webtracker-bot/internal/database/db"
 )
+
+// ToDomain converts a database Shipment model into the domain Shipment struct.
+func ToDomain(dbShip db.Shipment) Shipment {
+	var scheduledTransit, outForDelivery, expectedDelivery *time.Time
+	if dbShip.ScheduledTransitTime.Valid {
+		scheduledTransit = &dbShip.ScheduledTransitTime.Time
+	}
+	if dbShip.OutfordeliveryTime.Valid {
+		outForDelivery = &dbShip.OutfordeliveryTime.Time
+	}
+	if dbShip.ExpectedDeliveryTime.Valid {
+		expectedDelivery = &dbShip.ExpectedDeliveryTime.Time
+	}
+
+	return Shipment{
+		TrackingID:           dbShip.TrackingID,
+		UserJID:              dbShip.UserJid,
+		Status:               dbShip.Status.String,
+		CreatedAt:            dbShip.CreatedAt.Time,
+		ScheduledTransitTime: scheduledTransit,
+		OutForDeliveryTime:   outForDelivery,
+		ExpectedDeliveryTime: expectedDelivery,
+		SenderTimezone:       dbShip.SenderTimezone.String,
+		RecipientTimezone:    dbShip.RecipientTimezone.String,
+		SenderName:           dbShip.SenderName.String,
+		SenderPhone:          dbShip.SenderPhone.String,
+		Origin:               dbShip.Origin.String,
+		RecipientName:        dbShip.RecipientName.String,
+		RecipientPhone:       dbShip.RecipientPhone.String,
+		RecipientID:          dbShip.RecipientID.String,
+		RecipientEmail:       dbShip.RecipientEmail.String,
+		RecipientAddress:     dbShip.RecipientAddress.String,
+		Destination:          dbShip.Destination.String,
+		CargoType:            dbShip.CargoType.String,
+		Weight:               dbShip.Weight.Float64,
+		Cost:                 dbShip.Cost.Float64,
+	}
+}
 
 // Status constants
 const (

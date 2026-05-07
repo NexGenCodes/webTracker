@@ -3,11 +3,6 @@ package api
 import (
 	"log"
 
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/cors"
-	"github.com/gofiber/fiber/v2/middleware/logger"
-	"github.com/gofiber/fiber/v2/middleware/recover"
-
 	"database/sql"
 	"time"
 	"webtracker-bot/internal/auth"
@@ -15,6 +10,12 @@ import (
 	"webtracker-bot/internal/database/db"
 	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/shipment"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/gofiber/fiber/v2/middleware/timeout"
 )
 
 type Server struct {
@@ -30,7 +31,7 @@ type Server struct {
 func NewServer(cfg *config.Config, shipmentUC *shipment.Usecase, configUC *config.Usecase, db *sql.DB, bots models.BotProvider) *Server {
 	app := fiber.New(fiber.Config{
 		DisableStartupMessage: true,
-		BodyLimit:             1 * 1024 * 1024, // 1MB — prevents OOM on free tier
+		BodyLimit:             1 * 1024 * 1024,
 		ReadTimeout:           30 * time.Second,
 		WriteTimeout:          30 * time.Second,
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
@@ -45,8 +46,13 @@ func NewServer(cfg *config.Config, shipmentUC *shipment.Usecase, configUC *confi
 	})
 
 	// Global Middlewares
-	app.Use(recover.New()) // Catch panics — prevents full process crash
+	app.Use(recover.New())
 	app.Use(logger.New())
+
+	// Enforce 30-second context timeout on all requests
+	app.Use(timeout.NewWithContext(func(c *fiber.Ctx) error {
+		return c.Next()
+	}, 30*time.Second))
 
 	// Safely restrict CORS to the configured frontend URL and local development
 	app.Use(cors.New(cors.Config{
@@ -134,4 +140,3 @@ func (s *Server) Stop() error {
 func (s *Server) GetAppForTest() *fiber.App {
 	return s.app
 }
-

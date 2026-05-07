@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useTransition, useCallback } from 'react';
-import { Smartphone, Copy, Check, Loader2, XCircle, ChevronRight, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Smartphone, XCircle, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { z } from 'zod';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { pairWhatsApp, getWhatsAppQR } from '@/app/actions/setup';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
-import { QRCodeSVG } from 'qrcode.react';
 import { createClient } from '@/lib/supabase/client';
+
+import { QRCodeView } from './whatsapp/QRCodeView';
+import { PhoneConnectForm, type PhoneFormValues } from './whatsapp/PhoneConnectForm';
+import { PhoneCodeView } from './whatsapp/PhoneCodeView';
 
 const formatLocalPhone = (countryCode: string, phone: string) => {
     let localPhone = phone.replace(/[\s\-()]/g, '');
@@ -16,35 +16,6 @@ const formatLocalPhone = (countryCode: string, phone: string) => {
     }
     return localPhone.startsWith('+') ? localPhone : `${countryCode}${localPhone}`;
 };
-
-// --- CONFIGURATION ---
-const COUNTRY_CODES = [
-    { value: '+234', label: '🇳🇬 +234' },
-    { value: '+27', label: '🇿🇦 +27' },
-    { value: '+254', label: '🇰🇪 +254' },
-    { value: '+233', label: '🇬🇭 +233' },
-    { value: '+1', label: '🇺🇸 +1' },
-    { value: '+44', label: '🇬🇧 +44' },
-];
-
-// --- ZOD SCHEMA (Defined Outside Component) ---
-const phoneSchema = z.object({
-    countryCode: z.string(),
-    phone: z.string().min(1, "Phone number is required")
-}).superRefine((data, ctx) => {
-    const fullNumber = formatLocalPhone(data.countryCode, data.phone);
-    const phoneNumber = parsePhoneNumberFromString(fullNumber);
-
-    if (!phoneNumber || !phoneNumber.isValid()) {
-        ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: "Please enter a valid phone number",
-            path: ["phone"]
-        });
-    }
-});
-
-type PhoneFormValues = z.infer<typeof phoneSchema>;
 
 interface WhatsAppConnectModalProps {
     isOpen: boolean;
@@ -65,25 +36,11 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
     const [pairStatus, setPairStatus] = useState<'idle' | 'waiting' | 'connected'>('idle');
     const [connectMode, setConnectMode] = useState<'qr' | 'phone'>('qr');
 
-    // React 19 / Next.js 15: useTransition for Server Action
     const [isPending, startTransition] = useTransition();
 
-    // React Hook Form
-    const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<PhoneFormValues>({
-        resolver: zodResolver(phoneSchema),
-        defaultValues: {
-            countryCode: '+234',
-            phone: '',
-        }
-    });
-
-    const watchPhone = watch('phone');
-
-    // Handle connected logic
     const handleConnected = useCallback(() => {
         setPairStatus(prev => {
             if (prev === 'connected') return prev;
-            // Execute side-effect
             setTimeout(() => {
                 onSuccess();
                 onClose();
@@ -111,7 +68,6 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
         });
     }, [companyId, handleConnected]);
 
-    // Reset state when opened
     useEffect(() => {
         if (isOpen) {
             setPairingCode('');
@@ -119,35 +75,29 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
             setPairError('');
             setPairStatus('idle');
             setConnectMode('qr');
-            reset();
             handleFetchQR();
         }
-    }, [isOpen, reset, handleFetchQR]);
+    }, [isOpen, handleFetchQR]);
 
-    // Auto-refresh QR code every 20 seconds while in QR mode and waiting
     useEffect(() => {
         let interval: NodeJS.Timeout;
         if (isOpen && connectMode === 'qr' && pairStatus === 'waiting') {
             interval = setInterval(() => {
                 handleFetchQR();
-            }, 20000); // 20 seconds
+            }, 20000);
         }
         return () => {
             if (interval) clearInterval(interval);
         };
     }, [isOpen, connectMode, pairStatus, handleFetchQR]);
 
-
-
-    // 1. Handle pairing modal success state via props (updated by DashboardClient)
     useEffect(() => {
         if (!isOpen || !companyId) return;
-        if (companyData?.auth_status === 'active' && (pairStatus === 'waiting' || pairStatus === 'idle')) {
+        if (companyData?.auth_status === 'active') {
             handleConnected();
         }
-    }, [isOpen, companyId, companyData?.auth_status, pairStatus, handleConnected]);
+    }, [isOpen, companyId, companyData?.auth_status, handleConnected]);
 
-    // 2. Supabase Realtime Subscription (Ensures snappy UI update independently)
     useEffect(() => {
         if (!isOpen || !companyId) return;
 
@@ -164,17 +114,12 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
                     filter: `id=eq.${companyId}`,
                 },
                 (payload) => {
-                    console.log('[Realtime Modal] Row updated:', payload.new);
                     if (payload.new.auth_status === 'active') {
                         handleConnected();
                     }
                 }
             )
-            .subscribe((status) => {
-                if (status === 'SUBSCRIBED') {
-                    console.log('[Realtime Modal] Active');
-                }
-            });
+            .subscribe();
 
         return () => {
             supabase.removeChannel(channel);
@@ -198,24 +143,20 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
         setCodeCopied(true);
     };
 
-    const onSubmit = (data: PhoneFormValues) => {
+    const onSubmitPhoneForm = (data: PhoneFormValues) => {
         setPairError('');
 
-        // Guard: companyId must be present
         if (!companyId) {
-            console.error('[WhatsApp Pair] companyId is missing — session may have expired.');
             setPairError('Session expired. Please refresh the page and try again.');
             return;
         }
 
-        // Subscription validation check
         const subStatus = companyData?.subscription_status ?? 'active';
         if (subStatus !== 'active' && subStatus !== 'trialing') {
             setPairError('Subscription is inactive. Please renew to use the tracking bot.');
             return;
         }
 
-        // Process Phone Number securely using libphonenumber-js
         const fullNumber = formatLocalPhone(data.countryCode, data.phone);
         const phoneNumber = parsePhoneNumberFromString(fullNumber);
 
@@ -224,10 +165,8 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
             return;
         }
 
-        // Extract strictly digits for the backend (E.164 without the '+')
         const formattedPhone = phoneNumber.number.replace('+', '');
 
-        // Execute Server Action within transition
         startTransition(async () => {
             const response = await pairWhatsApp(companyId, formattedPhone);
 
@@ -252,7 +191,7 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-background/80"
+                    className="fixed inset-0 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm bg-background/80"
                 >
                     <motion.div
                         initial={{ scale: 0.95, opacity: 0, y: 20 }}
@@ -286,7 +225,6 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
                                 </div>
                             )}
 
-                            {/* Mode Toggle */}
                             {!pairingCode && pairStatus !== 'connected' && (
                                 <div className="flex bg-surface-muted p-1 rounded-xl mb-6">
                                     <button
@@ -307,151 +245,19 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
                             )}
 
                             {connectMode === 'qr' && !pairingCode ? (
-                                <div className="text-center space-y-6">
-                                    <div className="space-y-2">
-                                        <h4 className="text-lg font-black text-text-main">Scan QR Code</h4>
-                                        <p className="text-sm font-medium text-text-muted max-w-sm mx-auto">
-                                            Open WhatsApp {'>'} Linked Devices {'>'} Link a device
-                                        </p>
-                                    </div>
-
-                                    <div className="flex justify-center p-4 bg-white rounded-2xl mx-auto w-fit shadow-sm border border-border/50">
-                                        {qrCodeData ? (
-                                            <QRCodeSVG value={qrCodeData} size={200} />
-                                        ) : (
-                                            <div className="w-[200px] h-[200px] flex items-center justify-center bg-surface-muted rounded-xl">
-                                                <Loader2 className="animate-spin text-accent" size={32} />
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <div className="p-4 rounded-xl bg-accent/5 border border-accent/10 flex items-center justify-center gap-3">
-                                        {pairStatus === 'connected' ? (
-                                            <>
-                                                <div className="w-8 h-8 rounded-full bg-success/20 flex items-center justify-center text-success">
-                                                    <Check size={16} />
-                                                </div>
-                                                <p className="text-sm font-black text-success uppercase tracking-widest">Connected!</p>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Loader2 size={16} className="animate-spin text-accent" />
-                                                <p className="text-sm font-bold text-text-muted">Waiting for scan...</p>
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
+                                <QRCodeView qrCodeData={qrCodeData} pairStatus={pairStatus} />
                             ) : !pairingCode ? (
-                                <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-black uppercase tracking-widest text-text-muted">Business Number</label>
-                                        <div className="flex items-stretch gap-0 rounded-2xl border-2 border-transparent focus-within:border-accent/20 focus-within:ring-4 focus-within:ring-accent-soft overflow-hidden transition-all bg-surface-muted">
-                                            <select
-                                                {...register('countryCode')}
-                                                className="shrink-0 appearance-none border-r border-border px-4 py-4 text-sm font-black cursor-pointer focus:outline-none bg-surface text-text-main w-[110px]"
-                                            >
-                                                {COUNTRY_CODES.map(c => (
-                                                    <option key={c.value} value={c.value}>{c.label}</option>
-                                                ))}
-                                            </select>
-                                            <input
-                                                type="tel"
-                                                {...register('phone')}
-                                                placeholder="803 000 0000"
-                                                className="flex-1 min-w-0 px-4 py-4 text-base font-medium outline-none bg-transparent text-text-main caret-text-main"
-                                            />
-                                        </div>
-                                        {errors.phone && (
-                                            <p className="text-xs font-bold text-error mt-1">{errors.phone.message}</p>
-                                        )}
-                                        <p className="text-[10px] font-medium text-text-muted pl-1">Exclude the leading zero if applicable (e.g. 803 instead of 0803)</p>
-                                    </div>
-
-                                    <button
-                                        type="submit"
-                                        disabled={isPending || !watchPhone}
-                                        className="btn-primary w-full py-4 text-sm flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        {isPending ? (
-                                            <>
-                                                <Loader2 size={18} className="animate-spin" />
-                                                <span>Processing...</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <span>Generate Code</span>
-                                                <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
-                                            </>
-                                        )}
-                                    </button>
-                                </form>
+                                <PhoneConnectForm isPending={isPending} onSubmit={onSubmitPhoneForm} />
                             ) : (
-                                <div className="text-center space-y-8">
-                                    <div className="space-y-2">
-                                        <h4 className="text-lg font-black text-text-main">Enter Code on WhatsApp</h4>
-                                        <p className="text-sm font-medium text-text-muted max-w-sm mx-auto">
-                                            Open WhatsApp {'>'} Linked Devices {'>'} Link with phone number instead
-                                        </p>
-                                    </div>
-
-                                    <div className="flex justify-center items-center gap-1 sm:gap-2 md:gap-3 w-full">
-                                        {pairingCode.split('').map((char, i) => (
-                                            <React.Fragment key={i}>
-                                                {i === 4 && <div className="w-2 sm:w-4 flex items-center justify-center text-border font-black text-lg sm:text-2xl shrink-0">-</div>}
-                                                <div className="flex-1 max-w-[2.5rem] sm:max-w-[3rem] aspect-[4/5] bg-surface border border-border/50 rounded-lg sm:rounded-xl flex items-center justify-center text-lg sm:text-2xl md:text-3xl font-black text-accent shadow-inner">
-                                                    {char}
-                                                </div>
-                                            </React.Fragment>
-                                        ))}
-                                    </div>
-                                    <div className="flex flex-col sm:flex-row justify-center gap-3 mt-6">
-                                        <button
-                                            onClick={handleCopyCode}
-                                            className="inline-flex items-center justify-center gap-2 px-6 py-3.5 sm:py-2.5 rounded-xl sm:rounded-full bg-surface border border-border hover:bg-surface-hover text-sm font-bold text-text-main transition-colors w-full sm:w-auto active:scale-95"
-                                        >
-                                            {codeCopied ? <Check size={16} className="text-success" /> : <Copy size={16} />}
-                                            {codeCopied ? 'Copied!' : 'Copy Code'}
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setPairStatus('idle');
-                                            }}
-                                            className="inline-flex items-center justify-center gap-2 px-6 py-3.5 sm:py-2.5 rounded-xl sm:rounded-full bg-surface-muted hover:bg-border text-text-muted hover:text-text-main transition-colors w-full sm:w-auto text-sm font-bold active:scale-95"
-                                        >
-                                            <RefreshCw size={16} />
-                                            Regenerate
-                                        </button>
-                                    </div>
-
-                                    <div className="p-4 rounded-xl bg-accent/5 border border-accent/10 flex items-center justify-center gap-3">
-                                        {pairStatus === 'connected' ? (
-                                            <>
-                                                <div className="w-8 h-8 rounded-full bg-success/20 flex items-center justify-center text-success">
-                                                    <Check size={16} />
-                                                </div>
-                                                <p className="text-sm font-black text-success uppercase tracking-widest">Connected!</p>
-                                            </>
-                                        ) : (
-                                            <div className="flex flex-col items-center gap-2">
-                                                <div className="flex items-center gap-3">
-                                                    <Loader2 size={16} className="animate-spin text-accent" />
-                                                    <p className="text-sm font-bold text-text-muted">Waiting for connection...</p>
-                                                </div>
-                                                <button 
-                                                    onClick={() => {
-                                                        const supabase = createClient();
-                                                        supabase.from('companies').select('auth_status').eq('id', companyId).single().then(({ data }) => {
-                                                            if (data?.auth_status === 'active') handleConnected();
-                                                        });
-                                                    }}
-                                                    className="text-[10px] font-black uppercase tracking-widest text-accent hover:underline flex items-center gap-1"
-                                                >
-                                                    <RefreshCw size={10} /> Check Status Manually
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
+                                <PhoneCodeView
+                                    pairingCode={pairingCode}
+                                    pairStatus={pairStatus}
+                                    handleCopyCode={handleCopyCode}
+                                    codeCopied={codeCopied}
+                                    onRegenerate={() => setPairStatus('idle')}
+                                    companyId={companyId}
+                                    handleConnected={handleConnected}
+                                />
                             )}
                         </div>
                     </motion.div>

@@ -53,7 +53,7 @@ func GetLabelMappings() []uncompiledLabelMap{
 	possessive := `(?:['’]s|s['’]|s)?`
 	return []uncompiledLabelMap{
 		{"ReceiverName", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|reciever|rcvr|consignee|destinatario|destinatário|dirección|empfänger|destinataire|namen?)` + possessive + `\b(?:\s+is)?[\s\-:]+name\b[\s\-:]*`, 2},
-		{"ReceiverName", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|reciever|rcvr|consignee|destinatario|destinatário|empfänger|destinataire|to|dest|destination)` + possessive + `\b(?:\s+is)?[\s\-:]*`, 2},
+		{"ReceiverName", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|reciever|rcvr|consignee|destinatario|destinatário|empfänger|destinataire|to)` + possessive + `\b(?:\s+is)?[\s\-:]*`, 2},
 		{"ReceiverName", `(?i)\bname\b(?:\s+is)?[\s\-:]*`, 1},
 		{"ReceiverPhone", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|reciever|rcvr|to|consignment|consignee|destinatario|destinatário|empfänger|destinataire)` + possessive + `\b[\s\-:]+\b(?:phone|mobile|mob|teléfono|telephon|telefone|tel|num|contact|telephone|mobil|number|ph|cell|whatsapp|handy|nr)\b[\s\-:]*`, 2},
 		{"ReceiverPhone", `(?i)\b(?:phone|mobile|mob|teléfono|telephon|telefone|tel|num|contact|telephone|mobil|number|ph|cell|whatsapp|handy|nr)\b[\s\-:]*`, 1},
@@ -66,7 +66,7 @@ func GetLabelMappings() []uncompiledLabelMap{
 		{"ReceiverEmail", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|reciever|rcvr|to|consignment|consignee|destinatario|destinatário|empfänger|destinataire)` + possessive + `\b[\s\-:]+\b(?:email|mail|e-mail)\b[\s\-:]*`, 2},
 		{"ReceiverEmail", `(?i)\b(?:email|mail|e-mail)\b[\s\-:]*`, 1},
 		{"SenderName", `(?i)\b(?:sender|sendr|from|shippr|shipper|sent by|remetente|remitente|absender|expéditeur|expediteur|source|origin)` + possessive + `\b[\s\-:]+name\b[\s\-:]*`, 2},
-		{"SenderName", `(?i)\b(?:sender|sendr|from|shippr|shipper|sent by|remetente|remitente|absender|expéditeur|expediteur|source|origin)` + possessive + `\b[\s\-:]*`, 2},
+		{"SenderName", `(?i)\b(?:sender|sendr|from|shippr|shipper|sent by|remetente|remitente|absender|expéditeur|expediteur)` + possessive + `\b[\s\-:]*`, 2},
 		{"SenderCountry", `(?i)\b(?:origin|sender` + possessive + `\s*country|sender` + possessive + `\s*nation|source` + possessive + `\s*country|from` + possessive + `\s*country)\b[\s\-:]*`, 2},
 		{"CargoType", `(?i)\b(?:item|content|cargo|description|type|package|commodity|conteúdo|contenido|inhalt|ware|consignment)\b(?:\s+weight)?[\s\-:]*`, 1},
 		{"Weight", `(?i)\b(?:weight|wgt|mass|gross\s*weight|peso|gewicht|poids)\b[\s\-:]*`, 2},
@@ -362,17 +362,15 @@ func CleanText(text string) string {
 	return strings.TrimSpace(sb.String())
 }
 
-func ParseAI(text, apiKey string) (models.Manifest, error) {
+func ParseAI(ctx context.Context, text, apiKey string) (models.Manifest, error) {
 	if err := aiCircuitBreaker.Allow(); err != nil {
 		return models.Manifest{}, fmt.Errorf("AI parsing temporarily unavailable: %w", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
 	if err := aiRateLimiter.Wait(ctx); err != nil {
 		return models.Manifest{}, fmt.Errorf("AI rate limit exceeded: %w", err)
 	}
-	url := "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=" + apiKey
+	url := "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent"
 
 	prompt := `You are a logistics data extraction assistant. Extract shipping information from user text and return JSON matching the schema below.
         
@@ -417,6 +415,7 @@ func ParseAI(text, apiKey string) (models.Manifest, error) {
 		return models.Manifest{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-goog-api-key", apiKey)
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {

@@ -57,6 +57,11 @@ func (a *App) Init() error {
 	}
 	a.SqlPool = sqlPool
 
+	// Run embedded migrations automatically
+	if err := database.RunMigrations(a.Context, a.SqlPool); err != nil {
+		return fmt.Errorf("database migration failed: %w", err)
+	}
+
 	querier := db.New(a.SqlPool)
 	shipService := &shipment.Calculator{}
 	a.ShipmentUC = shipment.NewUsecase(querier, shipService)
@@ -111,14 +116,19 @@ func (a *App) Run() error {
 		}
 	}()
 
-	for _, bot := range a.BotManager.GetAllBots() {
-		wc := bot.GetWAClient()
-		if wc != nil && wc.Store != nil && wc.Store.ID != nil {
-			if err := wc.Connect(); err != nil {
-				logger.Error().Err(err).Str("company", bot.GetCompanyName()).Msg("Failed to connect")
+	// Fix Thundering Herd: Connect bots asynchronously with a delay so we don't spike CPU or get rate-limited by WhatsApp
+	go func() {
+		for _, bot := range a.BotManager.GetAllBots() {
+			wc := bot.GetWAClient()
+			if wc != nil && wc.Store != nil && wc.Store.ID != nil {
+				if err := wc.Connect(); err != nil {
+					logger.Error().Err(err).Str("company", bot.GetCompanyName()).Msg("Failed to connect")
+				}
+				// Jitter: wait 500ms before connecting the next bot
+				time.Sleep(500 * time.Millisecond)
 			}
 		}
-	}
+	}()
 
 	go func() {
 		if err := a.HttpServer.Start(a.Cfg.APIPort); err != nil {
@@ -226,4 +236,8 @@ func (a *App) GeneratePairingCode(ctx context.Context, companyID uuid.UUID, phon
 
 func (a *App) GetQR(ctx context.Context, companyID uuid.UUID) (string, error) {
 	return a.BotManager.GetQR(ctx, companyID)
+}
+
+func (a *App) LivenessCheck() {
+	a.BotManager.LivenessCheck()
 }

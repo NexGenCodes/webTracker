@@ -10,8 +10,7 @@ import (
 	"sort"
 
 	"webtracker-bot/internal/config"
-
-	"github.com/jackc/pgx/v5/pgxpool"
+	"webtracker-bot/internal/database"
 )
 
 func main() {
@@ -22,16 +21,16 @@ func main() {
 
 	ctx := context.Background()
 
-	// Connect to the database
-	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	// Connect to the database using the unified connection logic
+	db, err := database.Connect(cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("Unable to connect to database: %v\n", err)
 	}
-	defer pool.Close()
+	defer db.Close()
 
 	// Define the SQL directory
 	sqlDir := filepath.Join("sql", "migrations")
-	
+
 	// Read all files in the sql directory
 	files, err := os.ReadDir(sqlDir)
 	if err != nil {
@@ -57,7 +56,7 @@ func main() {
 	}
 
 	// Create schema_migrations table if it doesn't exist
-	_, err = pool.Exec(ctx, `
+	_, err = db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS schema_migrations (
 			version TEXT PRIMARY KEY,
 			applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -71,7 +70,7 @@ func main() {
 	for _, fileName := range sqlFiles {
 		// Check if already applied
 		var exists bool
-		err = pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = $1)", fileName).Scan(&exists)
+		err = db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = $1)", fileName).Scan(&exists)
 		if err != nil {
 			log.Fatalf("Failed to check migration status for %s: %v", fileName, err)
 		}
@@ -83,31 +82,31 @@ func main() {
 
 		filePath := filepath.Join(sqlDir, fileName)
 		fmt.Printf("Applying migration: %s...\n", filePath)
-		
+
 		sqlBytes, err := os.ReadFile(filePath)
 		if err != nil {
 			log.Fatalf("Failed to read sql file %s: %v\n", filePath, err)
 		}
 
 		// Execute the migration and record it in a transaction
-		tx, err := pool.Begin(ctx)
+		tx, err := db.BeginTx(ctx, nil)
 		if err != nil {
 			log.Fatalf("Failed to begin transaction for %s: %v", fileName, err)
 		}
 
-		_, err = tx.Exec(ctx, string(sqlBytes))
+		_, err = tx.ExecContext(ctx, string(sqlBytes))
 		if err != nil {
-			tx.Rollback(ctx)
+			tx.Rollback()
 			log.Fatalf("Failed to execute migration %s: %v\n", filePath, err)
 		}
 
-		_, err = tx.Exec(ctx, "INSERT INTO schema_migrations (version) VALUES ($1)", fileName)
+		_, err = tx.ExecContext(ctx, "INSERT INTO schema_migrations (version) VALUES ($1)", fileName)
 		if err != nil {
-			tx.Rollback(ctx)
+			tx.Rollback()
 			log.Fatalf("Failed to record migration %s: %v\n", filePath, err)
 		}
 
-		if err := tx.Commit(ctx); err != nil {
+		if err := tx.Commit(); err != nil {
 			log.Fatalf("Failed to commit migration %s: %v\n", filePath, err)
 		}
 

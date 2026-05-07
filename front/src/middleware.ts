@@ -1,9 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { jwtVerify, importSPKI } from 'jose'
 
-const JWT_PUBLIC_KEY_RAW = process.env.NEXT_PUBLIC_JWT_PUBLIC_KEY?.replace(/\\n/g, '\n');
+const JWT_PUBLIC_KEY_RAW = process.env.JWT_PUBLIC_KEY?.replace(/\\n/g, '\n');
 if (!JWT_PUBLIC_KEY_RAW) {
-  console.error('CRITICAL: NEXT_PUBLIC_JWT_PUBLIC_KEY environment variable is not set. Auth will reject all tokens.');
+  console.error('CRITICAL: JWT_PUBLIC_KEY environment variable is not set. Auth will reject all tokens.');
 }
 
 let publicKey: CryptoKey | null = null;

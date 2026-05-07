@@ -60,14 +60,14 @@ export default function BillingClient({ initialPlans, initialPayments, companyDa
         router.replace('/dashboard/billing');
     };
 
-    // Realtime subscription for payments
+    // Realtime subscription for payments and company subscription status
     useEffect(() => {
         if (!companyId) return;
 
         const supabase = createClient();
 
         const channel = supabase
-            .channel(`payments-${companyId}`)
+            .channel(`billing-${companyId}`)
             .on(
                 'postgres_changes',
                 {
@@ -78,7 +78,6 @@ export default function BillingClient({ initialPlans, initialPayments, companyDa
                 },
                 () => {
                     // Re-fetch payment history when any change occurs
-                    // if the page is a Server Component!
                     router.refresh();
 
                     // Fallback for immediate UI update
@@ -91,12 +90,31 @@ export default function BillingClient({ initialPlans, initialPayments, companyDa
                     fetchPayments();
                 }
             )
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'companies',
+                    filter: `id=eq.${companyId}`
+                },
+                async (payload) => {
+                    // Force auth context to reload on subscription status change
+                    const newStatus = payload.new?.subscription_status;
+                    const oldStatus = payload.old?.subscription_status;
+                    if (newStatus !== oldStatus && newStatus === 'active') {
+                        toast.success('Subscription activated successfully!', { id: 'sub-active' });
+                        await refreshAuth();
+                        router.refresh();
+                    }
+                }
+            )
             .subscribe();
 
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [companyId, router]);
+    }, [companyId, router, refreshAuth]);
 
     useEffect(() => {
         if (reference) {

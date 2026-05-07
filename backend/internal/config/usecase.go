@@ -5,8 +5,9 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/google/uuid"
 	"webtracker-bot/internal/database/db"
+
+	"github.com/google/uuid"
 )
 
 type Usecase struct {
@@ -150,12 +151,10 @@ func (u *Usecase) RecordPayment(ctx context.Context, companyID uuid.UUID, refere
 		Status:    sql.NullString{String: status, Valid: true},
 	})
 	if err == sql.ErrNoRows {
-		return 0, nil // Duplicate reference (ON CONFLICT DO NOTHING returns no rows)
+		return 0, nil
 	}
 	return id, err
 }
-
-
 
 // UpdateCompanyWhatsAppPhone updates the WhatsApp phone for a company.
 // Uses direct SQL to avoid SQLC regeneration requirement.
@@ -168,35 +167,13 @@ func (u *Usecase) UpdateCompanyWhatsAppPhone(ctx context.Context, companyID uuid
 }
 
 // DeleteCompany permanently removes a company and all its associated data.
-// Uses a transaction to ensure atomicity.
+// The database schema handles cascading deletes for child tables (ON DELETE CASCADE).
 func (u *Usecase) DeleteCompany(ctx context.Context, companyID uuid.UUID) error {
-	tx, err := u.pool.BeginTx(ctx, nil)
+	_, err := u.pool.ExecContext(ctx, "DELETE FROM companies WHERE id = $1", companyID)
 	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	// Delete in dependency order (children first)
-	tables := []string{
-		"telemetry",
-		"systemconfig",
-		"userpreference",
-		"groupauthority",
-		"shipment",
-	}
-
-	for _, table := range tables {
-		if _, err := tx.ExecContext(ctx, fmt.Sprintf("DELETE FROM %s WHERE company_id = $1", table), companyID); err != nil {
-			return fmt.Errorf("failed to delete from %s: %w", table, err)
-		}
-	}
-
-	// Finally delete the company itself
-	if _, err := tx.ExecContext(ctx, "DELETE FROM companies WHERE id = $1", companyID); err != nil {
 		return fmt.Errorf("failed to delete company: %w", err)
 	}
-
-	return tx.Commit()
+	return nil
 }
 
 func (uc *Usecase) GetActivePlans(ctx context.Context) ([]db.GetActivePlansRow, error) {
@@ -206,4 +183,3 @@ func (uc *Usecase) GetActivePlans(ctx context.Context) ([]db.GetActivePlansRow, 
 func (uc *Usecase) GetPlanByID(ctx context.Context, id string) (db.GetPlanByIDRow, error) {
 	return uc.repo.GetPlanByID(ctx, id)
 }
-

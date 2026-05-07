@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+// UserLimit tracks rate limiting for a specific user.
 type UserLimit struct {
 	sync.Mutex
 	Count      int

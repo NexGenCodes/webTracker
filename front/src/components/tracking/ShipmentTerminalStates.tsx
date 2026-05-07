@@ -24,7 +24,7 @@ export function ShipmentTerminalState({ type, dict }: ShipmentTerminalStateProps
   }
 
   return (
-    <div className="py-24 flex flex-col items-center text-center">
+    <div className="py-12 flex flex-col items-center text-center">
       <div className="w-32 h-32 bg-success/10 rounded-[3rem] flex items-center justify-center mb-10 shadow-inner rotate-3 transition-transform hover:rotate-0 duration-500">
         <CheckCircle className="w-16 h-16 text-success" />
       </div>

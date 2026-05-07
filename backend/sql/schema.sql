@@ -110,11 +110,16 @@ CREATE POLICY "tenant_read_own_payments" ON payments
   FOR SELECT TO authenticated
   USING (company_id = (auth.jwt() ->> 'company_id')::uuid);
 
--- Shipments: anon users can read shipments (for public tracking page)
+-- Shipments: anon users cannot read shipments directly to prevent enumeration
 DROP POLICY IF EXISTS "anon_read_shipment_by_tracking" ON shipment;
-CREATE POLICY "anon_read_shipment_by_tracking" ON shipment
-  FOR SELECT TO anon
-  USING (true);
+
+-- RPC function for public tracking to force tracking_id requirement
+CREATE OR REPLACE FUNCTION get_public_shipment(p_tracking_id TEXT)
+RETURNS SETOF shipment
+LANGUAGE sql SECURITY DEFINER
+AS $$
+  SELECT * FROM shipment WHERE tracking_id = p_tracking_id LIMIT 1;
+$$;
 
 -- Add shipment and companies to Realtime publication
 ALTER TABLE shipment REPLICA IDENTITY FULL;

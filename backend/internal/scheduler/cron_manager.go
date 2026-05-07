@@ -47,6 +47,7 @@ func (m *CronManager) Start() {
 	m.addJob("Daily Stats Report", "0 0 8 * * *", m.handleDailyStats)
 	m.addJob("Daily Pruning", "0 0 0 * * *", m.handlePruning)
 	m.addJob("Health Check", "0 */10 * * * *", m.handleHealthCheck)
+	m.addJob("Bot Liveness", "0 */3 * * * *", m.handleBotLiveness)
 
 	m.scheduler.Start()
 	logger.Info().Msg("[Cron] Scheduler & Tickers started")
@@ -194,4 +195,8 @@ func (m *CronManager) handleHealthCheck() {
 	if err != nil {
 		logger.Error().Err(err).Msg("Health check ping failed")
 	}
+}
+
+func (m *CronManager) handleBotLiveness() {
+	m.bots.LivenessCheck()
 }

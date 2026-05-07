@@ -5,12 +5,12 @@ import (
 	"crypto/sha512"
 	"encoding/hex"
 	"testing"
-	"webtracker-bot/internal/payment"
+	"webtracker-bot/internal/billing"
 )
 
 func TestPaystackService_VerifySignature(t *testing.T) {
 	secretKey := "sk_test_12345"
-	service := payment.NewPaystackService(secretKey)
+	service := billing.NewPaystackService(secretKey)
 
 	payload := []byte(`{"event":"charge.success","data":{"id":123}}`)
 	
@@ -54,6 +54,7 @@ func TestGetPlanByID(t *testing.T) {
 		wantID  string
 		wantErr bool
 	}{
+		{"trial", "trial", false},
 		{"starter", "starter", false},
 		{"pro", "pro", false},
 		{"enterprise", "enterprise", false},
@@ -63,7 +64,7 @@ func TestGetPlanByID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.id, func(t *testing.T) {
-			got, err := payment.GetPlanByID(tt.id)
+			got, err := billing.GetPlanByID(tt.id)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetPlanByID() error = %v, wantErr %v", err, tt.wantErr)
 				return

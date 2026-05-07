@@ -53,7 +53,6 @@ type JWTClaims struct {
 type OTPClaims struct {
 	CompanyName       string `json:"company_name"`
 	Email             string `json:"email"`
-	HashedPassword    string `json:"hashed_password"`
 	HashedOTP         string `json:"hashed_otp"`
 	jwt.RegisteredClaims
 }

@@ -4,33 +4,15 @@ import (
 	"context"
 	"database/sql"
 	"time"
+	"webtracker-bot/internal/billing"
 	"webtracker-bot/internal/config"
 
 	"github.com/google/uuid"
 )
 
-// PlanLimits maps plan_type to the maximum shipments allowed per billing cycle.
-var PlanLimits = map[string]int64{
-	"trial":      50,
-	"starter":    50,
-	"pro":        250,
-	"enterprise": 1000,
-}
-
-// IsSuperAdmin checks if the given company ID matches the configured super admin.
-func IsSuperAdmin(cfg *config.Config, companyID uuid.UUID) bool {
-	if cfg == nil || cfg.SuperAdminCompanyID == "" {
-		return false
-	}
-	superID, err := uuid.Parse(cfg.SuperAdminCompanyID)
-	if err != nil {
-		return false
-	}
-	return companyID == superID
-}
-
 // CheckShipmentCap verifies whether the company has remaining shipments in
 // the current billing cycle. Returns (remaining, error).
+// A return value of -1 signals unlimited (super admin).
 func (u *Usecase) CheckShipmentCap(
 	ctx context.Context,
 	cfg *config.Config,
@@ -39,7 +21,7 @@ func (u *Usecase) CheckShipmentCap(
 	expiry sql.NullTime,
 ) (remaining int64, err error) {
 	// Super admin is unlimited
-	if IsSuperAdmin(cfg, companyID) {
+	if billing.IsSuperAdmin(cfg, companyID) {
 		return -1, nil // -1 signals unlimited
 	}
 
@@ -49,11 +31,13 @@ func (u *Usecase) CheckShipmentCap(
 		return 0, nil // 0 remaining implies payment required / expired
 	}
 
-	limit, ok := PlanLimits[planType]
-	if !ok {
+	// Resolve the shipment cap from the single source of truth (billing.Plan)
+	plan, err := billing.GetPlanByID(planType)
+	if err != nil {
 		// Unknown plan — default to starter cap
-		limit = PlanLimits["starter"]
+		plan = billing.PlanStarter
 	}
+	limit := plan.MaxShipments
 
 	// Count shipments created since the start of the current calendar month
 	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())

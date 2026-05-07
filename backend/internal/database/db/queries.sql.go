@@ -9,6 +9,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
@@ -1178,198 +1179,65 @@ func (q *Queries) UpdatePlanPrice(ctx context.Context, arg UpdatePlanPriceParams
 	return err
 }
 
-const updateShipmentFieldCargoType = `-- name: UpdateShipmentFieldCargoType :exec
-UPDATE Shipment SET cargo_type = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2
+const updateShipmentDynamic = `-- name: UpdateShipmentDynamic :exec
+UPDATE Shipment
+SET 
+  sender_name = COALESCE(NULLIF($3::text, ''), sender_name),
+  sender_phone = COALESCE(NULLIF($4::text, ''), sender_phone),
+  origin = COALESCE(NULLIF($5::text, ''), origin),
+  recipient_name = COALESCE(NULLIF($6::text, ''), recipient_name),
+  recipient_phone = COALESCE(NULLIF($7::text, ''), recipient_phone),
+  recipient_email = COALESCE(NULLIF($8::text, ''), recipient_email),
+  recipient_id = COALESCE(NULLIF($9::text, ''), recipient_id),
+  recipient_address = COALESCE(NULLIF($10::text, ''), recipient_address),
+  destination = COALESCE(NULLIF($11::text, ''), destination),
+  cargo_type = COALESCE(NULLIF($12::text, ''), cargo_type),
+  scheduled_transit_time = COALESCE($13::timestamp, scheduled_transit_time),
+  expected_delivery_time = COALESCE($14::timestamp, expected_delivery_time),
+  outfordelivery_time = COALESCE($15::timestamp, outfordelivery_time),
+  status = COALESCE(NULLIF($16::text, ''), status),
+  updated_at = CURRENT_TIMESTAMP
+WHERE company_id = $1 AND tracking_id = $2
 `
 
-type UpdateShipmentFieldCargoTypeParams struct {
-	CompanyID  uuid.NullUUID  `json:"company_id"`
-	TrackingID string         `json:"tracking_id"`
-	CargoType  sql.NullString `json:"cargo_type"`
+type UpdateShipmentDynamicParams struct {
+	CompanyID  uuid.NullUUID `json:"company_id"`
+	TrackingID string        `json:"tracking_id"`
+	Column3    string        `json:"column_3"`
+	Column4    string        `json:"column_4"`
+	Column5    string        `json:"column_5"`
+	Column6    string        `json:"column_6"`
+	Column7    string        `json:"column_7"`
+	Column8    string        `json:"column_8"`
+	Column9    string        `json:"column_9"`
+	Column10   string        `json:"column_10"`
+	Column11   string        `json:"column_11"`
+	Column12   string        `json:"column_12"`
+	Column13   time.Time     `json:"column_13"`
+	Column14   time.Time     `json:"column_14"`
+	Column15   time.Time     `json:"column_15"`
+	Column16   string        `json:"column_16"`
 }
 
-func (q *Queries) UpdateShipmentFieldCargoType(ctx context.Context, arg UpdateShipmentFieldCargoTypeParams) error {
-	_, err := q.db.ExecContext(ctx, updateShipmentFieldCargoType, arg.CompanyID, arg.TrackingID, arg.CargoType)
-	return err
-}
-
-const updateShipmentFieldDestination = `-- name: UpdateShipmentFieldDestination :exec
-UPDATE Shipment SET destination = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2
-`
-
-type UpdateShipmentFieldDestinationParams struct {
-	CompanyID   uuid.NullUUID  `json:"company_id"`
-	TrackingID  string         `json:"tracking_id"`
-	Destination sql.NullString `json:"destination"`
-}
-
-func (q *Queries) UpdateShipmentFieldDestination(ctx context.Context, arg UpdateShipmentFieldDestinationParams) error {
-	_, err := q.db.ExecContext(ctx, updateShipmentFieldDestination, arg.CompanyID, arg.TrackingID, arg.Destination)
-	return err
-}
-
-const updateShipmentFieldExpectedDeliveryTime = `-- name: UpdateShipmentFieldExpectedDeliveryTime :exec
-UPDATE Shipment SET expected_delivery_time = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2
-`
-
-type UpdateShipmentFieldExpectedDeliveryTimeParams struct {
-	CompanyID            uuid.NullUUID `json:"company_id"`
-	TrackingID           string        `json:"tracking_id"`
-	ExpectedDeliveryTime sql.NullTime  `json:"expected_delivery_time"`
-}
-
-func (q *Queries) UpdateShipmentFieldExpectedDeliveryTime(ctx context.Context, arg UpdateShipmentFieldExpectedDeliveryTimeParams) error {
-	_, err := q.db.ExecContext(ctx, updateShipmentFieldExpectedDeliveryTime, arg.CompanyID, arg.TrackingID, arg.ExpectedDeliveryTime)
-	return err
-}
-
-const updateShipmentFieldOrigin = `-- name: UpdateShipmentFieldOrigin :exec
-UPDATE Shipment SET origin = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2
-`
-
-type UpdateShipmentFieldOriginParams struct {
-	CompanyID  uuid.NullUUID  `json:"company_id"`
-	TrackingID string         `json:"tracking_id"`
-	Origin     sql.NullString `json:"origin"`
-}
-
-func (q *Queries) UpdateShipmentFieldOrigin(ctx context.Context, arg UpdateShipmentFieldOriginParams) error {
-	_, err := q.db.ExecContext(ctx, updateShipmentFieldOrigin, arg.CompanyID, arg.TrackingID, arg.Origin)
-	return err
-}
-
-const updateShipmentFieldOutfordeliveryTime = `-- name: UpdateShipmentFieldOutfordeliveryTime :exec
-UPDATE Shipment SET outfordelivery_time = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2
-`
-
-type UpdateShipmentFieldOutfordeliveryTimeParams struct {
-	CompanyID          uuid.NullUUID `json:"company_id"`
-	TrackingID         string        `json:"tracking_id"`
-	OutfordeliveryTime sql.NullTime  `json:"outfordelivery_time"`
-}
-
-func (q *Queries) UpdateShipmentFieldOutfordeliveryTime(ctx context.Context, arg UpdateShipmentFieldOutfordeliveryTimeParams) error {
-	_, err := q.db.ExecContext(ctx, updateShipmentFieldOutfordeliveryTime, arg.CompanyID, arg.TrackingID, arg.OutfordeliveryTime)
-	return err
-}
-
-const updateShipmentFieldRecipientAddress = `-- name: UpdateShipmentFieldRecipientAddress :exec
-UPDATE Shipment SET recipient_address = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2
-`
-
-type UpdateShipmentFieldRecipientAddressParams struct {
-	CompanyID        uuid.NullUUID  `json:"company_id"`
-	TrackingID       string         `json:"tracking_id"`
-	RecipientAddress sql.NullString `json:"recipient_address"`
-}
-
-func (q *Queries) UpdateShipmentFieldRecipientAddress(ctx context.Context, arg UpdateShipmentFieldRecipientAddressParams) error {
-	_, err := q.db.ExecContext(ctx, updateShipmentFieldRecipientAddress, arg.CompanyID, arg.TrackingID, arg.RecipientAddress)
-	return err
-}
-
-const updateShipmentFieldRecipientEmail = `-- name: UpdateShipmentFieldRecipientEmail :exec
-UPDATE Shipment SET recipient_email = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2
-`
-
-type UpdateShipmentFieldRecipientEmailParams struct {
-	CompanyID      uuid.NullUUID  `json:"company_id"`
-	TrackingID     string         `json:"tracking_id"`
-	RecipientEmail sql.NullString `json:"recipient_email"`
-}
-
-func (q *Queries) UpdateShipmentFieldRecipientEmail(ctx context.Context, arg UpdateShipmentFieldRecipientEmailParams) error {
-	_, err := q.db.ExecContext(ctx, updateShipmentFieldRecipientEmail, arg.CompanyID, arg.TrackingID, arg.RecipientEmail)
-	return err
-}
-
-const updateShipmentFieldRecipientID = `-- name: UpdateShipmentFieldRecipientID :exec
-UPDATE Shipment SET recipient_id = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2
-`
-
-type UpdateShipmentFieldRecipientIDParams struct {
-	CompanyID   uuid.NullUUID  `json:"company_id"`
-	TrackingID  string         `json:"tracking_id"`
-	RecipientID sql.NullString `json:"recipient_id"`
-}
-
-func (q *Queries) UpdateShipmentFieldRecipientID(ctx context.Context, arg UpdateShipmentFieldRecipientIDParams) error {
-	_, err := q.db.ExecContext(ctx, updateShipmentFieldRecipientID, arg.CompanyID, arg.TrackingID, arg.RecipientID)
-	return err
-}
-
-const updateShipmentFieldRecipientName = `-- name: UpdateShipmentFieldRecipientName :exec
-UPDATE Shipment SET recipient_name = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2
-`
-
-type UpdateShipmentFieldRecipientNameParams struct {
-	CompanyID     uuid.NullUUID  `json:"company_id"`
-	TrackingID    string         `json:"tracking_id"`
-	RecipientName sql.NullString `json:"recipient_name"`
-}
-
-func (q *Queries) UpdateShipmentFieldRecipientName(ctx context.Context, arg UpdateShipmentFieldRecipientNameParams) error {
-	_, err := q.db.ExecContext(ctx, updateShipmentFieldRecipientName, arg.CompanyID, arg.TrackingID, arg.RecipientName)
-	return err
-}
-
-const updateShipmentFieldRecipientPhone = `-- name: UpdateShipmentFieldRecipientPhone :exec
-UPDATE Shipment SET recipient_phone = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2
-`
-
-type UpdateShipmentFieldRecipientPhoneParams struct {
-	CompanyID      uuid.NullUUID  `json:"company_id"`
-	TrackingID     string         `json:"tracking_id"`
-	RecipientPhone sql.NullString `json:"recipient_phone"`
-}
-
-func (q *Queries) UpdateShipmentFieldRecipientPhone(ctx context.Context, arg UpdateShipmentFieldRecipientPhoneParams) error {
-	_, err := q.db.ExecContext(ctx, updateShipmentFieldRecipientPhone, arg.CompanyID, arg.TrackingID, arg.RecipientPhone)
-	return err
-}
-
-const updateShipmentFieldScheduledTransitTime = `-- name: UpdateShipmentFieldScheduledTransitTime :exec
-UPDATE Shipment SET scheduled_transit_time = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2
-`
-
-type UpdateShipmentFieldScheduledTransitTimeParams struct {
-	CompanyID            uuid.NullUUID `json:"company_id"`
-	TrackingID           string        `json:"tracking_id"`
-	ScheduledTransitTime sql.NullTime  `json:"scheduled_transit_time"`
-}
-
-func (q *Queries) UpdateShipmentFieldScheduledTransitTime(ctx context.Context, arg UpdateShipmentFieldScheduledTransitTimeParams) error {
-	_, err := q.db.ExecContext(ctx, updateShipmentFieldScheduledTransitTime, arg.CompanyID, arg.TrackingID, arg.ScheduledTransitTime)
-	return err
-}
-
-const updateShipmentFieldSenderName = `-- name: UpdateShipmentFieldSenderName :exec
-UPDATE Shipment SET sender_name = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2
-`
-
-type UpdateShipmentFieldSenderNameParams struct {
-	CompanyID  uuid.NullUUID  `json:"company_id"`
-	TrackingID string         `json:"tracking_id"`
-	SenderName sql.NullString `json:"sender_name"`
-}
-
-func (q *Queries) UpdateShipmentFieldSenderName(ctx context.Context, arg UpdateShipmentFieldSenderNameParams) error {
-	_, err := q.db.ExecContext(ctx, updateShipmentFieldSenderName, arg.CompanyID, arg.TrackingID, arg.SenderName)
-	return err
-}
-
-const updateShipmentFieldSenderPhone = `-- name: UpdateShipmentFieldSenderPhone :exec
-UPDATE Shipment SET sender_phone = $3, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND tracking_id = $2
-`
-
-type UpdateShipmentFieldSenderPhoneParams struct {
-	CompanyID   uuid.NullUUID  `json:"company_id"`
-	TrackingID  string         `json:"tracking_id"`
-	SenderPhone sql.NullString `json:"sender_phone"`
-}
-
-func (q *Queries) UpdateShipmentFieldSenderPhone(ctx context.Context, arg UpdateShipmentFieldSenderPhoneParams) error {
-	_, err := q.db.ExecContext(ctx, updateShipmentFieldSenderPhone, arg.CompanyID, arg.TrackingID, arg.SenderPhone)
+func (q *Queries) UpdateShipmentDynamic(ctx context.Context, arg UpdateShipmentDynamicParams) error {
+	_, err := q.db.ExecContext(ctx, updateShipmentDynamic,
+		arg.CompanyID,
+		arg.TrackingID,
+		arg.Column3,
+		arg.Column4,
+		arg.Column5,
+		arg.Column6,
+		arg.Column7,
+		arg.Column8,
+		arg.Column9,
+		arg.Column10,
+		arg.Column11,
+		arg.Column12,
+		arg.Column13,
+		arg.Column14,
+		arg.Column15,
+		arg.Column16,
+	)
 	return err
 }
 

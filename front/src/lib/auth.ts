@@ -1,11 +1,11 @@
 import { cookies } from 'next/headers';
 import { jwtVerify, importSPKI } from 'jose';
 
-if (!process.env.NEXT_PUBLIC_JWT_PUBLIC_KEY) {
-    throw new Error('FATAL: NEXT_PUBLIC_JWT_PUBLIC_KEY environment variable is not set.');
+if (!process.env.JWT_PUBLIC_KEY) {
+    throw new Error('FATAL: JWT_PUBLIC_KEY environment variable is not set.');
 }
 
-const JWT_PUBLIC_KEY_RAW = process.env.NEXT_PUBLIC_JWT_PUBLIC_KEY.replace(/\\n/g, '\n');
+const JWT_PUBLIC_KEY_RAW = process.env.JWT_PUBLIC_KEY.replace(/\\n/g, '\n');
 
 let publicKey: CryptoKey | null = null;
 async function getPublicKey() {

@@ -59,7 +59,7 @@ export async function subscribeAction(plan: string, callback_url: string): Promi
             return { success: false, error: 'Plan is required.' };
         }
 
-        const res = await fetch(`${getApiUrl()}/api/company/subscribe`, {
+        const res = await fetch(`${getApiUrl()}/api/billing/subscribe`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${session.token}`,
@@ -89,7 +89,7 @@ export async function getSubscriptionStatusAction(): Promise<ActionResult<{ stat
             return { success: false, error: 'Unauthorized.' };
         }
 
-        const res = await fetch(`${getApiUrl()}/api/company/subscription-status`, {
+        const res = await fetch(`${getApiUrl()}/api/billing/subscription-status`, {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${session.token}`,
@@ -124,7 +124,7 @@ export async function checkPaymentStatusAction(): Promise<ActionResult<{ status:
             return { success: false, error: 'Unauthorized.' };
         }
 
-        const res = await fetch(`${getApiUrl()}/api/company/subscription-status`, {
+        const res = await fetch(`${getApiUrl()}/api/billing/subscription-status`, {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${session.token}`,
@@ -155,7 +155,7 @@ export async function getPaymentHistoryAction(): Promise<ActionResult<PaymentDat
             return { success: false, error: 'Unauthorized.' };
         }
 
-        const res = await fetch(`${getApiUrl()}/api/company/payments`, {
+        const res = await fetch(`${getApiUrl()}/api/billing/payments`, {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${session.token}`,
