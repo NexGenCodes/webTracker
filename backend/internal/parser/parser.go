@@ -367,10 +367,11 @@ func ParseAI(ctx context.Context, text, apiKey string) (models.Manifest, error) 
 		return models.Manifest{}, fmt.Errorf("AI parsing temporarily unavailable: %w", err)
 	}
 
-	if err := aiRateLimiter.Wait(ctx); err != nil {
-		return models.Manifest{}, fmt.Errorf("AI rate limit exceeded: %w", err)
+	if apiKey == "" {
+		return models.Manifest{}, fmt.Errorf("AI API key is missing")
 	}
-	url := "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent"
+
+	url := "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
 
 	prompt := `You are a logistics data extraction assistant. Extract shipping information from user text and return JSON matching the schema below.
         
@@ -444,8 +445,9 @@ func ParseAI(ctx context.Context, text, apiKey string) (models.Manifest, error) 
 		return models.Manifest{}, fmt.Errorf("no AI response")
 	}
 	aiText := strings.TrimSpace(result.Candidates[0].Content.Parts[0].Text)
-	aiText = strings.Trim(aiText, "```json")
-	aiText = strings.Trim(aiText, "```")
+	aiText = strings.TrimPrefix(aiText, "```json")
+	aiText = strings.TrimPrefix(aiText, "```")
+	aiText = strings.TrimSuffix(aiText, "```")
 	aiText = strings.TrimSpace(aiText)
 	var m models.Manifest
 	if err := json.Unmarshal([]byte(aiText), &m); err != nil {

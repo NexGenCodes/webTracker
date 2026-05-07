@@ -33,9 +33,9 @@
   --color-surface-muted: #f4f4f5;
 
   --color-primary: #18181b;
-  --color-accent: #4f46e5;
-  --color-accent-deep: #3730a3;
-  --color-accent-soft: rgba(79, 70, 229, 0.06);
+  --color-accent: var(--accent-color, #4f46e5);
+  --color-accent-deep: color-mix(in srgb, var(--color-accent), black 20%);
+  --color-accent-soft: color-mix(in srgb, var(--color-accent), transparent 94%);
 
   --color-text-main: #18181b;
   --color-text-muted: #52525b;
@@ -55,9 +55,9 @@
   --color-surface-muted: #262626;
 
   --color-primary: #fafafa;
-  --color-accent: #6366f1;
-  --color-accent-deep: #4f46e5;
-  --color-accent-soft: rgba(99, 102, 241, 0.12);
+  --color-accent: var(--accent-color, #6366f1);
+  --color-accent-deep: color-mix(in srgb, var(--color-accent), black 20%);
+  --color-accent-soft: color-mix(in srgb, var(--color-accent), transparent 88%);
 
   --color-text-main: #f4f4f5;
   --color-text-muted: #a1a1aa;

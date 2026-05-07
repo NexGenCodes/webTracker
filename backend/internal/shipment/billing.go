@@ -17,11 +17,12 @@ func (u *Usecase) CheckShipmentCap(
 	ctx context.Context,
 	cfg *config.Config,
 	companyID uuid.UUID,
+	adminEmail string,
 	planType string,
 	expiry sql.NullTime,
 ) (remaining int64, err error) {
 	// Super admin is unlimited
-	if billing.IsSuperAdmin(cfg, companyID) {
+	if billing.IsSuperAdminEmail(cfg, adminEmail) {
 		return -1, nil // -1 signals unlimited
 	}
 

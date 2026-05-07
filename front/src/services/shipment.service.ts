@@ -92,4 +92,84 @@ export class ShipmentService {
             return null;
         }
     }
+    static async create(companyId: string, data: Record<string, unknown>): Promise<{ success: boolean; error?: string }> {
+        try {
+            const supabase = await createClient();
+            const { error } = await supabase
+                .from('shipment')
+                .insert([{
+                    ...data,
+                    company_id: companyId,
+                    status: 'pending'
+                }]);
+
+            if (error) throw error;
+            return { success: true };
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            logger.error(`[ShipmentService] Create shipment`, error);
+            return { success: false, error: message };
+        }
+    }
+
+    static async update(id: string, companyId: string, data: Record<string, unknown>): Promise<{ success: boolean; error?: string }> {
+        try {
+            const supabase = await createClient();
+            const { error } = await supabase
+                .from('shipment')
+                .update(data)
+                .eq('id', id)
+                .eq('company_id', companyId);
+
+            if (error) throw error;
+            return { success: true };
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            logger.error(`[ShipmentService] Update shipment`, error);
+            return { success: false, error: message };
+        }
+    }
+
+    static async delete(id: string, companyId: string): Promise<{ success: boolean; error?: string }> {
+        try {
+            const supabase = await createClient();
+            const { error } = await supabase
+                .from('shipment')
+                .delete()
+                .eq('id', id)
+                .eq('company_id', companyId);
+
+            if (error) throw error;
+            return { success: true };
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            logger.error(`[ShipmentService] Delete shipment`, error);
+            return { success: false, error: message };
+        }
+    }
+
+    static async parse(text: string, jwt: string): Promise<{ success: boolean; data?: unknown; error?: string }> {
+        try {
+            const response = await fetch(`${process.env.BACKEND_URL}/api/admin/shipments/parse`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${jwt}`
+                },
+                body: JSON.stringify({ text })
+            });
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.error || `Server responded with ${response.status}`);
+            }
+
+            const data = await response.json();
+            return { success: true, data };
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            logger.error(`[ShipmentService] Parse manifest`, error);
+            return { success: false, error: message };
+        }
+    }
 }

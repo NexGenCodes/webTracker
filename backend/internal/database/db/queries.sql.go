@@ -405,6 +405,47 @@ func (q *Queries) GetAllCompanies(ctx context.Context) ([]uuid.UUID, error) {
 	return items, nil
 }
 
+const getAuditLogs = `-- name: GetAuditLogs :many
+SELECT id, actor_email, action, target_company_id, details, created_at FROM audit_log
+ORDER BY created_at DESC
+LIMIT $1 OFFSET $2
+`
+
+type GetAuditLogsParams struct {
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+func (q *Queries) GetAuditLogs(ctx context.Context, arg GetAuditLogsParams) ([]AuditLog, error) {
+	rows, err := q.db.QueryContext(ctx, getAuditLogs, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AuditLog
+	for rows.Next() {
+		var i AuditLog
+		if err := rows.Scan(
+			&i.ID,
+			&i.ActorEmail,
+			&i.Action,
+			&i.TargetCompanyID,
+			&i.Details,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getAuthorizedGroups = `-- name: GetAuthorizedGroups :many
 SELECT jid FROM GroupAuthority WHERE company_id = $1 AND is_authorized = true
 `
@@ -486,6 +527,46 @@ func (q *Queries) GetCompanyByID(ctx context.Context, id uuid.UUID) (Company, er
 	return i, err
 }
 
+const getCompanyPayments = `-- name: GetCompanyPayments :many
+SELECT id, company_id, reference, amount, status, created_at FROM payments WHERE company_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3
+`
+
+type GetCompanyPaymentsParams struct {
+	CompanyID uuid.NullUUID `json:"company_id"`
+	Limit     int32         `json:"limit"`
+	Offset    int32         `json:"offset"`
+}
+
+func (q *Queries) GetCompanyPayments(ctx context.Context, arg GetCompanyPaymentsParams) ([]Payment, error) {
+	rows, err := q.db.QueryContext(ctx, getCompanyPayments, arg.CompanyID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Payment
+	for rows.Next() {
+		var i Payment
+		if err := rows.Scan(
+			&i.ID,
+			&i.CompanyID,
+			&i.Reference,
+			&i.Amount,
+			&i.Status,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getGroupAuthority = `-- name: GetGroupAuthority :one
 SELECT is_authorized, updated_at FROM GroupAuthority WHERE company_id = $1 AND jid = $2
 `
@@ -558,6 +639,39 @@ func (q *Queries) GetPlanByID(ctx context.Context, id string) (GetPlanByIDRow, e
 		&i.TrialKey,
 		&i.BtnKey,
 		&i.Features,
+	)
+	return i, err
+}
+
+const getPlatformAnalytics = `-- name: GetPlatformAnalytics :one
+SELECT 
+    (SELECT COUNT(*) FROM companies) as total_tenants,
+    (SELECT COUNT(*) FROM companies WHERE created_at >= date_trunc('month', CURRENT_TIMESTAMP)) as new_tenants_this_month,
+    (SELECT COUNT(*) FROM Shipment) as total_shipments,
+    (SELECT COUNT(*) FROM Shipment WHERE created_at >= CURRENT_DATE) as shipments_today,
+    (SELECT jsonb_object_agg(plan_type, count) FROM (SELECT plan_type, COUNT(*) as count FROM companies GROUP BY plan_type) t) as plan_distribution,
+    (SELECT jsonb_object_agg(subscription_status, count) FROM (SELECT subscription_status, COUNT(*) as count FROM companies GROUP BY subscription_status) t) as subscription_distribution
+`
+
+type GetPlatformAnalyticsRow struct {
+	TotalTenants             int64           `json:"total_tenants"`
+	NewTenantsThisMonth      int64           `json:"new_tenants_this_month"`
+	TotalShipments           int64           `json:"total_shipments"`
+	ShipmentsToday           int64           `json:"shipments_today"`
+	PlanDistribution         json.RawMessage `json:"plan_distribution"`
+	SubscriptionDistribution json.RawMessage `json:"subscription_distribution"`
+}
+
+func (q *Queries) GetPlatformAnalytics(ctx context.Context) (GetPlatformAnalyticsRow, error) {
+	row := q.db.QueryRowContext(ctx, getPlatformAnalytics)
+	var i GetPlatformAnalyticsRow
+	err := row.Scan(
+		&i.TotalTenants,
+		&i.NewTenantsThisMonth,
+		&i.TotalShipments,
+		&i.ShipmentsToday,
+		&i.PlanDistribution,
+		&i.SubscriptionDistribution,
 	)
 	return i, err
 }
@@ -832,6 +946,28 @@ func (q *Queries) ListShipments(ctx context.Context, arg ListShipmentsParams) ([
 		return nil, err
 	}
 	return items, nil
+}
+
+const logAudit = `-- name: LogAudit :exec
+INSERT INTO audit_log (actor_email, action, target_company_id, details)
+VALUES ($1, $2, $3, $4)
+`
+
+type LogAuditParams struct {
+	ActorEmail      string                `json:"actor_email"`
+	Action          string                `json:"action"`
+	TargetCompanyID uuid.NullUUID         `json:"target_company_id"`
+	Details         pqtype.NullRawMessage `json:"details"`
+}
+
+func (q *Queries) LogAudit(ctx context.Context, arg LogAuditParams) error {
+	_, err := q.db.ExecContext(ctx, logAudit,
+		arg.ActorEmail,
+		arg.Action,
+		arg.TargetCompanyID,
+		arg.Details,
+	)
+	return err
 }
 
 const recordEvent = `-- name: RecordEvent :exec
@@ -1126,6 +1262,20 @@ func (q *Queries) UpdateCompanyOnboarding(ctx context.Context, arg UpdateCompany
 	return err
 }
 
+const updateCompanyPlan = `-- name: UpdateCompanyPlan :exec
+UPDATE companies SET plan_type = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1
+`
+
+type UpdateCompanyPlanParams struct {
+	ID       uuid.UUID      `json:"id"`
+	PlanType sql.NullString `json:"plan_type"`
+}
+
+func (q *Queries) UpdateCompanyPlan(ctx context.Context, arg UpdateCompanyPlanParams) error {
+	_, err := q.db.ExecContext(ctx, updateCompanyPlan, arg.ID, arg.PlanType)
+	return err
+}
+
 const updateCompanySettings = `-- name: UpdateCompanySettings :exec
 UPDATE companies SET name = $2, admin_email = $3, logo_url = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $1
 `
@@ -1144,6 +1294,21 @@ func (q *Queries) UpdateCompanySettings(ctx context.Context, arg UpdateCompanySe
 		arg.AdminEmail,
 		arg.LogoUrl,
 	)
+	return err
+}
+
+const updateCompanySubscription = `-- name: UpdateCompanySubscription :exec
+UPDATE companies SET subscription_status = $2, subscription_expiry = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $1
+`
+
+type UpdateCompanySubscriptionParams struct {
+	ID                 uuid.UUID      `json:"id"`
+	SubscriptionStatus sql.NullString `json:"subscription_status"`
+	SubscriptionExpiry sql.NullTime   `json:"subscription_expiry"`
+}
+
+func (q *Queries) UpdateCompanySubscription(ctx context.Context, arg UpdateCompanySubscriptionParams) error {
+	_, err := q.db.ExecContext(ctx, updateCompanySubscription, arg.ID, arg.SubscriptionStatus, arg.SubscriptionExpiry)
 	return err
 }
 
@@ -1192,9 +1357,9 @@ SET
   recipient_address = COALESCE(NULLIF($10::text, ''), recipient_address),
   destination = COALESCE(NULLIF($11::text, ''), destination),
   cargo_type = COALESCE(NULLIF($12::text, ''), cargo_type),
-  scheduled_transit_time = COALESCE($13::timestamp, scheduled_transit_time),
-  expected_delivery_time = COALESCE($14::timestamp, expected_delivery_time),
-  outfordelivery_time = COALESCE($15::timestamp, outfordelivery_time),
+  scheduled_transit_time = COALESCE(NULLIF($13::timestamp, '0001-01-01 00:00:00'::timestamp), scheduled_transit_time),
+  expected_delivery_time = COALESCE(NULLIF($14::timestamp, '0001-01-01 00:00:00'::timestamp), expected_delivery_time),
+  outfordelivery_time = COALESCE(NULLIF($15::timestamp, '0001-01-01 00:00:00'::timestamp), outfordelivery_time),
   status = COALESCE(NULLIF($16::text, ''), status),
   updated_at = CURRENT_TIMESTAMP
 WHERE company_id = $1 AND tracking_id = $2

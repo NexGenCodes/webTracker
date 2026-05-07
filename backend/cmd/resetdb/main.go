@@ -97,6 +97,7 @@ func main() {
 		"DROP TABLE IF EXISTS whatsmeow_lid_map CASCADE;",
 		"DROP TABLE IF EXISTS whatsmeow_event_buffer CASCADE;",
 		"DROP TABLE IF EXISTS sessions CASCADE;",
+		"DROP TABLE IF EXISTS audit_log CASCADE;",
 	}
 	for _, q := range drops {
 		_, err = pool.Exec(context.Background(), q)

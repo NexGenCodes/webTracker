@@ -55,7 +55,7 @@ type ShipmentUsecase interface {
 	CountCreatedSince(ctx context.Context, companyID uuid.UUID, since time.Time) (int64, error)
 	CreateWithPrefix(ctx context.Context, companyID uuid.UUID, s *db.Shipment, prefix string) (string, error)
 	FindSimilar(ctx context.Context, companyID uuid.UUID, userJid, phone string) (string, error)
-	CheckShipmentCap(ctx context.Context, cfg *config.Config, companyID uuid.UUID, planType string, expiry sql.NullTime) (int64, error)
+	CheckShipmentCap(ctx context.Context, cfg *config.Config, companyID uuid.UUID, adminEmail string, planType string, expiry sql.NullTime) (int64, error)
 }
 
 type ShipmentService interface {
@@ -85,6 +85,12 @@ type ConfigUsecase interface {
 	GetPlanByID(ctx context.Context, id string) (db.GetPlanByIDRow, error)
 	RecordPayment(ctx context.Context, companyID uuid.UUID, reference string, amount float64, status string) (int32, error)
 	UpdateCompanySubscriptionStatus(ctx context.Context, companyID uuid.UUID, subStatus, planType string) error
+	LogAudit(ctx context.Context, actorEmail, action string, targetCompanyID uuid.UUID, details map[string]interface{}) error
+	GetAuditLogs(ctx context.Context, limit, offset int32) ([]db.AuditLog, error)
+	GetPlatformAnalytics(ctx context.Context) (db.GetPlatformAnalyticsRow, error)
+	UpdateCompanyPlan(ctx context.Context, companyID uuid.UUID, planType string) error
+	UpdateCompanySubscription(ctx context.Context, companyID uuid.UUID, subStatus string, expiry time.Time) error
+	GetCompanyPayments(ctx context.Context, companyID uuid.UUID, limit, offset int32) ([]db.Payment, error)
 }
 
 type Manifest struct {

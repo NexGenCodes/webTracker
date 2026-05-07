@@ -2,6 +2,7 @@ package api
 
 import (
 	"log"
+	"strings"
 
 	"database/sql"
 	"time"
@@ -48,6 +49,19 @@ func NewServer(cfg *config.Config, shipmentUC *shipment.Usecase, configUC *confi
 	// Global Middlewares
 	app.Use(recover.New())
 	app.Use(logger.New())
+
+	// Exploit Probe Filtering Middleware
+	app.Use(func(c *fiber.Ctx) error {
+		path := strings.ToLower(c.Path())
+		probes := []string{".php", ".env", ".git", "cgi-bin", ".asp", ".jsp", "/wp-", "xmlrpc"}
+		for _, probe := range probes {
+			if strings.Contains(path, probe) {
+				// Silently drop probes or return 404 without logging if possible
+				return c.Status(fiber.StatusNotFound).SendString("Not Found")
+			}
+		}
+		return c.Next()
+	})
 
 	// Enforce 30-second context timeout on all requests
 	app.Use(timeout.NewWithContext(func(c *fiber.Ctx) error {
@@ -98,6 +112,9 @@ func (s *Server) SetupRoutes() {
 
 	billingHandler := NewBillingHandler(s.cfg, s.configUC)
 	billingHandler.RegisterRoutes(s.app)
+
+	superAdminHandler := NewSuperAdminHandler(s.cfg, s.configUC, s.bots)
+	superAdminHandler.RegisterRoutes(s.app)
 
 	// Enhanced Healthcheck
 	s.app.Get("/health", func(c *fiber.Ctx) error {

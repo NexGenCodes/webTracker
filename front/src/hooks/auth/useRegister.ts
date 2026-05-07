@@ -34,7 +34,7 @@ export function useRegister(
         if (intervalRef.current) {
             clearInterval(intervalRef.current);
         }
-        setOtpTimer(600);
+        setOtpTimer(300);
         intervalRef.current = setInterval(() => {
             setOtpTimer((prev) => {
                 if (prev <= 1) {

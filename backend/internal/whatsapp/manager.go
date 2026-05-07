@@ -471,7 +471,7 @@ func (m *Manager) startKeepalive(bot *BotInstance) {
 	bot.KeepaliveCancel = cancel
 
 	go func() {
-		ticker := time.NewTicker(4 * time.Minute)
+		ticker := time.NewTicker(1 * time.Minute)
 		defer ticker.Stop()
 
 		for {
@@ -483,9 +483,11 @@ func (m *Manager) startKeepalive(bot *BotInstance) {
 				if client == nil || !client.IsConnected() {
 					continue
 				}
-				if err := client.SendPresence(context.Background(), types.PresenceAvailable); err != nil {
+				kCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				if err := client.SendPresence(kCtx, types.PresenceAvailable); err != nil {
 					logger.Warn().Err(err).Str("company_id", bot.CompanyID.String()).Msg("Keepalive presence failed")
 				}
+				cancel()
 			}
 		}
 	}()
@@ -516,12 +518,19 @@ func (m *Manager) LivenessCheck() {
 			}
 
 			if !client.IsConnected() && client.Store != nil && client.Store.ID != nil {
+				// Don't step on other reconnect attempts
+				mu := m.getPairLock(entry.ID)
+				if !mu.TryLock() {
+					continue
+				}
+
 				logger.Warn().Str("company_id", entry.ID.String()).Msg("[LivenessCheck] Bot disconnected — attempting reconnect")
 				entry.Bot.ReconnectCount = 0
 				if err := client.Connect(); err != nil {
 					logger.Error().Err(err).Str("company_id", entry.ID.String()).Msg("[LivenessCheck] Reconnect failed")
 					_ = m.ConfigUC.UpdateCompanyAuthStatus(context.Background(), entry.ID, "disconnected")
 				}
+				mu.Unlock()
 				// Jitter to prevent Thundering Herd during a mass network drop
 				time.Sleep(200 * time.Millisecond)
 			}

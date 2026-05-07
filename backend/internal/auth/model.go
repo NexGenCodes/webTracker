@@ -51,9 +51,10 @@ type JWTClaims struct {
 
 // OTPClaims custom claims for the stateless OTP token
 type OTPClaims struct {
-	CompanyName       string `json:"company_name"`
-	Email             string `json:"email"`
-	HashedOTP         string `json:"hashed_otp"`
+	CompanyName    string `json:"company_name"`
+	Email          string `json:"email"`
+	HashedOTP      string `json:"hashed_otp"`
+	HashedPassword string `json:"hashed_password"`
 	jwt.RegisteredClaims
 }
 

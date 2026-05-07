@@ -12,13 +12,21 @@ import toast from 'react-hot-toast';
 export default function SettingsPage() {
     const { companyId, loading, user } = useMultiTenant();
 
-    const [settingsForm, setSettingsForm] = useState({ name: '', admin_email: '', logo_url: '' });
+    const [settingsForm, setSettingsForm] = useState({ 
+        name: '', 
+        admin_email: '', 
+        logo_url: '', 
+        brand_color: '#6366f1',
+        tracking_prefix: '' 
+    });
     const [isSaving, setIsSaving] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
     const [isDisconnecting, setIsDisconnecting] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [deleteConfirmText, setDeleteConfirmText] = useState('');
+    const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
+    const [disconnectConfirmText, setDisconnectConfirmText] = useState('');
     const [companyLoading, setCompanyLoading] = useState(true);
 
     const supabase = createClient();
@@ -30,7 +38,7 @@ export default function SettingsPage() {
             try {
                 const { data, error } = await supabase
                     .from('companies')
-                    .select('name, admin_email, logo_url')
+                    .select('name, admin_email, logo_url, brand_color, tracking_prefix')
                     .eq('id', companyId)
                     .single();
 
@@ -38,7 +46,9 @@ export default function SettingsPage() {
                     setSettingsForm({
                         name: data.name || '',
                         admin_email: data.admin_email || '',
-                        logo_url: data.logo_url || ''
+                        logo_url: data.logo_url || '',
+                        brand_color: data.brand_color || '#6366f1',
+                        tracking_prefix: data.tracking_prefix || ''
                     });
                 }
             } catch (err) {
@@ -70,8 +80,13 @@ export default function SettingsPage() {
         }
     };
 
+    const confirmName = settingsForm.name || settingsForm.admin_email || '';
+
     const handleDisconnectBot = async () => {
-        if (!confirm("Are you sure you want to disconnect the WhatsApp bot? This will instantly stop all tracking and delete your session.")) return;
+        if (disconnectConfirmText !== confirmName) {
+            toast.error('Company name does not match.');
+            return;
+        }
 
         setIsDisconnecting(true);
         if (!companyId) return;
@@ -79,7 +94,9 @@ export default function SettingsPage() {
         const result = await disconnectWhatsApp(companyId);
         if (result.success) {
             toast.success("Bot disconnected successfully.");
-            window.location.reload(); // Refresh to update status globally
+            setShowDisconnectConfirm(false);
+            setDisconnectConfirmText('');
+            window.location.reload();
         } else {
             toast.error(result.error || "Failed to disconnect bot");
         }
@@ -167,7 +184,7 @@ export default function SettingsPage() {
                             <div className="pt-4 border-t border-border/50 flex justify-between items-center">
                                 <div className="text-sm font-medium text-text-muted">Need to change your password?</div>
                                 <button
-                                    onClick={() => alert('Password reset link has been sent to your email.')}
+                                    onClick={() => toast.success('Password reset link has been sent to your email.')}
                                     className="px-5 py-2.5 bg-surface hover:bg-surface-muted text-text-main rounded-xl border border-border text-xs font-black uppercase tracking-widest transition-all active:scale-95"
                                 >
                                     Reset Password
@@ -245,6 +262,43 @@ export default function SettingsPage() {
                                 </div>
                             </div>
 
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                <div className="space-y-3">
+                                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-text-main ml-1">
+                                        Brand Color
+                                    </label>
+                                    <div className="flex gap-3">
+                                        <input
+                                            type="color"
+                                            value={settingsForm.brand_color}
+                                            onChange={(e) => setSettingsForm({ ...settingsForm, brand_color: e.target.value })}
+                                            className="w-14 h-14 rounded-2xl border-2 border-border/50 bg-surface cursor-pointer p-1"
+                                        />
+                                        <input
+                                            type="text"
+                                            value={settingsForm.brand_color}
+                                            onChange={(e) => setSettingsForm({ ...settingsForm, brand_color: e.target.value })}
+                                            className="input-premium flex-1 !bg-surface/50 focus:!bg-surface"
+                                            placeholder="#6366f1"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="space-y-3">
+                                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-text-main ml-1">
+                                        Tracking Prefix
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={settingsForm.tracking_prefix}
+                                        onChange={(e) => setSettingsForm({ ...settingsForm, tracking_prefix: e.target.value.toUpperCase() })}
+                                        className="input-premium w-full !bg-surface/50 focus:!bg-surface"
+                                        placeholder="e.g. TRK"
+                                        maxLength={5}
+                                    />
+                                    <p className="text-[10px] text-text-muted ml-1">Optional prefix for new tracking IDs (max 5 chars).</p>
+                                </div>
+                            </div>
+
                             <div className="pt-4 border-t border-border/50 flex items-center justify-end gap-4">
                                 {saveSuccess && (
                                     <span className="flex items-center gap-2 text-xs font-bold text-success uppercase tracking-widest animate-fade-in">
@@ -271,23 +325,64 @@ export default function SettingsPage() {
                         </h3>
 
                         {/* Disconnect WhatsApp */}
-                        <div className="flex items-start justify-between flex-col sm:flex-row gap-4 pb-8 border-b border-error/10">
-                            <div>
-                                <h4 className="text-xs font-black text-text-main uppercase tracking-widest mb-1 flex items-center gap-2">
-                                    <Unplug size={14} /> Disconnect WhatsApp
-                                </h4>
-                                <p className="text-sm font-medium text-text-muted leading-relaxed max-w-sm">
-                                    Stops all tracking instantly and deletes the WhatsApp session.
-                                </p>
+                        <div className="space-y-4 pb-8 border-b border-error/10">
+                            <div className="flex items-start justify-between flex-col sm:flex-row gap-4">
+                                <div>
+                                    <h4 className="text-xs font-black text-text-main uppercase tracking-widest mb-1 flex items-center gap-2">
+                                        <Unplug size={14} /> Disconnect WhatsApp
+                                    </h4>
+                                    <p className="text-sm font-medium text-text-muted leading-relaxed max-w-sm">
+                                        Stops all tracking instantly and deletes the WhatsApp session.
+                                    </p>
+                                </div>
+                                {!showDisconnectConfirm && (
+                                    <button
+                                        id="settings-disconnect-bot-trigger"
+                                        onClick={() => setShowDisconnectConfirm(true)}
+                                        className="px-6 py-3 bg-error/10 hover:bg-error text-error hover:text-white border border-error/20 rounded-xl font-black text-xs uppercase tracking-widest whitespace-nowrap shadow-sm transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 shrink-0 w-full sm:w-auto"
+                                    >
+                                        <Unplug size={14} /> Disconnect Bot
+                                    </button>
+                                )}
                             </div>
-                            <button
-                                id="settings-disconnect-bot"
-                                onClick={handleDisconnectBot}
-                                disabled={isDisconnecting}
-                                className="px-6 py-3 bg-error/10 hover:bg-error text-error hover:text-white border border-error/20 rounded-xl font-black text-xs uppercase tracking-widest whitespace-nowrap shadow-sm transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 shrink-0 w-full sm:w-auto"
-                            >
-                                {isDisconnecting ? <Loader2 size={16} className="animate-spin" /> : "Disconnect Bot"}
-                            </button>
+
+                            {showDisconnectConfirm && (
+                                <div className="p-6 bg-error/10 border border-error/20 rounded-2xl space-y-4">
+                                    <p className="text-sm font-bold text-text-main">
+                                        Type <span className="text-error font-black">{confirmName || 'your company name'}</span> to confirm:
+                                    </p>
+                                    <input
+                                        id="disconnect-confirm-input"
+                                        type="text"
+                                        value={disconnectConfirmText}
+                                        onChange={(e) => setDisconnectConfirmText(e.target.value)}
+                                        placeholder="Type company name here..."
+                                        className="input-premium w-full !bg-surface/50 focus:!bg-surface !border-error/30 focus:!border-error"
+                                    />
+                                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                                        <button
+                                            id="settings-disconnect-bot-confirm"
+                                            onClick={handleDisconnectBot}
+                                            disabled={isDisconnecting || disconnectConfirmText !== confirmName}
+                                            className="px-6 py-3 bg-error hover:bg-error/90 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-error/20 transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed w-full sm:w-auto"
+                                        >
+                                            {isDisconnecting ? (
+                                                <><Loader2 size={14} className="animate-spin" /> Disconnecting…</>
+                                            ) : (
+                                                <><Unplug size={14} /> Yes, Disconnect</>
+                                            )}
+                                        </button>
+                                        <button
+                                            id="settings-disconnect-bot-cancel"
+                                            onClick={() => { setShowDisconnectConfirm(false); setDisconnectConfirmText(''); }}
+                                            disabled={isDisconnecting}
+                                            className="px-6 py-3 bg-surface hover:bg-surface-muted text-text-main border border-border rounded-xl font-black text-xs uppercase tracking-widest transition-all duration-200 active:scale-95 flex items-center justify-center w-full sm:w-auto"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Delete Account */}

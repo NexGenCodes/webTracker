@@ -27,12 +27,15 @@ type Querier interface {
 	GetActivePlans(ctx context.Context) ([]GetActivePlansRow, error)
 	GetAllActiveCompanies(ctx context.Context) ([]Company, error)
 	GetAllCompanies(ctx context.Context) ([]uuid.UUID, error)
+	GetAuditLogs(ctx context.Context, arg GetAuditLogsParams) ([]AuditLog, error)
 	GetAuthorizedGroups(ctx context.Context, companyID uuid.UUID) ([]string, error)
 	GetCompanyByEmail(ctx context.Context, adminEmail string) (Company, error)
 	GetCompanyByID(ctx context.Context, id uuid.UUID) (Company, error)
+	GetCompanyPayments(ctx context.Context, arg GetCompanyPaymentsParams) ([]Payment, error)
 	GetGroupAuthority(ctx context.Context, arg GetGroupAuthorityParams) (GetGroupAuthorityRow, error)
 	GetLastShipmentIDForUser(ctx context.Context, arg GetLastShipmentIDForUserParams) (string, error)
 	GetPlanByID(ctx context.Context, id string) (GetPlanByIDRow, error)
+	GetPlatformAnalytics(ctx context.Context) (GetPlatformAnalyticsRow, error)
 	GetRecentEvents(ctx context.Context, arg GetRecentEventsParams) ([]Telemetry, error)
 	GetShipment(ctx context.Context, arg GetShipmentParams) (Shipment, error)
 	GetSystemConfig(ctx context.Context, arg GetSystemConfigParams) (string, error)
@@ -41,6 +44,7 @@ type Querier interface {
 	HasAuthorizedGroups(ctx context.Context, companyID uuid.UUID) (int64, error)
 	ListAllShipments(ctx context.Context, companyID uuid.NullUUID) ([]Shipment, error)
 	ListShipments(ctx context.Context, arg ListShipmentsParams) ([]Shipment, error)
+	LogAudit(ctx context.Context, arg LogAuditParams) error
 	RecordEvent(ctx context.Context, arg RecordEventParams) error
 	RecordPayment(ctx context.Context, arg RecordPaymentParams) (int32, error)
 	RunAgedCleanup(ctx context.Context, arg RunAgedCleanupParams) (sql.Result, error)
@@ -53,7 +57,9 @@ type Querier interface {
 	TransitionStatusToOutForDelivery(ctx context.Context, arg TransitionStatusToOutForDeliveryParams) ([]TransitionStatusToOutForDeliveryRow, error)
 	UpdateCompanyAuthStatus(ctx context.Context, arg UpdateCompanyAuthStatusParams) error
 	UpdateCompanyOnboarding(ctx context.Context, arg UpdateCompanyOnboardingParams) error
+	UpdateCompanyPlan(ctx context.Context, arg UpdateCompanyPlanParams) error
 	UpdateCompanySettings(ctx context.Context, arg UpdateCompanySettingsParams) error
+	UpdateCompanySubscription(ctx context.Context, arg UpdateCompanySubscriptionParams) error
 	UpdateCompanySubscriptionStatus(ctx context.Context, arg UpdateCompanySubscriptionStatusParams) error
 	UpdatePlanPrice(ctx context.Context, arg UpdatePlanPriceParams) error
 	UpdateShipmentDynamic(ctx context.Context, arg UpdateShipmentDynamicParams) error

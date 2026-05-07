@@ -20,34 +20,7 @@ import (
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/notif"
 	"webtracker-bot/internal/utils"
-	"sync"
 )
-
-type pendingReg struct {
-	hashedPassword string
-	expiresAt      time.Time
-}
-
-var (
-	pendingRegistrations sync.Map
-	cleanupOnce          sync.Once
-)
-
-func startCleanupRoutine() {
-	go func() {
-		for {
-			time.Sleep(5 * time.Minute)
-			now := time.Now()
-			pendingRegistrations.Range(func(key, value interface{}) bool {
-				reg := value.(pendingReg)
-				if now.After(reg.expiresAt) {
-					pendingRegistrations.Delete(key)
-				}
-				return true
-			})
-		}
-	}()
-}
 
 // Service handles authentication business logic
 type Service struct {
@@ -58,7 +31,6 @@ type Service struct {
 
 // NewService creates a new auth service
 func NewService(cfg *config.Config, queries db.Querier) *Service {
-	cleanupOnce.Do(startCleanupRoutine)
 	return &Service{
 		cfg:     cfg,
 		queries: queries,
@@ -96,19 +68,17 @@ func (s *Service) GenerateOTP(ctx context.Context, companyName, email, password 
 		return "", fmt.Errorf("failed to hash OTP: %w", err)
 	}
 
-	// Store password hash securely in memory
-	pendingRegistrations.Store(email, pendingReg{
-		hashedPassword: string(hashedPassword),
-		expiresAt:      time.Now().Add(10 * time.Minute),
-	})
+	// Stateless registration: No DB storage for pending intent.
+	// All necessary data is carried in the signed OTP token.
 
 	// Create Stateless JWT Token
 	claims := OTPClaims{
 		CompanyName:    companyName,
 		Email:          email,
 		HashedOTP:      string(hashedOTP),
+		HashedPassword: string(hashedPassword),
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Minute)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Issuer:    "webtracker-auth-otp",
 		},
@@ -131,25 +101,13 @@ func (s *Service) VerifyOTP(ctx context.Context, otp string, otpToken string) (*
 	}
 
 	// Verify OTP
-	logger.Info().Int("len", len(otp)).Msg("Comparing OTP")
+	logger.Info().Str("email", claims.Email).Msg("Verifying Stateless OTP")
 	err = bcrypt.CompareHashAndPassword([]byte(claims.HashedOTP), []byte(otp))
 	if err != nil {
 		return nil, "", errors.New("incorrect OTP code")
 	}
 
-	// Retrieve password hash from memory
-	val, ok := pendingRegistrations.Load(claims.Email)
-	if !ok {
-		return nil, "", errors.New("registration session expired on server")
-	}
-	reg := val.(pendingReg)
-	if time.Now().After(reg.expiresAt) {
-		pendingRegistrations.Delete(claims.Email)
-		return nil, "", errors.New("registration session expired on server")
-	}
-	pendingRegistrations.Delete(claims.Email)
-
-	// Create company in DB
+	// Create company in DB directly from JWT data
 	company, err := s.queries.CreateCompany(ctx, db.CreateCompanyParams{
 		AdminEmail: claims.Email,
 		Name:       sql.NullString{String: claims.CompanyName, Valid: true},
@@ -159,10 +117,10 @@ func (s *Service) VerifyOTP(ctx context.Context, otp string, otpToken string) (*
 		return nil, "", fmt.Errorf("failed to create company: %w", err)
 	}
 
-	// Update password hash immediately
+	// Update password hash immediately from JWT data
 	err = s.queries.SetCompanyPassword(ctx, db.SetCompanyPasswordParams{
 		ID:                company.ID,
-		AdminPasswordHash: sql.NullString{String: reg.hashedPassword, Valid: true},
+		AdminPasswordHash: sql.NullString{String: claims.HashedPassword, Valid: true},
 	})
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to set company password: %w", err)
@@ -276,11 +234,12 @@ func (s *Service) InitiatePasswordReset(ctx context.Context, email string) (stri
 		return "", fmt.Errorf("failed to hash OTP: %w", err)
 	}
 
+	// Create Stateless JWT Token
 	claims := ResetPasswordClaims{
 		Email:     email,
 		HashedOTP: string(hashedOTP),
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(15 * time.Minute)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Issuer:    "webtracker-password-reset",
 		},
@@ -352,19 +311,24 @@ func (s *Service) generateJWT(companyID uuid.UUID, companyName, email, planType,
 		return "", fmt.Errorf("failed to parse private key: %w", err)
 	}
 
+	role := "authenticated"
+	if s.cfg != nil && s.cfg.SuperAdminCompanyEmail != "" && email == s.cfg.SuperAdminCompanyEmail {
+		role = "super_admin"
+	}
+
 	claims := JWTClaims{
 		CompanyID:   companyID,
 		CompanyName: companyName,
 		Email:       email,
 		PlanType:    planType,
 		AuthStatus:  authStatus,
-		Role:        "authenticated",
+		Role:        role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(7 * 24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Issuer:    "webtracker-auth",
 			Subject:   companyID.String(),
-			Audience:  jwt.ClaimStrings{"authenticated"},
+			Audience:  jwt.ClaimStrings{role},
 		},
 	}
 

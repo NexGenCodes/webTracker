@@ -174,6 +174,12 @@ func (w *Worker) process(job models.Job) {
 		if aiM, err := parser.ParseAI(aiCtx, job.Text, w.Cfg.GeminiAPIKey); err == nil {
 			m.Merge(aiM)
 			m.IsAI = true
+		} else {
+			if aiCtx.Err() == context.DeadlineExceeded {
+				logger.Warn().Str("jid", job.SenderJID.String()).Msg("AI parsing timed out (7s)")
+			} else {
+				logger.Error().Err(err).Str("jid", job.SenderJID.String()).Msg("AI parsing failed")
+			}
 		}
 	}
 
@@ -246,7 +252,7 @@ func (w *Worker) process(job models.Job) {
 
 	g.Go(func() error {
 		var err error
-		remaining, err = w.ShipmentUC.CheckShipmentCap(gctx, w.Cfg, job.CompanyID, company.PlanType.String, company.SubscriptionExpiry)
+		remaining, err = w.ShipmentUC.CheckShipmentCap(gctx, w.Cfg, job.CompanyID, company.AdminEmail, company.PlanType.String, company.SubscriptionExpiry)
 		return err
 	})
 

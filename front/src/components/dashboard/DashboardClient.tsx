@@ -5,18 +5,21 @@ import { useRouter } from 'next/navigation';
 import {
     Package, Smartphone,
     CheckCircle2, AlertTriangle, XCircle,
-    UserCircle2, Activity
+    UserCircle2, Activity, TrendingUp, Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createClient } from '@/lib/supabase/client';
 import WhatsAppConnectModal from '@/components/dashboard/WhatsAppConnectModal';
 import { OverviewTab } from './OverviewTab';
+import { ShipmentsTab } from './ShipmentsTab';
+import { AnalyticsTab } from './AnalyticsTab';
 import { WhatsAppTab } from './WhatsAppTab';
+import { AIParserTab } from './AIParserTab';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Image from 'next/image';
 import toast from 'react-hot-toast';
 
-type Tab = 'overview' | 'whatsapp';
+type Tab = 'overview' | 'shipments' | 'analytics' | 'manifest' | 'whatsapp';
 
 export interface CompanyData {
     name: string;
@@ -40,8 +43,11 @@ interface DashboardClientProps {
 }
 
 // --- CONSTANTS & EXTRACTED COMPONENTS (Phase 1 Fixes) ---
-const TABS: { id: Tab; icon: typeof Package; label: string }[] = [
+const TABS: { id: Tab; icon: React.ElementType; label: string }[] = [
     { id: 'overview', icon: Activity, label: 'Overview' },
+    { id: 'shipments', icon: Package, label: 'Shipments' },
+    { id: 'analytics', icon: TrendingUp, label: 'Analytics' },
+    { id: 'manifest', icon: Sparkles, label: 'AI Manifest' },
     { id: 'whatsapp', icon: Smartphone, label: 'WhatsApp' },
 ];
 
@@ -193,7 +199,10 @@ export default function DashboardClient({ initialCompanyData, initialStats, user
     const overallStatus = whatsappConnected ? subscriptionStatus : 'pending';
 
     return (
-        <div className="pb-32 md:pb-24 relative bg-background overflow-x-hidden">
+        <div 
+            className="pb-32 md:pb-24 relative bg-background overflow-x-hidden"
+            style={{ '--accent-color': companyData?.brand_color || '#6366f1' } as React.CSSProperties}
+        >
             <div className="max-w-6xl mx-auto z-10 relative pt-24 md:pt-32 px-4 sm:px-8">
                 <motion.header
                     initial={{ y: -20, opacity: 0 }}
@@ -292,6 +301,18 @@ export default function DashboardClient({ initialCompanyData, initialStats, user
                                     isExpired={isExpired}
                                     onConnectClick={() => setIsConnectModalOpen(true)}
                                 />
+                            )}
+
+                            {activeTab === 'shipments' && (
+                                <ShipmentsTab companyId={companyId} jwt={jwt} />
+                            )}
+
+                            {activeTab === 'analytics' && (
+                                <AnalyticsTab shipmentStats={shipmentStats} />
+                            )}
+
+                            {activeTab === 'manifest' && (
+                                <AIParserTab companyId={companyId} />
                             )}
 
                             {activeTab === 'whatsapp' && (

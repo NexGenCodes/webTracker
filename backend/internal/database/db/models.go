@@ -12,6 +12,15 @@ import (
 	"github.com/sqlc-dev/pqtype"
 )
 
+type AuditLog struct {
+	ID              int32                 `json:"id"`
+	ActorEmail      string                `json:"actor_email"`
+	Action          string                `json:"action"`
+	TargetCompanyID uuid.NullUUID         `json:"target_company_id"`
+	Details         pqtype.NullRawMessage `json:"details"`
+	CreatedAt       sql.NullTime          `json:"created_at"`
+}
+
 type Company struct {
 	ID                 uuid.UUID      `json:"id"`
 	Name               sql.NullString `json:"name"`

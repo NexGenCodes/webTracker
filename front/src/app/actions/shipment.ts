@@ -18,3 +18,42 @@ export async function getTracking(trackingNumber: string): Promise<ShipmentData 
     }
 }
 
+
+/**
+ * Admin: Create shipment
+ */
+export async function createShipmentAction(companyId: string, data: Record<string, unknown>) {
+    return await ShipmentService.create(companyId, data);
+}
+
+/**
+ * Admin: Update shipment
+ */
+export async function updateShipmentAction(id: string, companyId: string, data: Record<string, unknown>) {
+    return await ShipmentService.update(id, companyId, data);
+}
+
+/**
+ * Admin: Delete shipment
+ */
+export async function deleteShipmentAction(id: string, companyId: string) {
+    return await ShipmentService.delete(id, companyId);
+}
+
+import { cookies } from 'next/headers';
+
+/**
+ * Admin: Parse Manifest with AI (Backend calls Gemini/Regex)
+ */
+export async function parseManifestAction(text: string) {
+    try {
+        const cookieStore = await cookies();
+        const jwt = cookieStore.get('jwt')?.value;
+        if (!jwt) return { success: false, error: 'Unauthorized' };
+
+        return await ShipmentService.parse(text, jwt);
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        return { success: false, error: message };
+    }
+}

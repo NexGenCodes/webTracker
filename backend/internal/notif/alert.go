@@ -3,6 +3,7 @@ package notif
 import (
 	"context"
 	"fmt"
+	"time"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
@@ -55,10 +56,27 @@ func SendStatusAlert(ctx context.Context, wa *whatsmeow.Client, cfg *config.Conf
 		Conversation: models.StrPtr(msg),
 	}
 
-	_, err = wa.SendMessage(ctx, jid, content)
+	if wa.Store.ID == nil {
+		logger.Warn().Str("chat", jidStr).Msg("Skipping status alert: Bot session not initialized (Store.ID is nil)")
+		return
+	}
+
+	// Ensure we send to the bare JID (all devices)
+	bareJid := types.JID{User: jid.User, Server: jid.Server}
+
+	_, err = wa.SendMessage(ctx, bareJid, content)
 	if err != nil {
 		logger.Error().Err(err).Str("chat", jidStr).Msg("Failed to send status alert")
 	} else {
 		logger.Info().Str("chat", jidStr).Str("status", status).Msg("Status alert sent")
 	}
+}
+
+// SendStatusAlertAsync dispatches a status alert in the background with a 15s timeout.
+func SendStatusAlertAsync(wa *whatsmeow.Client, cfg *config.Config, companyName, jidStr, tracking, status, email string) {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		SendStatusAlert(ctx, wa, cfg, companyName, jidStr, tracking, status, email)
+	}()
 }

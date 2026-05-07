@@ -157,9 +157,9 @@ SET
   recipient_address = COALESCE(NULLIF($10::text, ''), recipient_address),
   destination = COALESCE(NULLIF($11::text, ''), destination),
   cargo_type = COALESCE(NULLIF($12::text, ''), cargo_type),
-  scheduled_transit_time = COALESCE($13::timestamp, scheduled_transit_time),
-  expected_delivery_time = COALESCE($14::timestamp, expected_delivery_time),
-  outfordelivery_time = COALESCE($15::timestamp, outfordelivery_time),
+  scheduled_transit_time = COALESCE(NULLIF($13::timestamp, '0001-01-01 00:00:00'::timestamp), scheduled_transit_time),
+  expected_delivery_time = COALESCE(NULLIF($14::timestamp, '0001-01-01 00:00:00'::timestamp), expected_delivery_time),
+  outfordelivery_time = COALESCE(NULLIF($15::timestamp, '0001-01-01 00:00:00'::timestamp), outfordelivery_time),
   status = COALESCE(NULLIF($16::text, ''), status),
   updated_at = CURRENT_TIMESTAMP
 WHERE company_id = $1 AND tracking_id = $2;
@@ -214,3 +214,29 @@ WHERE id = $1 AND is_active = TRUE;
 
 -- name: UpdatePlanPrice :exec
 UPDATE plans SET base_price = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1;
+
+-- name: UpdateCompanyPlan :exec
+UPDATE companies SET plan_type = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1;
+
+-- name: UpdateCompanySubscription :exec
+UPDATE companies SET subscription_status = $2, subscription_expiry = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $1;
+
+-- name: LogAudit :exec
+INSERT INTO audit_log (actor_email, action, target_company_id, details)
+VALUES ($1, $2, $3, $4);
+
+-- name: GetAuditLogs :many
+SELECT * FROM audit_log
+ORDER BY created_at DESC
+LIMIT $1 OFFSET $2;
+
+-- name: GetPlatformAnalytics :one
+SELECT 
+    (SELECT COUNT(*) FROM companies) as total_tenants,
+    (SELECT COUNT(*) FROM companies WHERE created_at >= date_trunc('month', CURRENT_TIMESTAMP)) as new_tenants_this_month,
+    (SELECT COUNT(*) FROM Shipment) as total_shipments,
+    (SELECT COUNT(*) FROM Shipment WHERE created_at >= CURRENT_DATE) as shipments_today,
+    (SELECT jsonb_object_agg(plan_type, count) FROM (SELECT plan_type, COUNT(*) as count FROM companies GROUP BY plan_type) t) as plan_distribution,
+    (SELECT jsonb_object_agg(subscription_status, count) FROM (SELECT subscription_status, COUNT(*) as count FROM companies GROUP BY subscription_status) t) as subscription_distribution;
+-- name: GetCompanyPayments :many
+SELECT * FROM payments WHERE company_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3;

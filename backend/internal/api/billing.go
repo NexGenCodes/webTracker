@@ -32,6 +32,7 @@ func (h *BillingHandler) RegisterRoutes(app *fiber.App) {
 	api.Get("/plans", h.getPlans)
 	api.Post("/subscribe", h.subscribe)
 	api.Get("/subscription-status", h.getSubscriptionStatus)
+	api.Get("/payments", h.getPayments)
 
 	// Webhooks — outside the /api/billing group for Paystack compatibility
 	app.Post("/api/webhooks/paystack", h.paystackWebhook)
@@ -74,14 +75,14 @@ func (h *BillingHandler) subscribe(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing or invalid company_id"})
 	}
 
-	// Super admin bypasses billing
-	if billing.IsSuperAdmin(h.cfg, companyID) {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Super admin accounts do not require subscriptions"})
-	}
-
 	company, err := h.configUC.GetCompanyByID(c.Context(), companyID)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Company not found"})
+	}
+
+	// Super admin bypasses billing
+	if billing.IsSuperAdminEmail(h.cfg, company.AdminEmail) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Super admin accounts do not require subscriptions"})
 	}
 
 	var req struct {
@@ -149,6 +150,20 @@ func (h *BillingHandler) getSubscriptionStatus(c *fiber.Ctx) error {
 		"expiry": company.SubscriptionExpiry.Time,
 		"plan":   company.PlanType.String,
 	})
+}
+
+func (h *BillingHandler) getPayments(c *fiber.Ctx) error {
+	companyID := getCompanyID(c)
+	if companyID == uuid.Nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing or invalid company_id"})
+	}
+
+	payments, err := h.configUC.GetCompanyPayments(c.Context(), companyID, 50, 0)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch payments"})
+	}
+
+	return c.JSON(payments)
 }
 
 // paystackWebhook handles inbound webhook events from Paystack.

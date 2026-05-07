@@ -107,7 +107,7 @@ export async function registerIntentAction(data: RegisterInput): Promise<ActionR
                 secure: process.env.NODE_ENV === 'production',
                 sameSite: 'lax',
                 path: '/',
-                maxAge: 10 * 60 // 10 minutes
+                maxAge: 5 * 60 // 5 minutes
             });
         }
 
@@ -184,7 +184,7 @@ export async function forgotPasswordAction(email: string): Promise<ActionResult>
                 secure: process.env.NODE_ENV === 'production',
                 sameSite: 'lax',
                 path: '/',
-                maxAge: 15 * 60 // 15 minutes
+                maxAge: 5 * 60 // 5 minutes
             });
         }
 

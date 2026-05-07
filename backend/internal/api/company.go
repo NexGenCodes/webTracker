@@ -53,14 +53,14 @@ func (h *CompanyHandler) RegisterRoutes(app *fiber.App) {
 }
 
 func (h *CompanyHandler) checkSubscription(ctx *fiber.Ctx, companyID uuid.UUID) error {
-	// Super admin bypasses all billing checks
-	if billing.IsSuperAdmin(h.cfg, companyID) {
-		return nil
-	}
-
 	company, err := h.configUC.GetCompanyByID(ctx.Context(), companyID)
 	if err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "Failed to verify subscription status")
+	}
+
+	// Super admin bypasses all billing checks
+	if billing.IsSuperAdminEmail(h.cfg, company.AdminEmail) {
+		return nil
 	}
 
 	if company.SubscriptionStatus.String != "active" && company.SubscriptionStatus.String != "trialing" {

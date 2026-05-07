@@ -112,17 +112,27 @@ func (m *CronManager) handlePulse() {
 				break
 			}
 
+			bot, err := m.bots.GetBot(companyID)
+			if err != nil {
+				// Try to hydrate if missing
+				if err := m.bots.ActivateBot(ctx, companyID); err != nil {
+					continue
+				}
+				bot, _ = m.bots.GetBot(companyID)
+			}
+			if bot == nil {
+				continue
+			}
+
 			for _, t := range transitions {
 				logger.Info().Str("id", t.TrackingID).Str("new_status", t.NewStatus).Msg("Pulse: Shipment status updated via DB trigger")
 
-				bot, err := m.bots.GetBot(companyID)
-				if err != nil {
+				if bot.GetWAClient().Store.ID == nil {
+					logger.Warn().Str("company", companyID.String()).Msg("Pulse: Skipping alert, bot session not initialized")
 					continue
 				}
 
-				go func(t shipment.TransitionResult, b models.BotInstance) {
-					notif.SendStatusAlert(ctx, b.GetWAClient(), m.cfg, b.GetCompanyName(), t.UserJID, t.TrackingID, t.NewStatus, t.RecipientEmail)
-				}(t, bot)
+				notif.SendStatusAlertAsync(bot.GetWAClient(), m.cfg, bot.GetCompanyName(), t.UserJID, t.TrackingID, t.NewStatus, t.RecipientEmail)
 			}
 		}
 	}
@@ -149,17 +159,39 @@ func (m *CronManager) handleDailyStats() {
 
 		bot, err := m.bots.GetBot(companyID)
 		if err != nil {
+			// Lazy hydration
+			if err := m.bots.ActivateBot(ctx, companyID); err != nil {
+				continue
+			}
+			bot, _ = m.bots.GetBot(companyID)
+		}
+		if bot == nil {
+			continue
+		}
+
+		if bot.GetWAClient().Store.ID == nil {
+			logger.Warn().Str("company", companyID.String()).Msg("Stats: Skipping report, bot session not initialized")
 			continue
 		}
 
 		go func(cid uuid.UUID, b models.BotInstance) {
-			groups, _ := m.configUC.GetAuthorizedGroups(ctx, cid)
+			sCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			groups, _ := m.configUC.GetAuthorizedGroups(sCtx, cid)
 			for _, g := range groups {
-				jid, _ := types.ParseJID(g)
+				jid, err := types.ParseJID(g)
+				if err != nil {
+					continue
+				}
 				msgContent := &waProto.Message{
 					Conversation: &msg,
 				}
-				b.GetWAClient().SendMessage(ctx, jid, msgContent)
+				bareJid := types.JID{User: jid.User, Server: jid.Server}
+				_, err = b.GetWAClient().SendMessage(sCtx, bareJid, msgContent)
+				if err != nil {
+					logger.Error().Err(err).Str("group", g).Msg("Stats: Failed to send report to group")
+				}
 			}
 		}(companyID, bot)
 	}

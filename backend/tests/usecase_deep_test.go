@@ -175,6 +175,24 @@ func (m *MockQuerier) UpdateCompanyOnboarding(ctx context.Context, arg db.Update
 func (m *MockQuerier) RecordPayment(ctx context.Context, arg db.RecordPaymentParams) (int32, error) {
 	return 1, nil
 }
+func (m *MockQuerier) GetAuditLogs(ctx context.Context, arg db.GetAuditLogsParams) ([]db.AuditLog, error) {
+	return nil, nil
+}
+func (m *MockQuerier) LogAudit(ctx context.Context, arg db.LogAuditParams) error {
+	return nil
+}
+func (m *MockQuerier) GetCompanyPayments(ctx context.Context, arg db.GetCompanyPaymentsParams) ([]db.Payment, error) {
+	return nil, nil
+}
+func (m *MockQuerier) GetPlatformAnalytics(ctx context.Context) (db.GetPlatformAnalyticsRow, error) {
+	return db.GetPlatformAnalyticsRow{}, nil
+}
+func (m *MockQuerier) UpdateCompanyPlan(ctx context.Context, arg db.UpdateCompanyPlanParams) error {
+	return nil
+}
+func (m *MockQuerier) UpdateCompanySubscription(ctx context.Context, arg db.UpdateCompanySubscriptionParams) error {
+	return nil
+}
 
 // mockResult implements sql.Result for mock returns
 type mockResult struct{}

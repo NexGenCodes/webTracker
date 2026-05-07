@@ -101,7 +101,7 @@ func (h *ShipmentHandler) Create(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to look up company"})
 	}
-	remaining, err := h.shipmentUC.CheckShipmentCap(c.Context(), h.cfg, companyID, company.PlanType.String, company.SubscriptionExpiry)
+	remaining, err := h.shipmentUC.CheckShipmentCap(c.Context(), h.cfg, companyID, company.AdminEmail, company.PlanType.String, company.SubscriptionExpiry)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to check shipment cap"})
 	}
@@ -242,7 +242,7 @@ func (h *ShipmentHandler) UpdateStatus(c *fiber.Ctx) error {
 	// Send instant alert for manual admin overrides
 	if h.bots != nil {
 		if bot, err := h.bots.GetBot(companyID); err == nil {
-			notif.SendStatusAlert(c.Context(), bot.GetWAClient(), h.cfg, bot.GetCompanyName(), ship.UserJid, ship.TrackingID, req.Status, ship.RecipientEmail.String)
+			notif.SendStatusAlertAsync(bot.GetWAClient(), h.cfg, bot.GetCompanyName(), ship.UserJid, ship.TrackingID, req.Status, ship.RecipientEmail.String)
 		}
 	}
 
@@ -337,7 +337,7 @@ func (h *ShipmentHandler) BulkCreateCSV(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to look up company"})
 	}
-	remaining, err := h.shipmentUC.CheckShipmentCap(c.Context(), h.cfg, companyID, company.PlanType.String, company.SubscriptionExpiry)
+	remaining, err := h.shipmentUC.CheckShipmentCap(c.Context(), h.cfg, companyID, company.AdminEmail, company.PlanType.String, company.SubscriptionExpiry)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to check shipment cap"})
 	}

@@ -92,23 +92,32 @@ ALTER TABLE companies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE shipment ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
 
--- Companies: each tenant reads only their own row
+-- Companies: each tenant reads only their own row, super_admin sees all
 DROP POLICY IF EXISTS "tenant_read_own_company" ON companies;
 CREATE POLICY "tenant_read_own_company" ON companies 
   FOR SELECT TO authenticated 
-  USING (id = (auth.jwt() ->> 'company_id')::uuid);
+  USING (
+    (id = (auth.jwt() ->> 'company_id')::uuid) OR 
+    ((auth.jwt() ->> 'role') = 'super_admin')
+  );
 
--- Shipments: each tenant reads only their own shipments  
+-- Shipments: each tenant reads only their own shipments, super_admin sees all
 DROP POLICY IF EXISTS "tenant_read_own_shipments" ON shipment;
 CREATE POLICY "tenant_read_own_shipments" ON shipment 
   FOR SELECT TO authenticated 
-  USING (company_id = (auth.jwt() ->> 'company_id')::uuid);
+  USING (
+    (company_id = (auth.jwt() ->> 'company_id')::uuid) OR
+    ((auth.jwt() ->> 'role') = 'super_admin')
+  );
   
--- Payments: each tenant reads only their own payments
+-- Payments: each tenant reads only their own payments, super_admin sees all
 DROP POLICY IF EXISTS "tenant_read_own_payments" ON payments;
 CREATE POLICY "tenant_read_own_payments" ON payments
   FOR SELECT TO authenticated
-  USING (company_id = (auth.jwt() ->> 'company_id')::uuid);
+  USING (
+    (company_id = (auth.jwt() ->> 'company_id')::uuid) OR
+    ((auth.jwt() ->> 'role') = 'super_admin')
+  );
 
 -- Shipments: anon users cannot read shipments directly to prevent enumeration
 DROP POLICY IF EXISTS "anon_read_shipment_by_tracking" ON shipment;
@@ -177,3 +186,14 @@ CREATE TABLE IF NOT EXISTS plans (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS audit_log (
+    id SERIAL PRIMARY KEY,
+    actor_email TEXT NOT NULL,
+    action TEXT NOT NULL,
+    target_company_id UUID,
+    details JSONB,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at DESC);

@@ -3,11 +3,14 @@ package config
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"time"
 
 	"webtracker-bot/internal/database/db"
 
 	"github.com/google/uuid"
+	"github.com/sqlc-dev/pqtype"
 )
 
 type Usecase struct {
@@ -183,3 +186,65 @@ func (uc *Usecase) GetActivePlans(ctx context.Context) ([]db.GetActivePlansRow, 
 func (uc *Usecase) GetPlanByID(ctx context.Context, id string) (db.GetPlanByIDRow, error) {
 	return uc.repo.GetPlanByID(ctx, id)
 }
+
+func (u *Usecase) LogAudit(ctx context.Context, actorEmail, action string, targetCompanyID uuid.UUID, details map[string]interface{}) error {
+	var detailsRaw pqtype.NullRawMessage
+	if details != nil {
+		data, err := json.Marshal(details)
+		if err == nil {
+			detailsRaw = pqtype.NullRawMessage{RawMessage: data, Valid: true}
+		}
+	}
+
+	return u.repo.LogAudit(ctx, db.LogAuditParams{
+		ActorEmail:      actorEmail,
+		Action:          action,
+		TargetCompanyID: uuid.NullUUID{UUID: targetCompanyID, Valid: targetCompanyID != uuid.Nil},
+		Details:         detailsRaw,
+	})
+}
+
+func (u *Usecase) GetAuditLogs(ctx context.Context, limit, offset int32) ([]db.AuditLog, error) {
+	return u.repo.GetAuditLogs(ctx, db.GetAuditLogsParams{
+		Limit:  limit,
+		Offset: offset,
+	})
+}
+
+func (u *Usecase) GetPlatformAnalytics(ctx context.Context) (db.GetPlatformAnalyticsRow, error) {
+	return u.repo.GetPlatformAnalytics(ctx)
+}
+
+func (u *Usecase) UpdateCompanyPlan(ctx context.Context, companyID uuid.UUID, planType string) error {
+	return u.repo.UpdateCompanyPlan(ctx, db.UpdateCompanyPlanParams{
+		ID:       companyID,
+		PlanType: sql.NullString{String: planType, Valid: true},
+	})
+}
+
+func (u *Usecase) UpdateCompanySubscription(ctx context.Context, companyID uuid.UUID, subStatus string, expiry time.Time) error {
+	return u.repo.UpdateCompanySubscription(ctx, db.UpdateCompanySubscriptionParams{
+		ID:                 companyID,
+		SubscriptionStatus: sql.NullString{String: subStatus, Valid: true},
+		SubscriptionExpiry: sql.NullTime{Time: expiry, Valid: !expiry.IsZero()},
+	})
+}
+
+func (u *Usecase) GetCompanyPayments(ctx context.Context, companyID uuid.UUID, limit, offset int32) ([]db.Payment, error) {
+	rows, err := u.pool.QueryContext(ctx, "SELECT id, company_id, reference, amount, status, created_at FROM payments WHERE company_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3", companyID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var payments []db.Payment
+	for rows.Next() {
+		var p db.Payment
+		if err := rows.Scan(&p.ID, &p.CompanyID, &p.Reference, &p.Amount, &p.Status, &p.CreatedAt); err != nil {
+			return nil, err
+		}
+		payments = append(payments, p)
+	}
+	return payments, nil
+}
+

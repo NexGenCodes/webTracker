@@ -4,8 +4,6 @@ import (
 	"fmt"
 
 	"webtracker-bot/internal/config"
-
-	"github.com/google/uuid"
 )
 
 // Plan is the single source of truth for all pricing and quota data.
@@ -92,15 +90,11 @@ func GetPlanByID(id string) (Plan, error) {
 	}
 }
 
-// IsSuperAdmin checks if the given company ID matches the configured super admin.
+// IsSuperAdminEmail checks if the given email matches the configured super admin.
 // Lives in the billing package because it governs billing bypass logic.
-func IsSuperAdmin(cfg *config.Config, companyID uuid.UUID) bool {
-	if cfg == nil || cfg.SuperAdminCompanyID == "" {
+func IsSuperAdminEmail(cfg *config.Config, email string) bool {
+	if cfg == nil || cfg.SuperAdminCompanyEmail == "" {
 		return false
 	}
-	superID, err := uuid.Parse(cfg.SuperAdminCompanyID)
-	if err != nil {
-		return false
-	}
-	return companyID == superID
+	return email == cfg.SuperAdminCompanyEmail
 }

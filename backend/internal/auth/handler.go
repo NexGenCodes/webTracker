@@ -79,7 +79,7 @@ func (h *Handler) forgotPassword(c *fiber.Ctx) error {
 	c.Cookie(&fiber.Cookie{
 		Name:     "reset_token",
 		Value:    resetToken,
-		Expires:  time.Now().Add(15 * time.Minute),
+		Expires:  time.Now().Add(5 * time.Minute),
 		HTTPOnly: true,
 		Secure:   h.isSecure,
 		SameSite: h.sameSite,
@@ -146,15 +146,18 @@ func (h *Handler) registerIntent(c *fiber.Ctx) error {
 
 	otpToken, err := h.service.GenerateOTP(c.Context(), req.CompanyName, req.Email, req.Password)
 	if err != nil {
+		if strings.Contains(err.Error(), "already exists") {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		}
 		logger.Error().Err(err).Msg("Registration intent failed")
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to process registration"})
 	}
 
 	// Set temporary OTP cookie
 	c.Cookie(&fiber.Cookie{
 		Name:     "otp_token",
 		Value:    otpToken,
-		Expires:  time.Now().Add(10 * time.Minute),
+		Expires:  time.Now().Add(5 * time.Minute),
 		HTTPOnly: true,
 		Secure:   h.isSecure,
 		SameSite: h.sameSite,

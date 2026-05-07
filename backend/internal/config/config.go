@@ -49,7 +49,7 @@ type Config struct {
 	FrontendURL string `env:"FRONTEND_URL" env-default:"http://localhost:3000"`
 
 	// Super Admin — bypasses all billing, unlimited shipments
-	SuperAdminCompanyID string `env:"SUPERADMIN_COMPANY_ID"`
+	SuperAdminCompanyEmail string `env:"SUPER_ADMIN_COMPANY_EMAIL"`
 }
 
 func GetWorkDir() string {
