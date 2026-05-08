@@ -13,11 +13,13 @@ import (
 	"webtracker-bot/internal/utils"
 
 	"go.mau.fi/whatsmeow"
+	waProto "go.mau.fi/whatsmeow/binary/proto"
 	"go.mau.fi/whatsmeow/store"
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 	waLog "go.mau.fi/whatsmeow/util/log"
+	"google.golang.org/protobuf/proto"
 
 	// Import standard pgx driver.
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -46,8 +48,12 @@ func NewClientForDevice(device *store.Device, name string) *whatsmeow.Client {
 	if name == "" {
 		name = "AIRWAYBILL"
 	}
-	device.PushName = name
-	device.Platform = name
+
+	// Set the linked device display name (shown in WhatsApp > Linked Devices menu on phone)
+	store.DeviceProps.Os = proto.String(name)
+	store.DeviceProps.PlatformType = waProto.DeviceProps_CHROME.Enum()
+	store.DeviceProps.RequireFullSync = proto.Bool(false)
+
 	device.BusinessName = name
 
 	client := whatsmeow.NewClient(device, waLog.Stdout("whatsapp", "INFO", true))
@@ -207,17 +213,15 @@ func HandleEvent(bot *BotInstance, evt interface{}, cfg *config.Config, configUC
 					return
 				}
 			} else {
-				// Private chat rules
+				// Private chat rules — strict enforcement (no failover)
 				isSelfChat := chatJID.User == botPhone || (botLID != "" && chatJID.User == botLID)
 
 				if isSelfChat {
 					isAuthorized = true // Always allow Note to Self
 				} else if cfg.AllowPrivateChat {
 					isAuthorized = true
-				} else {
-					hasGroups, _ := configUC.HasAuthorizedGroups(context.Background(), companyID)
-					isAuthorized = !hasGroups // Failover: Allow private if no groups exist
 				}
+				// else: isAuthorized remains false — private chats are blocked
 
 				if !isAuthorized {
 					logger.Debug().

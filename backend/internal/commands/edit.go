@@ -131,28 +131,17 @@ func (h *EditHandler) Execute(ctx context.Context, shipUC models.ShipmentUsecase
 			}
 			now := time.Now().In(loc)
 
-			if parsedDate, ok := utils.ParseNaturalDate(value, now, loc); ok {
-				value = parsedDate.UTC().Format("2006-01-02 15:04:05")
-				if field == "scheduled_transit_time" {
-					departureUpdated = true
-					newDeparture = parsedDate.UTC()
-				}
-			} else {
-				// Strict format fallback
-				var strictTime time.Time
-				var parseErr error
-				strictTime, parseErr = time.Parse("2006-01-02", value)
-				if parseErr != nil {
-					strictTime, parseErr = time.Parse("2006-01-02 15:04:05", value)
-				}
-				if parseErr != nil {
-					continue // Skip invalid date
-				}
-				value = strictTime.UTC().Format("2006-01-02 15:04:05")
-				if field == "scheduled_transit_time" {
-					departureUpdated = true
-					newDeparture = strictTime.UTC()
-				}
+			// ParseNaturalDate now handles both natural language AND common date formats
+			parsedDate, ok := utils.ParseNaturalDate(value, now, loc)
+			if !ok {
+				// Skip — unrecognized date format
+				continue
+			}
+
+			value = parsedDate.UTC().Format("2006-01-02 15:04:05")
+			if field == "scheduled_transit_time" {
+				departureUpdated = true
+				newDeparture = parsedDate.UTC()
 			}
 
 			if field == "expected_delivery_time" {

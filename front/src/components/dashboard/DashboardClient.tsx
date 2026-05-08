@@ -340,6 +340,8 @@ export default function DashboardClient({ initialCompanyData, initialStats, user
                     });
                     queryClient.refetchQueries({ queryKey: ['company', companyId] });
                     queryClient.refetchQueries({ queryKey: ['shipments', companyId] });
+                    // Hard refresh to re-render SSR server components with fresh auth_status
+                    router.refresh();
                 }}
             />
         </div>
