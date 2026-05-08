@@ -179,9 +179,8 @@ func (c *Calculator) CalculateDeparture(now time.Time, originCountry string) tim
 }
 
 // CalculateArrival (Algorithm B) determines the delivery window.
-// Rule: Arrival is always the next day after departure in the destination's timezone.
-// Sunday skip: if arrival lands on Sunday, push to Monday.
-// Out for Delivery: 7:30 AM - 9:00 AM local. Expected Delivery: 9:00 AM - 5:00 PM local.
+// Rule: Arrival is always the next day after departure (+1 day).
+// Sunday skip removed as per user request for strict +1 day logic.
 func (c *Calculator) CalculateArrival(departure time.Time, destinationCountry string) (time.Time, time.Time) {
 	tz := c.ResolveTimezone(destinationCountry)
 	loc, err := loadLocation(tz)
@@ -189,24 +188,19 @@ func (c *Calculator) CalculateArrival(departure time.Time, destinationCountry st
 		loc = time.UTC
 	}
 
-	// Project departure into destination timezone and add 1 day
+	// Project departure into destination timezone and add exactly 1 day
 	depLocal := departure.In(loc)
 	arrivalDate := depLocal.AddDate(0, 0, 1)
 
-	// Sunday skip: if arrival lands on Sunday, push to Monday
-	if arrivalDate.Weekday() == time.Sunday {
-		arrivalDate = arrivalDate.AddDate(0, 0, 1)
-	}
-
-	// Out for Delivery: random between 7:30 AM and 9:00 AM destination local
-	ofdOffset := rand.IntN(91) // 0 to 90 minutes after 7:30
-	totalMin := 7*60 + 30 + ofdOffset
+	// Out for Delivery: random between 8:00 AM and 10:00 AM destination local
+	ofdOffset := rand.IntN(121) // 0 to 120 minutes after 8:00
+	totalMin := 8*60 + ofdOffset
 	ofdHour := totalMin / 60
 	ofdMin := totalMin % 60
 	outForDelivery := time.Date(arrivalDate.Year(), arrivalDate.Month(), arrivalDate.Day(), ofdHour, ofdMin, 0, 0, loc).UTC()
 
-	// Expected Delivery: random between 9:00 AM and 5:00 PM destination local
-	hour := 9 + rand.IntN(8) // 9, 10, 11, 12, 13, 14, 15, 16
+	// Expected Delivery: random between 10:00 AM and 4:00 PM destination local
+	hour := 10 + rand.IntN(6) // 10, 11, 12, 13, 14, 15
 	minute := rand.IntN(60)
 	arrival := time.Date(arrivalDate.Year(), arrivalDate.Month(), arrivalDate.Day(), hour, minute, 0, 0, loc).UTC()
 

@@ -11,6 +11,7 @@ import (
 
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/i18n"
+	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/notif"
 	"webtracker-bot/internal/parser"
@@ -103,6 +104,7 @@ func (h *EditHandler) Execute(ctx context.Context, shipUC models.ShipmentUsecase
 	departureUpdated := false
 	var newDeparture time.Time
 	arrivalExplicitlyUpdated := false
+	var newArrival time.Time
 
 	for field, value := range updates {
 		// Strict Policy: Weight is fixed
@@ -131,10 +133,9 @@ func (h *EditHandler) Execute(ctx context.Context, shipUC models.ShipmentUsecase
 			}
 			now := time.Now().In(loc)
 
-			// ParseNaturalDate now handles both natural language AND common date formats
 			parsedDate, ok := utils.ParseNaturalDate(value, now, loc)
 			if !ok {
-				// Skip — unrecognized date format
+				logger.Warn().Str("field", field).Str("value", value).Msg("Failed to parse date in edit command")
 				continue
 			}
 
@@ -146,27 +147,41 @@ func (h *EditHandler) Execute(ctx context.Context, shipUC models.ShipmentUsecase
 
 			if field == "expected_delivery_time" {
 				arrivalExplicitlyUpdated = true
+				newArrival = parsedDate.UTC()
 			}
 		}
 
 		err := shipUC.UpdateField(ctx, companyID, trackingID, field, value)
-		if err == nil {
+		if err != nil {
+			logger.Error().Err(err).Str("field", field).Msg("Failed to update field in edit command")
+		} else {
 			updatedFields = append(updatedFields, strings.ToUpper(strings.ReplaceAll(field, "_", " ")))
 		}
 	}
 
-	// 4. Automatic Arrival Sync (Algorithm B)
+	// 4. Automatic Arrival/OFD Sync (Strict +1 or Logical Consistency)
 	if departureUpdated && !arrivalExplicitlyUpdated {
+		// Departure edited -> Auto-sync Arrival to Departure + 1
 		dbShip, _ := shipUC.Track(ctx, companyID, trackingID)
 		if dbShip != nil {
-			// Recalculate Arrival based on new Departure
-			arrival, outForDelivery := shipUC.GetService().CalculateArrival(newDeparture, dbShip.Destination.String)
+			destTZ := shipUC.GetService().ResolveTimezone(dbShip.Destination.String)
+			destLoc, _ := time.LoadLocation(destTZ)
+			if destLoc == nil {
+				destLoc = time.UTC
+			}
+
+			arrivalDate := newDeparture.In(destLoc).AddDate(0, 0, 1)
+			ofd := time.Date(arrivalDate.Year(), arrivalDate.Month(), arrivalDate.Day(), 8, 30, 0, 0, destLoc).UTC()
+			arrival := time.Date(arrivalDate.Year(), arrivalDate.Month(), arrivalDate.Day(), 14, 0, 0, 0, destLoc).UTC()
 
 			_ = shipUC.UpdateField(ctx, companyID, trackingID, "expected_delivery_time", arrival.Format("2006-01-02 15:04:05"))
-			_ = shipUC.UpdateField(ctx, companyID, trackingID, "outfordelivery_time", outForDelivery.Format("2006-01-02 15:04:05"))
-
-			updatedFields = append(updatedFields, "EXPECTED DELIVERY TIME (AUTO-SYNC)", "OUTFORDELIVERY TIME (AUTO-SYNC)")
+			_ = shipUC.UpdateField(ctx, companyID, trackingID, "outfordelivery_time", ofd.Format("2006-01-02 15:04:05"))
+			updatedFields = append(updatedFields, "ARRIVAL (AUTO-SYNC +1D)")
 		}
+	} else if arrivalExplicitlyUpdated {
+		// Arrival edited -> Auto-sync OutForDelivery to 4 hours before arrival for consistency
+		_ = shipUC.UpdateField(ctx, companyID, trackingID, "outfordelivery_time", newArrival.Add(-4*time.Hour).Format("2006-01-02 15:04:05"))
+		updatedFields = append(updatedFields, "OFD (CONSISTENCY-SYNC)")
 	}
 
 	if len(updatedFields) == 0 {

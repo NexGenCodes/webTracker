@@ -23,7 +23,7 @@ import (
 )
 
 var (
-	templateCache = make(map[i18n.Language]*image.RGBA)
+	templateCache = make(map[string]*image.RGBA)
 	tmplMu        sync.RWMutex
 
 	bufPool = sync.Pool{
@@ -54,13 +54,16 @@ func RenderReceiptOptimized(s shipment.Shipment, companyName string, lang i18n.L
 	buf.Reset()
 	defer bufPool.Put(buf)
 
-	err := jpeg.Encode(buf, dc.Image(), &jpeg.Options{Quality: 82})
+	err := jpeg.Encode(buf, dc.Image(), &jpeg.Options{Quality: 72})
 	return buf.Bytes(), err
 }
 
 func loadStaticTemplate(companyName string, lang i18n.Language) *image.RGBA {
+	// Cache key includes company name so each tenant gets its own branded template
+	cacheKey := string(lang) + ":" + strings.ToUpper(companyName)
+
 	tmplMu.RLock()
-	if img, ok := templateCache[lang]; ok {
+	if img, ok := templateCache[cacheKey]; ok {
 		defer tmplMu.RUnlock()
 		return img
 	}
@@ -68,7 +71,7 @@ func loadStaticTemplate(companyName string, lang i18n.Language) *image.RGBA {
 
 	tmplMu.Lock()
 	defer tmplMu.Unlock()
-	if img, ok := templateCache[lang]; ok {
+	if img, ok := templateCache[cacheKey]; ok {
 		return img
 	}
 
@@ -111,7 +114,7 @@ func loadStaticTemplate(companyName string, lang i18n.Language) *image.RGBA {
 		draw.Draw(rgba, rgba.Bounds(), img, b.Min, draw.Src)
 	}
 
-	templateCache[lang] = rgba
+	templateCache[cacheKey] = rgba
 	return rgba
 }
 

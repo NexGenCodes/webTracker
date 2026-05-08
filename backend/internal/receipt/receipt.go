@@ -22,7 +22,7 @@ const (
 	ColorBgHex = "#f4f2eb"
 )
 
-const TemplateVersion = "v27"
+const TemplateVersion = "v28"
 
 var ctxPool = sync.Pool{
 	New: func() interface{} {
