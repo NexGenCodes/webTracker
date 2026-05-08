@@ -8,8 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"webtracker-bot/internal/cache"
 	"webtracker-bot/internal/database/db"
 	"webtracker-bot/internal/database/dbutil"
+	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/utils"
 
@@ -39,12 +41,27 @@ func (u *Usecase) GetService() models.ShipmentService {
 	return u.Service
 }
 
-// Track retrieves a shipment by its tracking ID.
+// Track retrieves a shipment by its tracking ID (Redis read-through cache, 30s TTL).
 func (u *Usecase) Track(ctx context.Context, companyID uuid.UUID, trackingID string) (*db.Shipment, error) {
+	key := cache.ShipmentKey(companyID.String(), trackingID)
+
+	// Try cache first
+	var cached db.Shipment
+	if hit, _ := cache.Get(ctx, key, &cached); hit {
+		return &cached, nil
+	}
+
+	// Cache miss — fetch from DB
 	shipment, err := u.repo.GetShipment(ctx, db.GetShipmentParams{CompanyID: toNullUUID(companyID), TrackingID: trackingID})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get shipment: %w", err)
 	}
+
+	// Populate cache (best-effort)
+	if err := cache.Set(ctx, key, shipment, cache.ShipmentTTL); err != nil {
+		logger.Warn().Err(err).Str("key", key).Msg("Cache: failed to set shipment")
+	}
+
 	return &shipment, nil
 }
 
@@ -73,6 +90,7 @@ func (u *Usecase) UpdateStatus(ctx context.Context, companyID uuid.UUID, trackin
 	if err != nil {
 		return fmt.Errorf("failed to update status: %w", err)
 	}
+	cache.Del(ctx, cache.ShipmentKey(companyID.String(), trackingID))
 	return nil
 }
 
@@ -96,6 +114,7 @@ func (u *Usecase) Delete(ctx context.Context, companyID uuid.UUID, trackingID st
 	if err != nil {
 		return fmt.Errorf("failed to delete shipment: %w", err)
 	}
+	cache.Del(ctx, cache.ShipmentKey(companyID.String(), trackingID))
 	return nil
 }
 
@@ -289,7 +308,12 @@ func (u *Usecase) UpdateField(ctx context.Context, companyID uuid.UUID, tracking
 		return fmt.Errorf("unsupported field: %s", field)
 	}
 
-	return u.repo.UpdateShipmentDynamic(ctx, params)
+	err := u.repo.UpdateShipmentDynamic(ctx, params)
+	if err != nil {
+		return fmt.Errorf("failed to update shipment field: %w", err)
+	}
+	cache.Del(ctx, cache.ShipmentKey(companyID.String(), trackingID))
+	return nil
 }
 
 func parseFlexibleTime(value string) (time.Time, error) {
@@ -335,22 +359,15 @@ func (u *Usecase) ListAll(ctx context.Context, companyID uuid.UUID) ([]db.Shipme
 	return u.repo.ListAllShipments(ctx, toNullUUID(companyID))
 }
 
-type TransitionResult struct {
-	TrackingID     string
-	NewStatus      string
-	UserJID        string
-	RecipientEmail string
-}
-
-func (u *Usecase) ProcessTransitions(ctx context.Context, companyID uuid.UUID, now time.Time) ([]TransitionResult, error) {
-	var results []TransitionResult
+func (u *Usecase) ProcessTransitions(ctx context.Context, companyID uuid.UUID, now time.Time) ([]models.TransitionResult, error) {
+	var results []models.TransitionResult
 
 	transit, err := u.repo.TransitionStatusToIntransit(ctx, db.TransitionStatusToIntransitParams{CompanyID: toNullUUID(companyID), ScheduledTransitTime: dbutil.ToNullTime(now)})
 	if err != nil {
 		return nil, err
 	}
 	for _, t := range transit {
-		results = append(results, TransitionResult{TrackingID: t.TrackingID, NewStatus: t.NewStatus.String, UserJID: t.UserJid, RecipientEmail: t.RecipientEmail.String})
+		results = append(results, models.TransitionResult{TrackingID: t.TrackingID, NewStatus: t.NewStatus.String, UserJID: t.UserJid, RecipientEmail: t.RecipientEmail.String})
 	}
 
 	out, err := u.repo.TransitionStatusToOutForDelivery(ctx, db.TransitionStatusToOutForDeliveryParams{CompanyID: toNullUUID(companyID), OutfordeliveryTime: dbutil.ToNullTime(now)})
@@ -358,7 +375,7 @@ func (u *Usecase) ProcessTransitions(ctx context.Context, companyID uuid.UUID, n
 		return results, err
 	}
 	for _, t := range out {
-		results = append(results, TransitionResult{TrackingID: t.TrackingID, NewStatus: t.NewStatus.String, UserJID: t.UserJid, RecipientEmail: t.RecipientEmail.String})
+		results = append(results, models.TransitionResult{TrackingID: t.TrackingID, NewStatus: t.NewStatus.String, UserJID: t.UserJid, RecipientEmail: t.RecipientEmail.String})
 	}
 
 	delivered, err := u.repo.TransitionStatusToDelivered(ctx, db.TransitionStatusToDeliveredParams{CompanyID: toNullUUID(companyID), ExpectedDeliveryTime: dbutil.ToNullTime(now)})
@@ -366,7 +383,7 @@ func (u *Usecase) ProcessTransitions(ctx context.Context, companyID uuid.UUID, n
 		return results, err
 	}
 	for _, t := range delivered {
-		results = append(results, TransitionResult{TrackingID: t.TrackingID, NewStatus: t.NewStatus.String, UserJID: t.UserJid, RecipientEmail: t.RecipientEmail.String})
+		results = append(results, models.TransitionResult{TrackingID: t.TrackingID, NewStatus: t.NewStatus.String, UserJID: t.UserJid, RecipientEmail: t.RecipientEmail.String})
 	}
 
 	return results, nil

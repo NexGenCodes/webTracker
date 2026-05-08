@@ -3,6 +3,7 @@ package shipment
 import (
 	"time"
 	"webtracker-bot/internal/database/db"
+	"webtracker-bot/internal/database/dbutil"
 )
 
 // ToDomain converts a database Shipment model into the domain Shipment struct.
@@ -38,8 +39,8 @@ func ToDomain(dbShip db.Shipment) Shipment {
 		RecipientAddress:     dbShip.RecipientAddress.String,
 		Destination:          dbShip.Destination.String,
 		CargoType:            dbShip.CargoType.String,
-		Weight:               dbShip.Weight.Float64,
-		Cost:                 dbShip.Cost.Float64,
+		Weight:               dbutil.NullNumericToFloat(dbShip.Weight),
+		Cost:                 dbutil.NullNumericToFloat(dbShip.Cost),
 	}
 }
 

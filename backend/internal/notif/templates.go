@@ -3,6 +3,7 @@ package notif
 import (
 	"fmt"
 	"time"
+	"webtracker-bot/internal/i18n"
 )
 
 // ---------------------------------------------------------------------------
@@ -83,10 +84,8 @@ func SetupLinkEmail(to, companyName, frontendURL, token string) Email {
 	}
 }
 
-
-
 // DeliveryEmail builds the shipment-arrival notification email.
-func DeliveryEmail(to, recipientName, trackingID, companyName, arrivalDate string) Email {
+func DeliveryEmail(to, recipientName, trackingID, companyName, arrivalDate string, lang i18n.Language) Email {
 	if companyName == "" {
 		companyName = "AIRWAYBILL"
 	}
@@ -94,32 +93,67 @@ func DeliveryEmail(to, recipientName, trackingID, companyName, arrivalDate strin
 		recipientName = "Customer"
 	}
 
+	title := i18n.T(lang, "email_delivery_title")
+	greeting := i18n.T(lang, "email_delivery_greeting")
+	body1 := i18n.T(lang, "email_delivery_body1", trackingID)
+	body2 := i18n.T(lang, "email_delivery_body2")
+	lblTrack := i18n.T(lang, "email_delivery_lbl_track")
+	lblStatus := i18n.T(lang, "email_delivery_lbl_status")
+	valStatus := i18n.T(lang, "email_delivery_val_status")
+	lblDate := i18n.T(lang, "email_delivery_lbl_date")
+	footer1 := i18n.T(lang, "email_delivery_footer1", companyName)
+	footer2 := i18n.T(lang, "email_delivery_footer2")
+
 	html := fmt.Sprintf(`<!DOCTYPE html>
 <html>
-<body style="font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px;">
-    <div style="max-width: 600px; margin: auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-        <h1 style="color: #28a745; font-size: 24px; margin-bottom: 10px;">%s</h1>
-        <h2 style="color: #333; font-size: 18px; margin-bottom: 25px;">Notice of Arrival</h2>
-        <p style="color: #555; line-height: 1.6;">Hello <strong>%s</strong>,</p>
-        <p style="color: #555; line-height: 1.6;">This is an official notification to inform you that your package (Tracking ID: <strong>%s</strong>) has successfully arrived in your country.</p>
-        <p style="color: #555; line-height: 1.6;">It is currently securely held at our local depot. One of our regional dispatchers will be contacting you shortly to coordinate the final delivery details to your address.</p>
-        <div style="background-color: #f8f9fa; border-left: 4px solid #28a745; padding: 15px; margin: 25px 0;">
-            <p style="margin: 0; color: #333;"><strong>Tracking ID:</strong> %s</p>
-            <p style="margin: 5px 0 0 0; color: #333;"><strong>Status:</strong> ARRIVED AT DESTINATION</p>
-            <p style="margin: 5px 0 0 0; color: #333;"><strong>Arrival Date:</strong> %s</p>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px; }
+        .container { max-width: 600px; margin: auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .header { color: #28a745; font-size: 24px; margin-bottom: 10px; }
+        .title { color: #333; font-size: 18px; margin-bottom: 25px; }
+        .text { color: #555; line-height: 1.6; font-size: 16px; }
+        .box { background-color: #f8f9fa; border-left: 4px solid #28a745; padding: 15px; margin: 25px 0; border-radius: 0 8px 8px 0; }
+        .box p { margin: 5px 0 0 0; color: #333; font-size: 15px; }
+        .box p:first-child { margin-top: 0; }
+        .footer { margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px; color: #888; font-size: 12px; line-height: 1.5; }
+        
+        @media only screen and (max-width: 600px) {
+            body { padding: 10px; }
+            .container { padding: 25px 20px; }
+            .header { font-size: 22px; }
+            .title { font-size: 17px; }
+            .text { font-size: 15px; }
+            .box { padding: 12px; margin: 20px 0; }
+            .box p { font-size: 14px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="header">%s</h1>
+        <h2 class="title">%s</h2>
+        <p class="text">%s <strong>%s</strong>,</p>
+        <p class="text">%s</p>
+        <p class="text">%s</p>
+        <div class="box">
+            <p><strong>%s</strong> %s</p>
+            <p><strong>%s</strong> <span style="color: #28a745; font-weight: 600;">%s</span></p>
+            <p><strong>%s</strong> %s</p>
         </div>
-        <p style="color: #555; line-height: 1.6;">Thank you for choosing %s. We appreciate your patience during this final transit phase.</p>
-        <p style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px; color: #888; font-size: 12px;">
-            This is an automated message. Please await further contact from our local agent.
+        <p class="text">%s</p>
+        <div class="footer">
+            %s
             <br>&copy; 2026 %s. All rights reserved.
-        </p>
+        </div>
     </div>
 </body>
-</html>`, companyName, recipientName, trackingID, trackingID, arrivalDate, companyName, companyName)
+</html>`, companyName, title, greeting, recipientName, body1, body2, lblTrack, trackingID, lblStatus, valStatus, lblDate, arrivalDate, footer1, footer2, companyName)
 
 	return Email{
 		To:       to,
-		Subject:  fmt.Sprintf("[%s] Package Arrival Notification - %s", companyName, trackingID),
+		Subject:  fmt.Sprintf("[%s] %s - %s", companyName, title, trackingID),
 		HTMLBody: html,
 		FromName: companyName,
 	}
@@ -154,4 +188,3 @@ func PasswordResetEmail(to, otp string) Email {
 		FromName: companyName,
 	}
 }
-

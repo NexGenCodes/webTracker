@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -142,4 +143,26 @@ func WithField(key string, value interface{}) zerolog.Logger {
 // WithFields adds multiple fields to the log
 func WithFields(fields map[string]interface{}) zerolog.Logger {
 	return log.With().Fields(fields).Logger()
+}
+
+// AsynqLogger wraps zerolog to satisfy asynq.Logger interface
+type AsynqLogger struct{}
+
+func (l AsynqLogger) Debug(args ...interface{}) {
+	log.Debug().Msg(fmt.Sprint(args...))
+}
+
+func (l AsynqLogger) Info(args ...interface{}) {
+	log.Info().Msg(fmt.Sprint(args...))
+}
+
+func (l AsynqLogger) Warn(args ...interface{}) {
+	log.Warn().Msg(fmt.Sprint(args...))
+}
+
+func (l AsynqLogger) Error(args ...interface{}) {
+	log.Error().Msg(fmt.Sprint(args...))
+}
+func (l AsynqLogger) Fatal(args ...interface{}) {
+	log.Fatal().Msg(fmt.Sprint(args...))
 }

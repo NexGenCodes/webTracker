@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"time"
 
+	"webtracker-bot/internal/cache"
 	"webtracker-bot/internal/database/db"
-
+	"webtracker-bot/internal/database/dbutil"
+	"webtracker-bot/internal/logger"
 	"github.com/google/uuid"
 	"github.com/sqlc-dev/pqtype"
 )
@@ -96,31 +98,62 @@ func (u *Usecase) CountAuthorizedGroups(ctx context.Context, companyID uuid.UUID
 }
 
 func (u *Usecase) GetCompanyByID(ctx context.Context, companyID uuid.UUID) (db.Company, error) {
-	return u.repo.GetCompanyByID(ctx, companyID)
+	key := cache.CompanyKey(companyID.String())
+
+	// Try cache first
+	var cached db.Company
+	if hit, _ := cache.Get(ctx, key, &cached); hit {
+		return cached, nil
+	}
+
+	// Cache miss — fetch from DB
+	company, err := u.repo.GetCompanyByID(ctx, companyID)
+	if err != nil {
+		return company, err
+	}
+
+	// Populate cache (best-effort)
+	if err := cache.Set(ctx, key, company, cache.CompanyTTL); err != nil {
+		logger.Warn().Err(err).Str("key", key).Msg("Cache: failed to set company")
+	}
+
+	return company, nil
 }
 
 func (u *Usecase) UpdateCompanySettings(ctx context.Context, companyID uuid.UUID, name, adminEmail, logoUrl string) error {
-	return u.repo.UpdateCompanySettings(ctx, db.UpdateCompanySettingsParams{
+	err := u.repo.UpdateCompanySettings(ctx, db.UpdateCompanySettingsParams{
 		ID:         companyID,
 		Name:       sql.NullString{String: name, Valid: name != ""},
 		AdminEmail: adminEmail,
-		LogoUrl:    sql.NullString{String: logoUrl, Valid: true},
+		LogoUrl:    sql.NullString{String: logoUrl, Valid: logoUrl != ""},
 	})
+	if err == nil {
+		cache.Del(ctx, cache.CompanyKey(companyID.String()))
+	}
+	return err
 }
 
 func (u *Usecase) UpdateCompanyAuthStatus(ctx context.Context, companyID uuid.UUID, authStatus string) error {
-	return u.repo.UpdateCompanyAuthStatus(ctx, db.UpdateCompanyAuthStatusParams{
+	err := u.repo.UpdateCompanyAuthStatus(ctx, db.UpdateCompanyAuthStatusParams{
 		ID:         companyID,
 		AuthStatus: sql.NullString{String: authStatus, Valid: true},
 	})
+	if err == nil {
+		cache.Del(ctx, cache.CompanyKey(companyID.String()))
+	}
+	return err
 }
 
 func (u *Usecase) UpdateCompanySubscriptionStatus(ctx context.Context, companyID uuid.UUID, subStatus, planType string) error {
-	return u.repo.UpdateCompanySubscriptionWithPlan(ctx, db.UpdateCompanySubscriptionWithPlanParams{
+	err := u.repo.UpdateCompanySubscriptionWithPlan(ctx, db.UpdateCompanySubscriptionWithPlanParams{
 		ID:                 companyID,
 		SubscriptionStatus: sql.NullString{String: subStatus, Valid: subStatus != ""},
 		PlanType:           planType,
 	})
+	if err == nil {
+		cache.Del(ctx, cache.CompanyKey(companyID.String()))
+	}
+	return err
 }
 
 func (u *Usecase) CreateCompany(ctx context.Context, name, adminEmail, setupToken string) (db.Company, error) {
@@ -136,7 +169,7 @@ func (u *Usecase) RecordPayment(ctx context.Context, companyID uuid.UUID, refere
 	id, err := u.repo.RecordPayment(ctx, db.RecordPaymentParams{
 		CompanyID: uuid.NullUUID{UUID: companyID, Valid: true},
 		Reference: reference,
-		Amount:    sql.NullFloat64{Float64: amount, Valid: true},
+		Amount:    dbutil.FloatToNullNumeric(amount),
 		Status:    sql.NullString{String: status, Valid: true},
 	})
 	if err == sql.ErrNoRows {
@@ -146,14 +179,22 @@ func (u *Usecase) RecordPayment(ctx context.Context, companyID uuid.UUID, refere
 }
 
 func (u *Usecase) UpdateCompanyWhatsAppPhone(ctx context.Context, companyID uuid.UUID, phone string) error {
-	return u.repo.UpdateCompanyWhatsAppPhone(ctx, db.UpdateCompanyWhatsAppPhoneParams{
+	err := u.repo.UpdateCompanyWhatsAppPhone(ctx, db.UpdateCompanyWhatsAppPhoneParams{
 		WhatsappPhone: sql.NullString{String: phone, Valid: phone != ""},
 		ID:            companyID,
 	})
+	if err == nil {
+		cache.Del(ctx, cache.CompanyKey(companyID.String()))
+	}
+	return err
 }
 
 func (u *Usecase) DeleteCompany(ctx context.Context, companyID uuid.UUID) error {
-	return u.repo.DeleteCompany(ctx, companyID)
+	err := u.repo.DeleteCompany(ctx, companyID)
+	if err == nil {
+		cache.Del(ctx, cache.CompanyKey(companyID.String()))
+	}
+	return err
 }
 
 func (uc *Usecase) GetActivePlans(ctx context.Context) ([]db.GetActivePlansRow, error) {
@@ -193,18 +234,26 @@ func (u *Usecase) GetPlatformAnalytics(ctx context.Context) (db.GetPlatformAnaly
 }
 
 func (u *Usecase) UpdateCompanyPlan(ctx context.Context, companyID uuid.UUID, planType string) error {
-	return u.repo.UpdateCompanyPlan(ctx, db.UpdateCompanyPlanParams{
+	err := u.repo.UpdateCompanyPlan(ctx, db.UpdateCompanyPlanParams{
 		ID:       companyID,
 		PlanType: sql.NullString{String: planType, Valid: true},
 	})
+	if err == nil {
+		cache.Del(ctx, cache.CompanyKey(companyID.String()))
+	}
+	return err
 }
 
 func (u *Usecase) UpdateCompanySubscription(ctx context.Context, companyID uuid.UUID, subStatus string, expiry time.Time) error {
-	return u.repo.UpdateCompanySubscription(ctx, db.UpdateCompanySubscriptionParams{
+	err := u.repo.UpdateCompanySubscription(ctx, db.UpdateCompanySubscriptionParams{
 		ID:                 companyID,
 		SubscriptionStatus: sql.NullString{String: subStatus, Valid: true},
 		SubscriptionExpiry: sql.NullTime{Time: expiry, Valid: !expiry.IsZero()},
 	})
+	if err == nil {
+		cache.Del(ctx, cache.CompanyKey(companyID.String()))
+	}
+	return err
 }
 
 func (u *Usecase) GetCompanyPayments(ctx context.Context, companyID uuid.UUID, limit, offset int32) ([]db.Payment, error) {

@@ -68,7 +68,7 @@ export function useRegister(
         });
     };
 
-    const verifyOtp = async (fullOtp: string) => {
+    const verifyOtp = async (email: string, fullOtp: string) => {
         if (fullOtp.length !== 6) {
             setError('Please enter all 6 digits.');
             return;
@@ -76,7 +76,7 @@ export function useRegister(
 
         setError(null);
         startTransition(async () => {
-            const result = await verifyOtpAction(fullOtp);
+            const result = await verifyOtpAction(email, fullOtp);
 
             if (!result.success) {
                 if (result.error?.includes('expired')) {

@@ -3,25 +3,31 @@ package worker
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
-	"runtime/debug"
 	"strings"
-	"sync"
 	"time"
 
+	"github.com/hibiken/asynq"
+	waProto "go.mau.fi/whatsmeow/binary/proto"
+	"go.mau.fi/whatsmeow/types"
+	"go.mau.fi/whatsmeow/types/events"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/protobuf/proto"
 
 	"webtracker-bot/internal/commands"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/database/db"
+	"webtracker-bot/internal/database/dbutil"
 	"webtracker-bot/internal/i18n"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/parser"
 	"webtracker-bot/internal/receipt"
 	"webtracker-bot/internal/shipment"
+	"webtracker-bot/internal/tasks"
 	"webtracker-bot/internal/utils"
 )
 
@@ -38,39 +44,55 @@ type Worker struct {
 	Bots            models.BotProvider
 	ShipmentUC      models.ShipmentUsecase
 	ConfigUC        models.ConfigUsecase
-	Jobs            <-chan models.Job
-	WG              *sync.WaitGroup
 	Cfg             *config.Config
 	FrontendURL     string
 	ShipmentService shipment.Service
 	Context         context.Context
+	AsynqClient     *asynq.Client
 }
 
-// Start begins processing jobs from the queue.
-func (w *Worker) Start() {
-	defer w.WG.Done()
-	logger.Info().Int("worker_id", w.ID).Msg("Worker started")
-
-	poolSize := w.Cfg.WorkerPoolSize
-	if poolSize <= 0 {
-		poolSize = 10
-	}
-	sem := make(chan struct{}, poolSize) // Bounded concurrency based on config
-	for job := range w.Jobs {
-		sem <- struct{}{}
-		go func(j models.Job) {
-			defer func() {
-				<-sem
-				if r := recover(); r != nil {
-					logger.Error().Msgf("Worker %d panicked: %v\n%s", w.ID, r, string(debug.Stack()))
-				}
-			}()
-			w.process(j)
-		}(job)
-	}
+// Start registers the Asynq handlers and begins processing.
+func (w *Worker) Start(mux *asynq.ServeMux) {
+	logger.Info().Int("worker_id", w.ID).Msg("Worker registering Asynq handlers")
+	// Registration happens externally in app.go, but we could do it here
 }
 
-func (w *Worker) process(job models.Job) {
+// HandleWhatsAppMessage is the Asynq Handler interface method
+func (w *Worker) HandleWhatsAppMessage(ctx context.Context, t *asynq.Task) error {
+	var payload tasks.WhatsAppMessagePayload
+	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
+		return fmt.Errorf("json.Unmarshal failed: %v: %w", err, asynq.SkipRetry)
+	}
+
+	chatJID, _ := types.ParseJID(payload.ChatJID)
+	senderJID, _ := types.ParseJID(payload.SenderJID)
+
+	job := models.Job{
+		CompanyID:   payload.CompanyID,
+		ChatJID:     chatJID,
+		SenderJID:   senderJID,
+		MessageID:   payload.MessageID,
+		Text:        payload.Text,
+		SenderPhone: payload.SenderPhone,
+		Language:    payload.Language,
+		IsAdmin:     payload.IsAdmin,
+	}
+
+	// Restore the protobuf message if it exists
+	if len(payload.RawMessageBytes) > 0 {
+		msg := &waProto.Message{}
+		if err := proto.Unmarshal(payload.RawMessageBytes, msg); err == nil {
+			job.RawMessage = &events.Message{
+				Message: msg,
+			}
+		}
+	}
+
+	w.process(ctx, job)
+	return nil
+}
+
+func (w *Worker) process(workerCtx context.Context, job models.Job) {
 	logger.GlobalVitals.IncJobs()
 
 	bot, err := w.Bots.GetBot(job.CompanyID)
@@ -123,8 +145,12 @@ func (w *Worker) process(job models.Job) {
 		return
 	}
 
-	// A. Initial Feedback (Typing)
+	// A. Initial Feedback (Typing, Reading, Reacting)
 	sender := bot.GetSender()
+
+	sender.MarkRead(job.ChatJID, job.SenderJID, job.MessageID)
+	sender.React(job.ChatJID, job.SenderJID, job.MessageID, "🔍")
+
 	sender.SetTyping(job.ChatJID, true)
 	defer sender.SetTyping(job.ChatJID, false)
 
@@ -137,7 +163,7 @@ func (w *Worker) process(job models.Job) {
 		botPhone = utils.GetBarePhone(wa.Store.ID.User)
 	}
 
-	dispatcher := commands.NewDispatcher(w.Cfg, w.ShipmentUC, w.ConfigUC, sender, bot.GetPrefix(), bot.GetCompanyName(), botPhone, w.Cfg.AdminTimezone, bot.GetTier())
+	dispatcher := commands.NewDispatcher(w.Cfg, w.ShipmentUC, w.ConfigUC, sender, bot.GetPrefix(), bot.GetCompanyName(), botPhone, bot.GetTier())
 	if res, ok := dispatcher.Dispatch(ctx, job.CompanyID, job.Text); ok {
 		if len(res.Image) > 0 {
 			sender.SendImage(job.ChatJID, job.SenderJID, res.Image, res.Message, job.MessageID, job.Text)
@@ -150,6 +176,9 @@ func (w *Worker) process(job models.Job) {
 			logger.Info().Str("edit_id", res.EditID).Msg("Edit detected, triggering receipt regeneration")
 			w.generateAndSendReceipt(bot, job, res.EditID, lang)
 		}
+
+		// Change reaction to success since command was handled
+		sender.React(job.ChatJID, job.SenderJID, job.MessageID, "✅")
 		return
 	}
 
@@ -217,6 +246,7 @@ func (w *Worker) process(job models.Job) {
 			"• " + strings.Join(missing, "\n• ") + "\n" +
 			"━━━━━━━━━━━━━━━━━━━━━━━\n\n_Please provide the missing data to proceed._"
 		sender.Reply(job.ChatJID, job.SenderJID, msg, job.MessageID, job.Text)
+		sender.React(job.ChatJID, job.SenderJID, job.MessageID, "⚠️")
 		return
 	}
 	logger.GlobalVitals.IncParseSuccess()
@@ -281,19 +311,21 @@ func (w *Worker) process(job models.Job) {
 		logger.Info().Str("existing_id", existingID).Msg("Duplicate shipment blocked")
 		dupMsg := fmt.Sprintf("⚠️ *SHIPMENT ALREADY EXISTS*\n\nA shipment for this recipient phone is already in the system.\n\n🆔 *%s*\n\n🔹 Use `!edit %s ...` to update.\n🔹 Use `!delete %s` to remove.", existingID, existingID, existingID)
 		sender.Reply(job.ChatJID, job.SenderJID, dupMsg, job.MessageID, job.Text)
+		sender.React(job.ChatJID, job.SenderJID, job.MessageID, "⚠️")
 		return
 	}
 
 	if remaining == 0 {
 		logger.Info().Str("company_id", job.CompanyID.String()).Msg("Shipment blocked: billing limit reached")
 		sender.Reply(job.ChatJID, job.SenderJID, "⚠️ *SHIPMENT BLOCKED*\n\nYour monthly shipment limit has been reached or your subscription has expired.\n\nPlease contact your administrator to upgrade your plan via the dashboard.", job.MessageID, job.Text)
+		sender.React(job.ChatJID, job.SenderJID, job.MessageID, "⛔")
 		return
 	}
 
 	// Generate schedule dates using the new Smart Anchor Algorithm (A & B)
 	now := time.Now().UTC()
-	departure := w.ShipmentService.CalculateDeparture(now, w.Cfg.AdminTimezone)
-	arrival, outForDelivery := w.ShipmentService.CalculateArrival(departure, newShipment.Origin, newShipment.Destination)
+	departure := w.ShipmentService.CalculateDeparture(now, newShipment.Origin)
+	arrival, outForDelivery := w.ShipmentService.CalculateArrival(departure, newShipment.Destination)
 
 	dbShip := &db.Shipment{
 		UserJid:              newShipment.UserJID,
@@ -313,8 +345,8 @@ func (w *Worker) process(job models.Job) {
 		RecipientAddress:     sql.NullString{String: newShipment.RecipientAddress, Valid: true},
 		Destination:          sql.NullString{String: newShipment.Destination, Valid: true},
 		CargoType:            sql.NullString{String: newShipment.CargoType, Valid: true},
-		Weight:               sql.NullFloat64{Float64: newShipment.Weight, Valid: true},
-		Cost:                 sql.NullFloat64{Float64: newShipment.Cost, Valid: true},
+		Weight:               dbutil.FloatToNullNumeric(newShipment.Weight),
+		Cost:                 dbutil.FloatToNullNumeric(newShipment.Cost),
 	}
 
 	trackingID, err := w.ShipmentUC.CreateWithPrefix(processCtx, job.CompanyID, dbShip, bot.GetPrefix())
@@ -322,6 +354,7 @@ func (w *Worker) process(job models.Job) {
 		logger.GlobalVitals.IncInsertFailure()
 		logger.Error().Err(err).Str("jid", job.SenderJID.String()).Msg("Failed to insert shipment information")
 		sender.Reply(job.ChatJID, job.SenderJID, "❌ *SYSTEM ERROR*\n_Saving information failed. Please contact your admin._", job.MessageID, job.Text)
+		sender.React(job.ChatJID, job.SenderJID, job.MessageID, "❌")
 		return
 	}
 	logger.GlobalVitals.IncInsertSuccess()
@@ -345,6 +378,9 @@ func (w *Worker) process(job models.Job) {
 		trackingMsg += "\n\n_✨ Parsed by AI_"
 	}
 	sender.Reply(job.ChatJID, job.SenderJID, trackingMsg, job.MessageID, job.Text)
+
+	// Change reaction to success since shipment was created
+	sender.React(job.ChatJID, job.SenderJID, job.MessageID, "✅")
 }
 
 func (w *Worker) generateAndSendReceipt(bot models.BotInstance, job models.Job, id string, lang i18n.Language) {

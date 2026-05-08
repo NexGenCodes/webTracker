@@ -9,6 +9,7 @@ import (
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
+	"webtracker-bot/internal/tasks"
 	"webtracker-bot/internal/utils"
 
 	"go.mau.fi/whatsmeow"
@@ -61,8 +62,14 @@ func NewClientForDevice(device *store.Device, name string) *whatsmeow.Client {
 const maxCacheAge = 1 * time.Hour
 
 func checkCacheCleanup(bot *BotInstance) {
+	// Fast path: avoid locking if cache is fresh
+	if time.Since(bot.CacheLastClear) <= maxCacheAge {
+		return
+	}
+
 	bot.CacheMu.Lock()
 	defer bot.CacheMu.Unlock()
+	// Double-check after acquiring lock
 	if time.Since(bot.CacheLastClear) > maxCacheAge {
 		logger.Info().Msg("[RBAC] Clearing participant and authority caches (TTL reached)")
 		bot.AuthCache.Clear()
@@ -72,7 +79,7 @@ func checkCacheCleanup(bot *BotInstance) {
 }
 
 // HandleEvent processes incoming WhatsApp events.
-func HandleEvent(bot *BotInstance, evt interface{}, queue chan<- models.Job, cfg *config.Config, configUC models.ConfigUsecase) {
+func HandleEvent(bot *BotInstance, evt interface{}, cfg *config.Config, configUC models.ConfigUsecase) {
 	client := bot.WA
 	companyID := bot.CompanyID
 
@@ -246,14 +253,25 @@ func HandleEvent(bot *BotInstance, evt interface{}, queue chan<- models.Job, cfg
 			RawMessage:  v,
 		}
 
-		// Blocking queue push: safely applies backpressure without stalling the whatsmeow socket reader
-		queue <- jobPayload
+		// Enqueue the job asynchronously via Redis/Asynq
+		if err := tasks.EnqueueWhatsAppMessage(bot.AsynqClient, jobPayload); err != nil {
+			logger.Error().Err(err).Msg("Failed to enqueue WhatsApp message job")
+		}
 	}(v)
 	}
 }
 
 // VerifyGroupAuthority performs a real-time check. Updates both DB and in-memory cache.
 func VerifyGroupAuthority(bot *BotInstance, configUC models.ConfigUsecase, chat types.JID) bool {
+	key := chat.String()
+	// Use singleflight to prevent multiple concurrent requests for the same group
+	v, _, _ := bot.GroupAuthFlight.Do(key, func() (interface{}, error) {
+		return verifyGroupAuthorityInternal(bot, configUC, chat), nil
+	})
+	return v.(bool)
+}
+
+func verifyGroupAuthorityInternal(bot *BotInstance, configUC models.ConfigUsecase, chat types.JID) bool {
 	client := bot.WA
 	companyID := bot.CompanyID
 

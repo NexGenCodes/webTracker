@@ -47,12 +47,12 @@ type Groupauthority struct {
 }
 
 type Payment struct {
-	ID        int32           `json:"id"`
-	CompanyID uuid.NullUUID   `json:"company_id"`
-	Reference string          `json:"reference"`
-	Amount    sql.NullFloat64 `json:"amount"`
-	Status    sql.NullString  `json:"status"`
-	CreatedAt sql.NullTime    `json:"created_at"`
+	ID        int32          `json:"id"`
+	CompanyID uuid.NullUUID  `json:"company_id"`
+	Reference string         `json:"reference"`
+	Amount    sql.NullString `json:"amount"`
+	Status    sql.NullString `json:"status"`
+	CreatedAt sql.NullTime   `json:"created_at"`
 }
 
 type Plan struct {
@@ -74,29 +74,37 @@ type Plan struct {
 }
 
 type Shipment struct {
-	TrackingID           string          `json:"tracking_id"`
-	CompanyID            uuid.NullUUID   `json:"company_id"`
-	UserJid              string          `json:"user_jid"`
-	Status               sql.NullString  `json:"status"`
-	CreatedAt            sql.NullTime    `json:"created_at"`
-	ScheduledTransitTime sql.NullTime    `json:"scheduled_transit_time"`
-	OutfordeliveryTime   sql.NullTime    `json:"outfordelivery_time"`
-	ExpectedDeliveryTime sql.NullTime    `json:"expected_delivery_time"`
-	SenderTimezone       sql.NullString  `json:"sender_timezone"`
-	RecipientTimezone    sql.NullString  `json:"recipient_timezone"`
-	SenderName           sql.NullString  `json:"sender_name"`
-	SenderPhone          sql.NullString  `json:"sender_phone"`
-	Origin               sql.NullString  `json:"origin"`
-	RecipientName        sql.NullString  `json:"recipient_name"`
-	RecipientPhone       sql.NullString  `json:"recipient_phone"`
-	RecipientEmail       sql.NullString  `json:"recipient_email"`
-	RecipientID          sql.NullString  `json:"recipient_id"`
-	RecipientAddress     sql.NullString  `json:"recipient_address"`
-	Destination          sql.NullString  `json:"destination"`
-	CargoType            sql.NullString  `json:"cargo_type"`
-	Weight               sql.NullFloat64 `json:"weight"`
-	Cost                 sql.NullFloat64 `json:"cost"`
-	UpdatedAt            sql.NullTime    `json:"updated_at"`
+	TrackingID           string         `json:"tracking_id"`
+	CompanyID            uuid.NullUUID  `json:"company_id"`
+	UserJid              string         `json:"user_jid"`
+	Status               sql.NullString `json:"status"`
+	CreatedAt            sql.NullTime   `json:"created_at"`
+	ScheduledTransitTime sql.NullTime   `json:"scheduled_transit_time"`
+	OutfordeliveryTime   sql.NullTime   `json:"outfordelivery_time"`
+	ExpectedDeliveryTime sql.NullTime   `json:"expected_delivery_time"`
+	SenderTimezone       sql.NullString `json:"sender_timezone"`
+	RecipientTimezone    sql.NullString `json:"recipient_timezone"`
+	SenderName           sql.NullString `json:"sender_name"`
+	SenderPhone          sql.NullString `json:"sender_phone"`
+	Origin               sql.NullString `json:"origin"`
+	RecipientName        sql.NullString `json:"recipient_name"`
+	RecipientPhone       sql.NullString `json:"recipient_phone"`
+	RecipientEmail       sql.NullString `json:"recipient_email"`
+	RecipientID          sql.NullString `json:"recipient_id"`
+	RecipientAddress     sql.NullString `json:"recipient_address"`
+	Destination          sql.NullString `json:"destination"`
+	CargoType            sql.NullString `json:"cargo_type"`
+	Weight               sql.NullString `json:"weight"`
+	Cost                 sql.NullString `json:"cost"`
+	UpdatedAt            sql.NullTime   `json:"updated_at"`
+}
+
+type SuperAdmin struct {
+	ID           uuid.UUID    `json:"id"`
+	Email        string       `json:"email"`
+	PasswordHash string       `json:"password_hash"`
+	CreatedAt    sql.NullTime `json:"created_at"`
+	UpdatedAt    sql.NullTime `json:"updated_at"`
 }
 
 type Systemconfig struct {

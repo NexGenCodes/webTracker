@@ -85,6 +85,7 @@ var (
 	dashesRe           *regexp.Regexp
 	phoneLinesRe       *regexp.Regexp
 	weightLinesRe      *regexp.Regexp
+	labelSepRe         *regexp.Regexp
 )
 
 func init() {
@@ -97,6 +98,7 @@ func init() {
 	dashesRe = regexp.MustCompile(`^[\-]+$`)
 	phoneLinesRe = regexp.MustCompile(`(?i)(?:\+?\d[\d\s\-\(\)]{7,}\d)`)
 	weightLinesRe = regexp.MustCompile(`(?i)(?:^|\s)([\d.,]+)\s*(?:kg|kgs|kilos|kg's)\b`)
+	labelSepRe = regexp.MustCompile(labelSep)
 
 	// Pre-compile all regex maps to save CPU on the VPS
 	rawMaps := GetLabelMappings()
@@ -256,7 +258,7 @@ func findAnchors(text string, mappings []labelMap) []anchor {
 			anchorStart := match[0]
 			anchorText := text[match[0]:match[1]]
 			isStartOfLine := anchorStart == 0 || text[anchorStart-1] == '\n'
-			hasStrongSep := regexp.MustCompile(labelSep).MatchString(anchorText)
+			hasStrongSep := labelSepRe.MatchString(anchorText)
 
 			if isStartOfLine || hasStrongSep || lm.priority > 1 {
 				anchors = append(anchors, anchor{

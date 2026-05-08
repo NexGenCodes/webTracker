@@ -43,7 +43,7 @@ export function RegisterView({
 
     const handleVerifyRegisterOTP = async (e: React.FormEvent) => {
         e.preventDefault();
-        await verifyOtp(otp.join(''));
+        await verifyOtp(emailCache, otp.join(''));
     };
 
     const stepsInfo: { key: RegisterStep; label: string }[] = [

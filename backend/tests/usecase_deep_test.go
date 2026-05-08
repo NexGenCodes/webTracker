@@ -137,6 +137,9 @@ func (m *MockQuerier) CreateCompany(ctx context.Context, arg db.CreateCompanyPar
 	args := m.Called(ctx, arg)
 	return args.Get(0).(db.Company), args.Error(1)
 }
+func (m *MockQuerier) DeleteCompany(ctx context.Context, id uuid.UUID) error {
+	return nil
+}
 func (m *MockQuerier) GetCompanyByEmail(ctx context.Context, adminEmail string) (db.Company, error) {
 	args := m.Called(ctx, adminEmail)
 	return args.Get(0).(db.Company), args.Error(1)
@@ -192,6 +195,18 @@ func (m *MockQuerier) UpdateCompanyPlan(ctx context.Context, arg db.UpdateCompan
 }
 func (m *MockQuerier) UpdateCompanySubscription(ctx context.Context, arg db.UpdateCompanySubscriptionParams) error {
 	return nil
+}
+func (m *MockQuerier) UpdateCompanySubscriptionWithPlan(ctx context.Context, arg db.UpdateCompanySubscriptionWithPlanParams) error {
+	return nil
+}
+func (m *MockQuerier) UpdateCompanyWhatsAppPhone(ctx context.Context, arg db.UpdateCompanyWhatsAppPhoneParams) error {
+	return nil
+}
+func (m *MockQuerier) CreateSuperAdmin(ctx context.Context, arg db.CreateSuperAdminParams) (db.SuperAdmin, error) {
+	return db.SuperAdmin{}, nil
+}
+func (m *MockQuerier) GetSuperAdminByEmail(ctx context.Context, email string) (db.SuperAdmin, error) {
+	return db.SuperAdmin{}, nil
 }
 
 // mockResult implements sql.Result for mock returns

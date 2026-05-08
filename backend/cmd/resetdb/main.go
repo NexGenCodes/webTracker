@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func main() {
@@ -98,6 +99,7 @@ func main() {
 		"DROP TABLE IF EXISTS whatsmeow_event_buffer CASCADE;",
 		"DROP TABLE IF EXISTS sessions CASCADE;",
 		"DROP TABLE IF EXISTS audit_log CASCADE;",
+		"DROP TABLE IF EXISTS super_admins CASCADE;",
 	}
 	for _, q := range drops {
 		_, err = pool.Exec(context.Background(), q)
@@ -122,6 +124,30 @@ func main() {
 	}
 
 	fmt.Println("Database reset successfully with pristine SQLC Schema.")
+
+	// --- SEED SUPER ADMIN ---
+	adminEmail := os.Getenv("SUPERADMIN_COMPANY_EMAIL")
+	if adminEmail == "" {
+		adminEmail = "emmanuelztrd@gmail.com"
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte("CargoHiveAdmin2026!"), bcrypt.DefaultCost)
+	if err != nil {
+		log.Fatalf("Failed to hash admin password: %v", err)
+	}
+
+	_, err = pool.Exec(context.Background(), `
+		INSERT INTO super_admins (email, password_hash)
+		VALUES ($1, $2)
+		ON CONFLICT (email) DO NOTHING;
+	`, adminEmail, string(hash))
+
+	if err != nil {
+		log.Fatalf("Failed to seed super admin: %v", err)
+	}
+	fmt.Printf("Seeded Super Admin: %s\n", adminEmail)
+	fmt.Println("Password: CargoHiveAdmin2026!")
+	// ------------------------
 
 	// Auto-run generate to ensure Go code is in sync
 	fmt.Println("Auto-running code generation...")

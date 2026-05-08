@@ -4,6 +4,8 @@ import (
 	"context"
 	"runtime"
 	"sync"
+	"time"
+	"webtracker-bot/internal/database/dbutil"
 	"webtracker-bot/internal/i18n"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
@@ -90,8 +92,10 @@ func processReceipt(rj Job) {
 		return
 	}
 
-	// 1. Fetch Shipment
-	dbShip, err := rj.ShipmentUC.Track(context.Background(), rj.Msg.CompanyID, rj.TrackingID)
+	// 1. Fetch Shipment (with timeout to prevent worker hang if Postgres is slow)
+	fetchCtx, fetchCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer fetchCancel()
+	dbShip, err := rj.ShipmentUC.Track(fetchCtx, rj.Msg.CompanyID, rj.TrackingID)
 	if err != nil || dbShip == nil {
 		logger.Warn().Err(err).Str("tracking_id", rj.TrackingID).Msg("Failed to fetch info for receipt delivery")
 		return
@@ -115,8 +119,8 @@ func processReceipt(rj Job) {
 		RecipientAddress:  dbShip.RecipientAddress.String,
 		Destination:       dbShip.Destination.String,
 		CargoType:         dbShip.CargoType.String,
-		Weight:            dbShip.Weight.Float64,
-		Cost:              dbShip.Cost.Float64,
+		Weight:            dbutil.NullNumericToFloat(dbShip.Weight),
+		Cost:              dbutil.NullNumericToFloat(dbShip.Cost),
 	}
 
 	if dbShip.ScheduledTransitTime.Valid {

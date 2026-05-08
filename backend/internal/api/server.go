@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"time"
 	"webtracker-bot/internal/auth"
+	"webtracker-bot/internal/cache"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/database/db"
 	"webtracker-bot/internal/logger"
@@ -50,10 +51,16 @@ func NewServer(cfg *config.Config, shipmentUC *shipment.Usecase, configUC *confi
 	app.Use(recover.New())
 	app.Use(fiberlogger.New())
 
-	// Exploit Probe Filtering Middleware
+	// Distributed Redis Rate Limiter (100 reqs per minute per IP)
+	app.Use(cache.NewRedisRateLimiter(cache.RateLimitConfig{
+		Max:    100,
+		Window: 1 * time.Minute,
+	}))
+
+	// Exploit Probe Filtering Middleware (Optimized allocation)
+	probes := []string{".php", ".env", ".git", "cgi-bin", ".asp", ".jsp", "/wp-", "xmlrpc"}
 	app.Use(func(c *fiber.Ctx) error {
 		path := strings.ToLower(c.Path())
-		probes := []string{".php", ".env", ".git", "cgi-bin", ".asp", ".jsp", "/wp-", "xmlrpc"}
 		for _, probe := range probes {
 			if strings.Contains(path, probe) {
 				// Silently drop probes or return 404 without logging if possible
@@ -131,11 +138,22 @@ func (s *Server) SetupRoutes() {
 			dbStatus = "not initialized"
 		}
 
+		redisStatus := "connected"
+		if cache.RedisClient != nil {
+			if err := cache.RedisClient.Ping(c.Context()).Err(); err != nil {
+				status = "Error"
+				redisStatus = "disconnected: " + err.Error()
+			}
+		} else {
+			redisStatus = "not initialized"
+		}
+
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
 			"status":    status,
 			"timestamp": time.Now().Format(time.RFC3339),
 			"services": fiber.Map{
 				"database": dbStatus,
+				"redis":    redisStatus,
 				"uptime":   time.Since(s.startTime).Truncate(time.Second).String(),
 			},
 		})

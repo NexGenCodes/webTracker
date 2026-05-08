@@ -52,6 +52,7 @@ func (h *Handler) RegisterRoutes(app *fiber.App) {
 	group.Post("/register-intent", h.registerIntent)
 	group.Post("/verify-otp", h.verifyOTP)
 	group.Post("/login", h.login)
+	group.Post("/admin-login", h.adminLogin)
 	group.Post("/logout", h.logout)
 	group.Post("/forgot-password", h.forgotPassword)
 	group.Post("/reset-password", h.resetPassword)
@@ -71,22 +72,13 @@ func (h *Handler) forgotPassword(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	resetToken, err := h.service.InitiatePasswordReset(c.Context(), req.Email)
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": err.Error()})
+	// Always return 200 regardless of outcome to prevent email enumeration.
+	// Internal errors are logged but never exposed to the client.
+	if err := h.service.InitiatePasswordReset(c.Context(), req.Email); err != nil {
+		logger.Error().Err(err).Str("email", req.Email).Msg("Password reset initiation failed internally")
 	}
 
-	c.Cookie(&fiber.Cookie{
-		Name:     "reset_token",
-		Value:    resetToken,
-		Expires:  time.Now().Add(5 * time.Minute),
-		HTTPOnly: true,
-		Secure:   h.isSecure,
-		SameSite: h.sameSite,
-		Path:     "/",
-	})
-
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Reset code sent", "reset_token": resetToken})
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "If that email exists, a reset code has been sent."})
 }
 
 func (h *Handler) resetPassword(c *fiber.Ctx) error {
@@ -99,22 +91,10 @@ func (h *Handler) resetPassword(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	resetToken := c.Get("X-Reset-Token")
-	if resetToken == "" {
-		resetToken = c.Cookies("reset_token")
-	}
-
-	if resetToken == "" {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Reset session expired or missing"})
-	}
-
-	err := h.service.CompletePasswordReset(c.Context(), req, resetToken)
+	err := h.service.CompletePasswordReset(c.Context(), req)
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
 	}
-
-	// Clear reset token
-	c.Cookie(&fiber.Cookie{Name: "reset_token", Value: "", Expires: time.Now().Add(-1 * time.Hour), HTTPOnly: true, Path: "/"})
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Password reset successful"})
 }
@@ -144,7 +124,7 @@ func (h *Handler) registerIntent(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	otpToken, err := h.service.GenerateOTP(c.Context(), req.CompanyName, req.Email, req.Password)
+	err := h.service.GenerateOTP(c.Context(), req.CompanyName, req.Email, req.Password)
 	if err != nil {
 		if strings.Contains(err.Error(), "already exists") {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
@@ -153,18 +133,7 @@ func (h *Handler) registerIntent(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to process registration"})
 	}
 
-	// Set temporary OTP cookie
-	c.Cookie(&fiber.Cookie{
-		Name:     "otp_token",
-		Value:    otpToken,
-		Expires:  time.Now().Add(5 * time.Minute),
-		HTTPOnly: true,
-		Secure:   h.isSecure,
-		SameSite: h.sameSite,
-		Path:     "/",
-	})
-
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "OTP sent to email", "otp_token": otpToken})
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "OTP sent to email"})
 }
 
 func (h *Handler) verifyOTP(c *fiber.Ctx) error {
@@ -177,24 +146,14 @@ func (h *Handler) verifyOTP(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	otpToken := c.Get("X-OTP-Token")
-	if otpToken == "" {
-		otpToken = c.Cookies("otp_token")
-	}
-	
-	if otpToken == "" {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "OTP session expired or missing"})
-	}
-
 	otpCode := strings.TrimSpace(req.OTP)
-	resp, sessionToken, err := h.service.VerifyOTP(c.Context(), otpCode, otpToken)
+	resp, sessionToken, err := h.service.VerifyOTP(c.Context(), req.Email, otpCode)
 	if err != nil {
 		logger.Error().Err(err).Msg("OTP Verification failed")
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	// Clear OTP token and set Session token
-	c.Cookie(&fiber.Cookie{Name: "otp_token", Value: "", Expires: time.Now().Add(-1 * time.Hour), HTTPOnly: true, Path: "/"})
+	// Set Session token
 	h.setJWTCookie(c, sessionToken)
 	resp.Token = sessionToken
 	return c.Status(fiber.StatusOK).JSON(resp)
@@ -254,6 +213,26 @@ func (h *Handler) logout(c *fiber.Ctx) error {
 		Path:     "/",
 	})
 	return c.SendStatus(fiber.StatusOK)
+}
+
+func (h *Handler) adminLogin(c *fiber.Ctx) error {
+	var req AdminLoginRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
+	}
+
+	if err := h.validate.Struct(req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	tokenString, err := h.service.AdminLogin(c.Context(), req)
+	if err != nil {
+		logger.Warn().Err(err).Msg("Admin Login failed")
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	h.setJWTCookie(c, tokenString)
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"token": tokenString})
 }
 
 func (h *Handler) setJWTCookie(c *fiber.Ctx, token string) {

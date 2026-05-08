@@ -280,3 +280,46 @@ func (s *Sender) SetTyping(chat types.JID, typing bool) {
 			Msg("Failed to set chat presence (non-critical)")
 	}
 }
+
+// React sends an emoji reaction to a specific message.
+func (s *Sender) React(chat, sender types.JID, messageID string, emoji string) {
+	content := &waProto.Message{
+		ReactionMessage: &waProto.ReactionMessage{
+			Key: &waProto.MessageKey{
+				RemoteJID:   models.StrPtr(chat.String()),
+				FromMe:      models.BoolPtr(false),
+				ID:          models.StrPtr(messageID),
+				Participant: models.StrPtr(sender.String()),
+			},
+			Text:              models.StrPtr(emoji),
+			SenderTimestampMS: models.Int64Ptr(time.Now().UnixMilli()),
+		},
+	}
+
+	// Send reaction asynchronously without strictly queuing it
+	// behind text messages, as reactions are low priority and non-blocking.
+	s.enqueue(OutboundMessage{Chat: chat, Content: content, msgType: "reaction"})
+}
+
+// MarkRead tells the WhatsApp server that the bot has read the message.
+func (s *Sender) MarkRead(chat, sender types.JID, messageID string) {
+	go func() {
+		// Use a short context for the API call
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		var senderArg types.JID
+		if chat.Server == "g.us" {
+			senderArg = sender
+		}
+
+		err := s.Client.MarkRead(ctx, []types.MessageID{messageID}, time.Now(), chat, senderArg)
+		if err != nil {
+			senderLog.Warn().
+				Err(err).
+				Str("company", s.CompanyName).
+				Str("chat", chat.String()).
+				Msg("Failed to mark message as read")
+		}
+	}()
+}

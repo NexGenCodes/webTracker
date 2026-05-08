@@ -41,7 +41,6 @@ export function LayoutHeader() {
 
     const handleSignOut = async () => {
         await logoutAction();
-        // Force a full browser reload to the home page to clear all router caches
         window.location.href = '/';
     };
 
@@ -73,7 +72,7 @@ export function LayoutHeader() {
                                     <span className="hidden lg:inline">Admin</span>
                                 </Link>
                             )}
-                            {dashboardNavLinks.map((link) => {
+                            {!isSuperAdmin && dashboardNavLinks.map((link) => {
                                 const isActive = pathname === link.href || (link.href !== '/dashboard' && pathname?.startsWith(link.href));
                                 const isExactDashboard = link.href === '/dashboard' && pathname === '/dashboard';
                                 const active = isExactDashboard || (link.href !== '/dashboard' && isActive);
@@ -150,7 +149,7 @@ export function LayoutHeader() {
                                 </Link>
                             </motion.div>
                         )}
-                        {dashboardNavLinks.map((link, i) => {
+                        {!isSuperAdmin && dashboardNavLinks.map((link, i) => {
                             const isActive = pathname === link.href || (link.href !== '/dashboard' && pathname?.startsWith(link.href));
                             const isExactDashboard = link.href === '/dashboard' && pathname === '/dashboard';
                             const active = isExactDashboard || (link.href !== '/dashboard' && isActive);

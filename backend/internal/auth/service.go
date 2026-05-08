@@ -16,6 +16,9 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
+	"encoding/json"
+
+	"webtracker-bot/internal/cache"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/database/db"
 	"webtracker-bot/internal/logger"
@@ -23,20 +26,31 @@ import (
 	"webtracker-bot/internal/utils"
 )
 
+// defaultJWTKeyID is used when JWT_KEY_ID is not set in the environment.
+const defaultJWTKeyID = "3ac00c7e-2058-4c54-8cf1-54ebca7a67f1"
+
 // Service handles authentication business logic
 type Service struct {
-	cfg        *config.Config
-	queries    db.Querier
-	mailer     *notif.Mailer
-	privateKey *ecdsa.PrivateKey // Cached at init to avoid per-request disk reads
+	cfg          *config.Config
+	queries      db.Querier
+	mailer       *notif.Mailer
+	privateKey   *ecdsa.PrivateKey // Cached at init to avoid per-request disk reads
+	loginLimiter *cache.LoginFailLimiter
+	jwtKeyID     string // Key ID embedded in JWT headers — from JWT_KEY_ID env var
 }
 
 // NewService creates a new auth service
 func NewService(cfg *config.Config, queries db.Querier) *Service {
+	kid := cfg.JWTKeyID
+	if kid == "" {
+		kid = defaultJWTKeyID
+	}
 	s := &Service{
-		cfg:     cfg,
-		queries: queries,
-		mailer:  notif.NewMailer(cfg),
+		cfg:          cfg,
+		queries:      queries,
+		mailer:       notif.NewMailer(cfg),
+		loginLimiter: cache.NewLoginFailLimiter(5, 15*time.Minute),
+		jwtKeyID:     kid,
 	}
 
 	// Pre-load and cache the ECDSA private key at init
@@ -58,20 +72,20 @@ func NewService(cfg *config.Config, queries db.Querier) *Service {
 	return s
 }
 
-// GenerateOTP creates a 6 digit code and sends it via email, returning the stateless token
-func (s *Service) GenerateOTP(ctx context.Context, companyName, email, password string) (string, error) {
+// GenerateOTP creates a 6 digit code, sends it via email, and stores pending state in Redis
+func (s *Service) GenerateOTP(ctx context.Context, companyName, email, password string) error {
 	email = strings.ToLower(strings.TrimSpace(email))
 
 	// Check if already registered
 	company, err := s.queries.GetCompanyByEmail(ctx, email)
 	if err == nil && company.ID != uuid.Nil {
-		return "", errors.New("a company with this email already exists")
+		return errors.New("a company with this email already exists")
 	}
 
 	// Generate 6 digit OTP securely
 	n, err := rand.Int(rand.Reader, big.NewInt(1000000))
 	if err != nil {
-		return "", fmt.Errorf("failed to generate secure OTP: %w", err)
+		return fmt.Errorf("failed to generate secure OTP: %w", err)
 	}
 	otp := fmt.Sprintf("%06d", n.Int64())
 	logger.Info().Str("email", email).Msg("Generated OTP, sending verification email")
@@ -80,71 +94,86 @@ func (s *Service) GenerateOTP(ctx context.Context, companyName, email, password 
 	// Hash password and OTP
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return "", fmt.Errorf("failed to hash password: %w", err)
+		return fmt.Errorf("failed to hash password: %w", err)
 	}
 
 	hashedOTP, err := bcrypt.GenerateFromPassword([]byte(otp), bcrypt.DefaultCost)
 	if err != nil {
-		return "", fmt.Errorf("failed to hash OTP: %w", err)
+		return fmt.Errorf("failed to hash OTP: %w", err)
 	}
 
-	// Stateless registration: No DB storage for pending intent.
-	// All necessary data is carried in the signed OTP token.
-
-	// Create Stateless JWT Token
-	claims := OTPClaims{
+	// Save to Redis
+	payload := PendingUserPayload{
 		CompanyName:    companyName,
 		Email:          email,
 		HashedOTP:      string(hashedOTP),
 		HashedPassword: string(hashedPassword),
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			Issuer:    "webtracker-auth-otp",
-		},
+	}
+	
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(s.cfg.JWTSecret))
+	redisKey := fmt.Sprintf("pending_user:%s", email)
+	if cache.RedisClient == nil {
+		return fmt.Errorf("redis not available for OTP storage")
+	}
+	err = cache.RedisClient.Set(ctx, redisKey, data, 15*time.Minute).Err()
+	if err != nil {
+		return fmt.Errorf("failed to store pending user in redis: %w", err)
+	}
+
+	return nil
 }
 
-// VerifyOTP validates the OTP from the token and creates the user record
-func (s *Service) VerifyOTP(ctx context.Context, otp string, otpToken string) (*AuthResponse, string, error) {
-	// Parse OTP token
-	claims := &OTPClaims{}
-	token, err := jwt.ParseWithClaims(otpToken, claims, func(token *jwt.Token) (interface{}, error) {
-		return []byte(s.cfg.JWTSecret), nil
-	})
+// VerifyOTP validates the OTP from Redis and creates the user record
+func (s *Service) VerifyOTP(ctx context.Context, email, otp string) (*AuthResponse, string, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	redisKey := fmt.Sprintf("pending_user:%s", email)
 
-	if err != nil || !token.Valid {
+	// Fetch from Redis
+	if cache.RedisClient == nil {
+		return nil, "", errors.New("redis not available — cannot verify OTP")
+	}
+	data, err := cache.RedisClient.Get(ctx, redisKey).Result()
+	if err != nil {
 		return nil, "", errors.New("invalid or expired OTP session")
 	}
 
+	var payload PendingUserPayload
+	if err := json.Unmarshal([]byte(data), &payload); err != nil {
+		return nil, "", errors.New("failed to parse session data")
+	}
+
 	// Verify OTP
-	logger.Info().Str("email", claims.Email).Msg("Verifying Stateless OTP")
-	err = bcrypt.CompareHashAndPassword([]byte(claims.HashedOTP), []byte(otp))
+	logger.Info().Str("email", payload.Email).Msg("Verifying Stateful OTP")
+	err = bcrypt.CompareHashAndPassword([]byte(payload.HashedOTP), []byte(otp))
 	if err != nil {
 		return nil, "", errors.New("incorrect OTP code")
 	}
 
-	// Create company in DB directly from JWT data
+	// Create company in DB directly from Redis data
 	company, err := s.queries.CreateCompany(ctx, db.CreateCompanyParams{
-		AdminEmail: claims.Email,
-		Name:       sql.NullString{String: claims.CompanyName, Valid: true},
+		AdminEmail: payload.Email,
+		Name:       sql.NullString{String: payload.CompanyName, Valid: true},
 		SetupToken: sql.NullString{String: uuid.New().String(), Valid: true},
 	})
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to create company: %w", err)
 	}
 
-	// Update password hash immediately from JWT data
+	// Update password hash immediately
 	err = s.queries.SetCompanyPassword(ctx, db.SetCompanyPasswordParams{
 		ID:                company.ID,
-		AdminPasswordHash: sql.NullString{String: claims.HashedPassword, Valid: true},
+		AdminPasswordHash: sql.NullString{String: payload.HashedPassword, Valid: true},
 	})
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to set company password: %w", err)
 	}
+
+	// Clear the OTP from Redis
+	cache.RedisClient.Del(ctx, redisKey)
 
 	// Generate Session JWT
 	sessionToken, err := s.generateJWT(company.ID, company.Name.String, company.AdminEmail, company.PlanType.String, "pending_verification")
@@ -199,8 +228,14 @@ func (s *Service) SetupCompany(ctx context.Context, companyID uuid.UUID, req Set
 func (s *Service) Login(ctx context.Context, req LoginRequest) (*AuthResponse, string, error) {
 	email := strings.ToLower(strings.TrimSpace(req.Email))
 
+	// Brute-force protection: block email after 5 consecutive failures within 15 min
+	if blocked, _ := s.loginLimiter.IsBlocked(ctx, email); blocked {
+		return nil, "", errors.New("account temporarily locked due to too many failed attempts")
+	}
+
 	company, err := s.queries.GetCompanyByEmail(ctx, email)
 	if err != nil {
+		s.loginLimiter.Increment(ctx, email) //nolint:errcheck
 		return nil, "", errors.New("invalid email or password")
 	}
 
@@ -210,8 +245,12 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (*AuthResponse, s
 
 	err = bcrypt.CompareHashAndPassword([]byte(company.AdminPasswordHash.String), []byte(req.Password))
 	if err != nil {
+		s.loginLimiter.Increment(ctx, email) //nolint:errcheck
 		return nil, "", errors.New("invalid email or password")
 	}
+
+	// Successful login — clear the failure counter
+	s.loginLimiter.Reset(ctx, email)
 
 	token, err := s.generateJWT(company.ID, company.Name.String, company.AdminEmail, company.PlanType.String, company.AuthStatus.String)
 	if err != nil {
@@ -227,9 +266,59 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (*AuthResponse, s
 	}, token, nil
 }
 
+// AdminLogin verifies Super Admin credentials and returns a JWT
+func (s *Service) AdminLogin(ctx context.Context, req AdminLoginRequest) (string, error) {
+	email := strings.ToLower(strings.TrimSpace(req.Email))
+
+	// Brute-force protection: same rules as regular login
+	if blocked, _ := s.loginLimiter.IsBlocked(ctx, email); blocked {
+		return "", errors.New("account temporarily locked due to too many failed attempts")
+	}
+
+	admin, err := s.queries.GetSuperAdminByEmail(ctx, email)
+	if err != nil {
+		s.loginLimiter.Increment(ctx, email) //nolint:errcheck
+		return "", errors.New("invalid email or password")
+	}
+
+	err = bcrypt.CompareHashAndPassword([]byte(admin.PasswordHash), []byte(req.Password))
+	if err != nil {
+		s.loginLimiter.Increment(ctx, email) //nolint:errcheck
+		return "", errors.New("invalid email or password")
+	}
+
+	// Successful login — clear the failure counter
+	s.loginLimiter.Reset(ctx, email)
+
+	// Generate super admin token (using a dummy UUID for CompanyID since they aren't a company)
+	if s.privateKey == nil {
+		return "", errors.New("JWT private key is not loaded")
+	}
+
+	claims := JWTClaims{
+		CompanyID:   uuid.Nil, // Super Admins don't belong to a specific company
+		CompanyName: "Super Admin",
+		Email:       admin.Email,
+		PlanType:    "unlimited",
+		AuthStatus:  "active",
+		Role:        "super_admin",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)), // Shorter expiry for admin
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			Issuer:    "webtracker-auth",
+			Subject:   admin.ID.String(),
+			Audience:  jwt.ClaimStrings{"super_admin"},
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+	token.Header["kid"] = s.jwtKeyID
+	return token.SignedString(s.privateKey)
+}
+
 // InitiatePasswordReset starts the password reset flow by sending an OTP.
-// Always returns a token regardless of whether the email exists to prevent enumeration.
-func (s *Service) InitiatePasswordReset(ctx context.Context, email string) (string, error) {
+// Always returns nil regardless of whether the email exists to prevent enumeration.
+func (s *Service) InitiatePasswordReset(ctx context.Context, email string) error {
 	email = strings.ToLower(strings.TrimSpace(email))
 
 	// Check if user exists — but never reveal the result to the caller
@@ -239,7 +328,7 @@ func (s *Service) InitiatePasswordReset(ctx context.Context, email string) (stri
 	// Generate 6 digit OTP securely
 	n, err := rand.Int(rand.Reader, big.NewInt(1000000))
 	if err != nil {
-		return "", fmt.Errorf("failed to generate secure OTP: %w", err)
+		return fmt.Errorf("failed to generate secure OTP: %w", err)
 	}
 	otp := fmt.Sprintf("%06d", n.Int64())
 
@@ -253,43 +342,55 @@ func (s *Service) InitiatePasswordReset(ctx context.Context, email string) (stri
 
 	hashedOTP, err := bcrypt.GenerateFromPassword([]byte(otp), bcrypt.DefaultCost)
 	if err != nil {
-		return "", fmt.Errorf("failed to hash OTP: %w", err)
+		return fmt.Errorf("failed to hash OTP: %w", err)
 	}
 
-	// Create Stateless JWT Token
-	claims := ResetPasswordClaims{
+	// Save to Redis
+	payload := PendingResetPayload{
 		Email:     email,
 		HashedOTP: string(hashedOTP),
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			Issuer:    "webtracker-password-reset",
-		},
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(s.cfg.JWTSecret))
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	redisKey := fmt.Sprintf("pending_reset:%s", email)
+	if cache.RedisClient == nil {
+		return fmt.Errorf("redis not available for password reset")
+	}
+	err = cache.RedisClient.Set(ctx, redisKey, data, 15*time.Minute).Err()
+	if err != nil {
+		return fmt.Errorf("failed to store reset intent in redis: %w", err)
+	}
+
+	return nil
 }
 
-// CompletePasswordReset verifies the OTP and updates the password
-func (s *Service) CompletePasswordReset(ctx context.Context, req ResetPasswordRequest, resetToken string) error {
-	claims := &ResetPasswordClaims{}
-	token, err := jwt.ParseWithClaims(resetToken, claims, func(token *jwt.Token) (interface{}, error) {
-		return []byte(s.cfg.JWTSecret), nil
-	})
+// CompletePasswordReset verifies the OTP from Redis and updates the password
+func (s *Service) CompletePasswordReset(ctx context.Context, req ResetPasswordRequest) error {
+	email := strings.ToLower(strings.TrimSpace(req.Email))
+	redisKey := fmt.Sprintf("pending_reset:%s", email)
 
-	if err != nil || !token.Valid {
+	// Fetch from Redis
+	if cache.RedisClient == nil {
+		return errors.New("redis not available — cannot verify reset code")
+	}
+	data, err := cache.RedisClient.Get(ctx, redisKey).Result()
+	if err != nil {
 		return errors.New("invalid or expired reset session")
 	}
 
-	if claims.Email != req.Email {
-		return errors.New("email mismatch")
+	var payload PendingResetPayload
+	if err := json.Unmarshal([]byte(data), &payload); err != nil {
+		return errors.New("failed to parse session data")
 	}
 
 	// Verify OTP
 	otpCode := strings.TrimSpace(req.OTP)
-	logger.Info().Int("len", len(otpCode)).Msg("Comparing Reset OTP")
-	err = bcrypt.CompareHashAndPassword([]byte(claims.HashedOTP), []byte(otpCode))
+	logger.Info().Int("len", len(otpCode)).Msg("Comparing Reset OTP (Stateful)")
+	err = bcrypt.CompareHashAndPassword([]byte(payload.HashedOTP), []byte(otpCode))
 	if err != nil {
 		return errors.New("incorrect reset code")
 	}
@@ -315,6 +416,9 @@ func (s *Service) CompletePasswordReset(ctx context.Context, req ResetPasswordRe
 		return fmt.Errorf("failed to update password: %w", err)
 	}
 
+	// Clear the reset session from Redis
+	cache.RedisClient.Del(ctx, redisKey)
+
 	return nil
 }
 
@@ -324,9 +428,6 @@ func (s *Service) generateJWT(companyID uuid.UUID, companyName, email, planType,
 	}
 
 	role := "authenticated"
-	if s.cfg != nil && s.cfg.SuperAdminCompanyEmail != "" && email == s.cfg.SuperAdminCompanyEmail {
-		role = "super_admin"
-	}
 
 	claims := JWTClaims{
 		CompanyID:   companyID,
@@ -345,6 +446,6 @@ func (s *Service) generateJWT(companyID uuid.UUID, companyName, email, planType,
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
-	token.Header["kid"] = "3ac00c7e-2058-4c54-8cf1-54ebca7a67f1"
+	token.Header["kid"] = s.jwtKeyID
 	return token.SignedString(s.privateKey)
 }

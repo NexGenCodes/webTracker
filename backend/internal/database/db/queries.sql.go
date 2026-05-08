@@ -178,29 +178,29 @@ INSERT INTO Shipment (
 `
 
 type CreateShipmentParams struct {
-	CompanyID            uuid.NullUUID   `json:"company_id"`
-	TrackingID           string          `json:"tracking_id"`
-	UserJid              string          `json:"user_jid"`
-	Status               sql.NullString  `json:"status"`
-	CreatedAt            sql.NullTime    `json:"created_at"`
-	ScheduledTransitTime sql.NullTime    `json:"scheduled_transit_time"`
-	OutfordeliveryTime   sql.NullTime    `json:"outfordelivery_time"`
-	ExpectedDeliveryTime sql.NullTime    `json:"expected_delivery_time"`
-	SenderTimezone       sql.NullString  `json:"sender_timezone"`
-	RecipientTimezone    sql.NullString  `json:"recipient_timezone"`
-	SenderName           sql.NullString  `json:"sender_name"`
-	SenderPhone          sql.NullString  `json:"sender_phone"`
-	Origin               sql.NullString  `json:"origin"`
-	RecipientName        sql.NullString  `json:"recipient_name"`
-	RecipientPhone       sql.NullString  `json:"recipient_phone"`
-	RecipientEmail       sql.NullString  `json:"recipient_email"`
-	RecipientID          sql.NullString  `json:"recipient_id"`
-	RecipientAddress     sql.NullString  `json:"recipient_address"`
-	Destination          sql.NullString  `json:"destination"`
-	CargoType            sql.NullString  `json:"cargo_type"`
-	Weight               sql.NullFloat64 `json:"weight"`
-	Cost                 sql.NullFloat64 `json:"cost"`
-	UpdatedAt            sql.NullTime    `json:"updated_at"`
+	CompanyID            uuid.NullUUID  `json:"company_id"`
+	TrackingID           string         `json:"tracking_id"`
+	UserJid              string         `json:"user_jid"`
+	Status               sql.NullString `json:"status"`
+	CreatedAt            sql.NullTime   `json:"created_at"`
+	ScheduledTransitTime sql.NullTime   `json:"scheduled_transit_time"`
+	OutfordeliveryTime   sql.NullTime   `json:"outfordelivery_time"`
+	ExpectedDeliveryTime sql.NullTime   `json:"expected_delivery_time"`
+	SenderTimezone       sql.NullString `json:"sender_timezone"`
+	RecipientTimezone    sql.NullString `json:"recipient_timezone"`
+	SenderName           sql.NullString `json:"sender_name"`
+	SenderPhone          sql.NullString `json:"sender_phone"`
+	Origin               sql.NullString `json:"origin"`
+	RecipientName        sql.NullString `json:"recipient_name"`
+	RecipientPhone       sql.NullString `json:"recipient_phone"`
+	RecipientEmail       sql.NullString `json:"recipient_email"`
+	RecipientID          sql.NullString `json:"recipient_id"`
+	RecipientAddress     sql.NullString `json:"recipient_address"`
+	Destination          sql.NullString `json:"destination"`
+	CargoType            sql.NullString `json:"cargo_type"`
+	Weight               sql.NullString `json:"weight"`
+	Cost                 sql.NullString `json:"cost"`
+	UpdatedAt            sql.NullTime   `json:"updated_at"`
 }
 
 func (q *Queries) CreateShipment(ctx context.Context, arg CreateShipmentParams) error {
@@ -230,6 +230,28 @@ func (q *Queries) CreateShipment(ctx context.Context, arg CreateShipmentParams) 
 		arg.UpdatedAt,
 	)
 	return err
+}
+
+const createSuperAdmin = `-- name: CreateSuperAdmin :one
+INSERT INTO super_admins (email, password_hash) VALUES ($1, $2) RETURNING id, email, password_hash, created_at, updated_at
+`
+
+type CreateSuperAdminParams struct {
+	Email        string `json:"email"`
+	PasswordHash string `json:"password_hash"`
+}
+
+func (q *Queries) CreateSuperAdmin(ctx context.Context, arg CreateSuperAdminParams) (SuperAdmin, error) {
+	row := q.db.QueryRowContext(ctx, createSuperAdmin, arg.Email, arg.PasswordHash)
+	var i SuperAdmin
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const deleteCompany = `-- name: DeleteCompany :exec
@@ -766,6 +788,23 @@ func (q *Queries) GetShipment(ctx context.Context, arg GetShipmentParams) (Shipm
 	return i, err
 }
 
+const getSuperAdminByEmail = `-- name: GetSuperAdminByEmail :one
+SELECT id, email, password_hash, created_at, updated_at FROM super_admins WHERE email = $1 LIMIT 1
+`
+
+func (q *Queries) GetSuperAdminByEmail(ctx context.Context, email string) (SuperAdmin, error) {
+	row := q.db.QueryRowContext(ctx, getSuperAdminByEmail, email)
+	var i SuperAdmin
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getSystemConfig = `-- name: GetSystemConfig :one
 SELECT value FROM SystemConfig WHERE company_id = $1 AND key = $2
 `
@@ -1003,10 +1042,10 @@ RETURNING id
 `
 
 type RecordPaymentParams struct {
-	CompanyID uuid.NullUUID   `json:"company_id"`
-	Reference string          `json:"reference"`
-	Amount    sql.NullFloat64 `json:"amount"`
-	Status    sql.NullString  `json:"status"`
+	CompanyID uuid.NullUUID  `json:"company_id"`
+	Reference string         `json:"reference"`
+	Amount    sql.NullString `json:"amount"`
+	Status    sql.NullString `json:"status"`
 }
 
 func (q *Queries) RecordPayment(ctx context.Context, arg RecordPaymentParams) (int32, error) {
@@ -1342,7 +1381,7 @@ func (q *Queries) UpdateCompanySubscriptionStatus(ctx context.Context, arg Updat
 const updateCompanySubscriptionWithPlan = `-- name: UpdateCompanySubscriptionWithPlan :exec
 UPDATE companies
 SET subscription_status = $2,
-    subscription_expiry = GREATEST(subscription_expiry, CURRENT_TIMESTAMP) + INTERVAL '30 days',
+    subscription_expiry = GREATEST(COALESCE(subscription_expiry, '0001-01-01 00:00:00'::timestamp), CURRENT_TIMESTAMP) + INTERVAL '30 days',
     plan_type = COALESCE(NULLIF($3::text, ''), plan_type),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1

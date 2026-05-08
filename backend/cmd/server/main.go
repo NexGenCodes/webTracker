@@ -5,18 +5,14 @@ import (
 	"os"
 	"runtime/debug"
 	"strconv"
-	"time"
 	"webtracker-bot/internal/app"
+	"webtracker-bot/internal/cache"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/logger"
 )
 
 func main() {
 	flag.Parse()
-
-	// Dynamic Vertical Scaling Configuration
-	// By default, it limits to 700MB. To scale vertically, set MAX_MEMORY_MB in your environment.
-	// e.g. MAX_MEMORY_MB=2048 for a 2GB VPS.
 	memLimitMB := int64(700)
 	if envMem := os.Getenv("MAX_MEMORY_MB"); envMem != "" {
 		if parsed, err := strconv.ParseInt(envMem, 10, 64); err == nil {
@@ -24,15 +20,9 @@ func main() {
 		}
 	}
 
-	debug.SetGCPercent(50)
+	// Rely on GOMEMLIMIT for soft memory limits without aggressively overriding GC percent.
+	// We removed the stop-the-world FreeOSMemory loop to eliminate latency spikes.
 	debug.SetMemoryLimit(memLimitMB * 1024 * 1024)
-
-	go func() {
-		for {
-			time.Sleep(5 * time.Minute)
-			debug.FreeOSMemory()
-		}
-	}()
 
 	// 1. Load Config
 	cfg := config.Load()
@@ -44,6 +34,12 @@ func main() {
 	if err := cfg.Validate(); err != nil {
 		logger.Fatal().Err(err).Msg("Configuration validation failed")
 	}
+
+	// 4. Initialize Redis & Asynq
+	if err := cache.InitRedis(cfg.RedisURL); err != nil {
+		logger.Fatal().Err(err).Msg("Failed to initialize Redis")
+	}
+	defer cache.Close()
 
 	// 4. Initialize App
 	application := app.New(cfg)

@@ -255,3 +255,9 @@ SET subscription_status = $2,
     plan_type = COALESCE(NULLIF(sqlc.arg(plan_type)::text, ''), plan_type),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1;
+
+-- name: GetSuperAdminByEmail :one
+SELECT * FROM super_admins WHERE email = $1 LIMIT 1;
+
+-- name: CreateSuperAdmin :one
+INSERT INTO super_admins (email, password_hash) VALUES ($1, $2) RETURNING *;

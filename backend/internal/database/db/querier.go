@@ -21,6 +21,7 @@ type Querier interface {
 	CountShipmentsByStatus(ctx context.Context, companyID uuid.NullUUID) (CountShipmentsByStatusRow, error)
 	CreateCompany(ctx context.Context, arg CreateCompanyParams) (Company, error)
 	CreateShipment(ctx context.Context, arg CreateShipmentParams) error
+	CreateSuperAdmin(ctx context.Context, arg CreateSuperAdminParams) (SuperAdmin, error)
 	DeleteCompany(ctx context.Context, id uuid.UUID) error
 	DeleteDeliveredShipments(ctx context.Context, companyID uuid.NullUUID) error
 	DeleteShipment(ctx context.Context, arg DeleteShipmentParams) error
@@ -39,6 +40,7 @@ type Querier interface {
 	GetPlatformAnalytics(ctx context.Context) (GetPlatformAnalyticsRow, error)
 	GetRecentEvents(ctx context.Context, arg GetRecentEventsParams) ([]Telemetry, error)
 	GetShipment(ctx context.Context, arg GetShipmentParams) (Shipment, error)
+	GetSuperAdminByEmail(ctx context.Context, email string) (SuperAdmin, error)
 	GetSystemConfig(ctx context.Context, arg GetSystemConfigParams) (string, error)
 	GetTelemetryStats(ctx context.Context, arg GetTelemetryStatsParams) ([]GetTelemetryStatsRow, error)
 	GetUserLanguage(ctx context.Context, arg GetUserLanguageParams) (string, error)

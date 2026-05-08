@@ -13,9 +13,9 @@ import (
 	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/receipt"
 	"webtracker-bot/internal/utils"
-	"webtracker-bot/internal/worker"
 
 	"github.com/google/uuid"
+	"github.com/hibiken/asynq"
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/store"
 	"go.mau.fi/whatsmeow/store/sqlstore"
@@ -25,29 +25,31 @@ import (
 
 // Manager orchestrates multiple BotInstances across different companies.
 type Manager struct {
-	Cfg        *config.Config
-	ShipmentUC models.ShipmentUsecase
-	ConfigUC   models.ConfigUsecase
-	WAStore    *sqlstore.Container
-	Bots       map[uuid.UUID]*BotInstance
-	BotsMu     sync.RWMutex
-	PairLocks  map[uuid.UUID]*sync.Mutex
-	PairMu     sync.Mutex
-	WG         *sync.WaitGroup
-	Context    context.Context
+	Cfg         *config.Config
+	ShipmentUC  models.ShipmentUsecase
+	ConfigUC    models.ConfigUsecase
+	WAStore     *sqlstore.Container
+	Bots        map[uuid.UUID]*BotInstance
+	BotsMu      sync.RWMutex
+	PairLocks   map[uuid.UUID]*sync.Mutex
+	PairMu      sync.Mutex
+	WG          *sync.WaitGroup
+	Context     context.Context
+	AsynqClient *asynq.Client
 }
 
 // NewManager creates a new multi-tenant WhatsApp manager.
-func NewManager(ctx context.Context, cfg *config.Config, shipUC models.ShipmentUsecase, configUC models.ConfigUsecase, store *sqlstore.Container, wg *sync.WaitGroup) *Manager {
+func NewManager(ctx context.Context, cfg *config.Config, shipUC models.ShipmentUsecase, configUC models.ConfigUsecase, store *sqlstore.Container, wg *sync.WaitGroup, asynqClient *asynq.Client) *Manager {
 	return &Manager{
-		Cfg:        cfg,
-		ShipmentUC: shipUC,
-		ConfigUC:   configUC,
-		WAStore:    store,
-		Bots:       make(map[uuid.UUID]*BotInstance),
-		PairLocks:  make(map[uuid.UUID]*sync.Mutex),
-		WG:         wg,
-		Context:    ctx,
+		Cfg:         cfg,
+		ShipmentUC:  shipUC,
+		ConfigUC:    configUC,
+		WAStore:     store,
+		Bots:        make(map[uuid.UUID]*BotInstance),
+		PairLocks:   make(map[uuid.UUID]*sync.Mutex),
+		WG:          wg,
+		Context:     ctx,
+		AsynqClient: asynqClient,
 	}
 }
 
@@ -118,17 +120,15 @@ func (m *Manager) DeactivateBot(companyID uuid.UUID) error {
 		return fmt.Errorf("bot not found")
 	}
 
-	// Cancel keepalive goroutine first
-	if bot.KeepaliveCancel != nil {
-		bot.KeepaliveCancel()
-	}
-
 	bot.GetWAClient().Disconnect()
-	if bot.Jobs != nil {
-		close(bot.Jobs)
-	}
+
 	delete(m.Bots, companyID)
 	m.BotsMu.Unlock()
+
+	// Clean up pairing lock to prevent memory leaks over time
+	m.PairMu.Lock()
+	delete(m.PairLocks, companyID)
+	m.PairMu.Unlock()
 
 	logger.Info().Str("company_id", companyID.String()).Msg("Bot dynamically deactivated")
 	return nil
@@ -254,23 +254,8 @@ func (m *Manager) InitBotForCompany(c db.Company) error {
 		Tier:        c.SubscriptionStatus.String,
 		WA:          waClient,
 		Sender:      sender,
-		Jobs:        make(chan models.Job, m.Cfg.BufferSize),
+		AsynqClient: m.AsynqClient,
 	}
-
-	m.WG.Add(1)
-	w := &worker.Worker{
-		ID:              int(c.ID.ID()),
-		Jobs:            bot.Jobs,
-		WG:              m.WG,
-		Cfg:             m.Cfg,
-		ShipmentUC:      m.ShipmentUC,
-		ConfigUC:        m.ConfigUC,
-		FrontendURL:     m.Cfg.FrontendURL,
-		ShipmentService: m.ShipmentUC.GetService(),
-		Bots:            m,
-		Context:         m.Context,
-	}
-	go w.Start()
 
 	waClient.AddEventHandler(func(evt interface{}) {
 		m.HandleWAEvent(bot, evt)
@@ -308,10 +293,10 @@ func (m *Manager) InitBotForCompany(c db.Company) error {
 
 // HandleWAEvent proxies events to the specific bot instance.
 func (m *Manager) HandleWAEvent(bot *BotInstance, evt interface{}) {
-	HandleEvent(bot, evt, bot.Jobs, m.Cfg, m.ConfigUC)
+	HandleEvent(bot, evt, m.Cfg, m.ConfigUC)
 
 	switch evt.(type) {
-	case *events.Connected, *events.PairSuccess:
+	case *events.Connected:
 		_ = m.ConfigUC.UpdateCompanyAuthStatus(m.Context, bot.CompanyID, "active")
 		if bot.GetWAClient().Store != nil && bot.GetWAClient().Store.ID != nil {
 			phone := utils.GetBarePhone(bot.GetWAClient().Store.ID.User)
@@ -320,23 +305,38 @@ func (m *Manager) HandleWAEvent(bot *BotInstance, evt interface{}) {
 			}
 		}
 		bot.ReconnectCount = 0
-		bot.LastReconnect = time.Now()
+		bot.LastReconnect = time.Time{}
 
-		// Start keepalive goroutine to prevent idle disconnects
-		m.startKeepalive(bot)
+	case *events.PairSuccess:
+		_ = m.ConfigUC.UpdateCompanyAuthStatus(m.Context, bot.CompanyID, "active")
+		if bot.GetWAClient().Store != nil && bot.GetWAClient().Store.ID != nil {
+			phone := utils.GetBarePhone(bot.GetWAClient().Store.ID.User)
+			if phone != "" {
+				_ = m.ConfigUC.UpdateCompanyWhatsAppPhone(m.Context, bot.CompanyID, phone)
+			}
+
+			// Priority 1: Send a Welcome Validation Message directly to the paired device
+			ownJID := bot.GetWAClient().Store.ID.ToNonAD()
+			welcomeMsg := "✅ *CargoHive Bot Activated*\n\nYour WhatsApp tracking bot is now securely linked and fully operational.\n\nAll tracking requests sent to this number will now be automatically processed. 🚀"
+			bot.Sender.Send(ownJID, welcomeMsg)
+		}
+		bot.ReconnectCount = 0
+		bot.LastReconnect = time.Time{}
 
 	case *events.LoggedOut:
+		// 1. Reset auth status
 		_ = m.ConfigUC.UpdateCompanyAuthStatus(m.Context, bot.CompanyID, "pending")
+		// 2. Clear the WhatsApp phone in the database
+		_ = m.ConfigUC.UpdateCompanyWhatsAppPhone(m.Context, bot.CompanyID, "")
+		
+		// 3. Forcefully delete local store session cryptographic keys
+		if bot.GetWAClient().Store != nil {
+			_ = bot.GetWAClient().Store.Delete(m.Context)
+		}
+		
+		// 4. Deactivate the bot from memory
 		_ = m.DeactivateBot(bot.CompanyID)
 	case *events.Disconnected:
-		const maxRetries = 15
-
-		if bot.ReconnectCount >= maxRetries {
-			_ = m.ConfigUC.UpdateCompanyAuthStatus(m.Context, bot.CompanyID, "disconnected")
-			logger.Error().Str("company_id", bot.CompanyID.String()).Msg("Bot exhausted all reconnect attempts — marked disconnected")
-			return
-		}
-
 		bot.ReconnectCount++
 
 		// Update DB to reflect reconnecting state (only on first attempt to avoid write spam)
@@ -344,66 +344,63 @@ func (m *Manager) HandleWAEvent(bot *BotInstance, evt interface{}) {
 			_ = m.ConfigUC.UpdateCompanyAuthStatus(m.Context, bot.CompanyID, "reconnecting")
 		}
 
-		// Exponential backoff with jitter: base * 2^attempt + random(0..base)
-		base := 5 * time.Second
-		backoff := base * (1 << min(bot.ReconnectCount-1, 6))        // cap exponent at 6 → max ~320s
-		jitter := time.Duration(time.Now().UnixNano() % int64(base)) // 0..5s jitter
-		delay := backoff + jitter
-
 		logger.Info().
 			Str("company_id", bot.CompanyID.String()).
 			Int("attempt", bot.ReconnectCount).
-			Dur("delay", delay).
-			Msg("Scheduling reconnect with exponential backoff")
-
-		go func() {
-			time.Sleep(delay)
-			mu := m.getPairLock(bot.CompanyID)
-			if !mu.TryLock() {
-				return
-			}
-			defer mu.Unlock()
-
-			m.BotsMu.RLock()
-			_, stillActive := m.Bots[bot.CompanyID]
-			m.BotsMu.RUnlock()
-			if stillActive && bot.GetWAClient().Store != nil && bot.GetWAClient().Store.ID != nil {
-				if err := bot.GetWAClient().Connect(); err != nil {
-					logger.Warn().Err(err).Str("company_id", bot.CompanyID.String()).Int("attempt", bot.ReconnectCount).Msg("Reconnect attempt failed")
-				}
-			}
-		}()
+			Msg("Bot disconnected. whatsmeow internal auto-reconnect will handle this.")
 	}
+}
+
+// getOrInitBot safely retrieves an existing bot or initializes a new one.
+func (m *Manager) getOrInitBot(companyID uuid.UUID) (models.BotInstance, error) {
+	mu := m.getPairLock(companyID)
+	mu.Lock()
+	defer mu.Unlock()
+
+	bot, err := m.GetBot(companyID)
+	if err == nil {
+		return bot, nil
+	}
+
+	company, err := m.ConfigUC.GetCompanyByID(m.Context, companyID)
+	if err != nil {
+		return nil, err
+	}
+	if err := m.InitBotForCompany(company); err != nil {
+		m.PairMu.Lock()
+		delete(m.PairLocks, companyID)
+		m.PairMu.Unlock()
+		return nil, err
+	}
+
+	bot, err = m.GetBot(companyID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve bot after init: %w", err)
+	}
+	return bot, nil
 }
 
 // GeneratePairingCode generates a pairing code for a companion device.
 func (m *Manager) GeneratePairingCode(ctx context.Context, companyID uuid.UUID, phone string) (string, error) {
-	mu := m.getPairLock(companyID)
-	mu.Lock()
-	bot, err := m.GetBot(companyID)
+	bot, err := m.getOrInitBot(companyID)
 	if err != nil {
-		company, err := m.ConfigUC.GetCompanyByID(m.Context, companyID)
-		if err != nil {
-			mu.Unlock()
-			return "", err
-		}
-		if err := m.InitBotForCompany(company); err != nil {
-			mu.Unlock()
-			return "", err
-		}
-		bot, _ = m.GetBot(companyID)
-	}
-	mu.Unlock()
-
-	if bot.GetWAClient().IsConnected() {
-		bot.GetWAClient().Disconnect()
-		time.Sleep(500 * time.Millisecond)
-	}
-	if err := bot.GetWAClient().Connect(); err != nil {
 		return "", err
 	}
 
-	pairCtx, cancel := context.WithTimeout(m.Context, 60*time.Second)
+	waClient := bot.GetWAClient()
+	if waClient.Store.ID != nil {
+		return "", fmt.Errorf("device is already paired")
+	}
+
+	// Do not forcefully disconnect if already connected.
+	if !waClient.IsConnected() {
+		if err := waClient.Connect(); err != nil {
+			return "", fmt.Errorf("failed to connect for pairing: %w", err)
+		}
+	}
+
+	// Chain the incoming HTTP ctx with a fallback 60s timeout
+	pairCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 
 	displayName := strings.ToUpper(bot.GetCompanyName())
@@ -411,31 +408,24 @@ func (m *Manager) GeneratePairingCode(ctx context.Context, companyID uuid.UUID, 
 		displayName = "AIRWAYBILL"
 	}
 
-	return bot.GetWAClient().PairPhone(pairCtx, phone, true, whatsmeow.PairClientChrome, fmt.Sprintf("%s (Windows)", displayName))
+	return waClient.PairPhone(pairCtx, phone, true, whatsmeow.PairClientChrome, fmt.Sprintf("%s (Windows)", displayName))
 }
 
 // GetQR retrieves the current pairing QR code for the bot.
 func (m *Manager) GetQR(ctx context.Context, companyID uuid.UUID) (string, error) {
-	mu := m.getPairLock(companyID)
-	mu.Lock()
-	bot, err := m.GetBot(companyID)
+	bot, err := m.getOrInitBot(companyID)
 	if err != nil {
-		company, err := m.ConfigUC.GetCompanyByID(m.Context, companyID)
-		if err != nil {
-			mu.Unlock()
-			return "", err
-		}
-		if err := m.InitBotForCompany(company); err != nil {
-			mu.Unlock()
-			return "", err
-		}
-		bot, _ = m.GetBot(companyID)
+		return "", err
 	}
-	mu.Unlock()
+
+	waClient := bot.GetWAClient()
+	if waClient.Store.ID != nil {
+		return "", fmt.Errorf("device is already paired")
+	}
 
 	// Ensure connection is active to receive QR events
-	if !bot.GetWAClient().IsConnected() {
-		if err := bot.GetWAClient().Connect(); err != nil {
+	if !waClient.IsConnected() {
+		if err := waClient.Connect(); err != nil {
 			return "", fmt.Errorf("failed to connect for QR: %w", err)
 		}
 	}
@@ -447,9 +437,15 @@ func (m *Manager) GetQR(ctx context.Context, companyID uuid.UUID) (string, error
 			return code, nil
 		}
 
-		// If we've waited a bit and still no code, try refreshing the QR channel
-		if i == 5 {
-			logger.Info().Str("company", companyID.String()).Msg("Retrying QR generation...")
+		// Actually force a QR channel refresh if we hit the 5-second mark with no QR code.
+		// This safely cycles the websocket so WhatsApp emits a fresh QR string.
+		if i == 10 {
+			logger.Info().Str("company", companyID.String()).Msg("Forcing QR channel refresh...")
+			waClient.Disconnect()
+			time.Sleep(200 * time.Millisecond)
+			if err := waClient.Connect(); err != nil {
+				logger.Warn().Err(err).Msg("Failed to reconnect during QR refresh")
+			}
 		}
 
 		time.Sleep(500 * time.Millisecond)
@@ -458,40 +454,7 @@ func (m *Manager) GetQR(ctx context.Context, companyID uuid.UUID) (string, error
 	return "", fmt.Errorf("qr code not available yet, please try again in a moment")
 }
 
-// startKeepalive sends a presence broadcast every 4 minutes to prevent
-// WhatsApp from killing the connection due to inactivity.
-// Each call cancels any prior keepalive for this bot (idempotent).
-func (m *Manager) startKeepalive(bot *BotInstance) {
-	// Cancel any existing keepalive for this bot
-	if bot.KeepaliveCancel != nil {
-		bot.KeepaliveCancel()
-	}
 
-	ctx, cancel := context.WithCancel(m.Context)
-	bot.KeepaliveCancel = cancel
-
-	go func() {
-		ticker := time.NewTicker(1 * time.Minute)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				client := bot.GetWAClient()
-				if client == nil || !client.IsConnected() {
-					continue
-				}
-				kCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-				if err := client.SendPresence(kCtx, types.PresenceAvailable); err != nil {
-					logger.Warn().Err(err).Str("company_id", bot.CompanyID.String()).Msg("Keepalive presence failed")
-				}
-				cancel()
-			}
-		}
-	}()
-}
 
 // LivenessCheck audits all active bots and corrects auth_status if
 // a bot is tracked as "active" in the DB but is actually disconnected.
@@ -511,6 +474,9 @@ func (m *Manager) LivenessCheck() {
 	m.BotsMu.RUnlock()
 
 	go func() {
+		// Concurrency limit to prevent Thundering Herd on mass reconnect
+		sem := make(chan struct{}, 5) // max 5 concurrent reconnects
+
 		for _, entry := range snapshot {
 			client := entry.Bot.GetWAClient()
 			if client == nil {
@@ -518,21 +484,31 @@ func (m *Manager) LivenessCheck() {
 			}
 
 			if !client.IsConnected() && client.Store != nil && client.Store.ID != nil {
-				// Don't step on other reconnect attempts
-				mu := m.getPairLock(entry.ID)
-				if !mu.TryLock() {
-					continue
-				}
+				sem <- struct{}{} // acquire
+				
+				go func(e struct {
+					ID  uuid.UUID
+					Bot *BotInstance
+				}) {
+					defer func() { <-sem }() // release
 
-				logger.Warn().Str("company_id", entry.ID.String()).Msg("[LivenessCheck] Bot disconnected — attempting reconnect")
-				entry.Bot.ReconnectCount = 0
-				if err := client.Connect(); err != nil {
-					logger.Error().Err(err).Str("company_id", entry.ID.String()).Msg("[LivenessCheck] Reconnect failed")
-					_ = m.ConfigUC.UpdateCompanyAuthStatus(m.Context, entry.ID, "disconnected")
-				}
-				mu.Unlock()
-				// Jitter to prevent Thundering Herd during a mass network drop
-				time.Sleep(200 * time.Millisecond)
+					// Don't step on other reconnect attempts
+					mu := m.getPairLock(e.ID)
+					if !mu.TryLock() {
+						return
+					}
+					defer mu.Unlock()
+
+					logger.Warn().Str("company_id", e.ID.String()).Msg("[LivenessCheck] Bot disconnected — attempting reconnect")
+					e.Bot.ReconnectCount = 0
+					if err := client.Connect(); err != nil {
+						logger.Error().Err(err).Str("company_id", e.ID.String()).Msg("[LivenessCheck] Reconnect failed")
+						_ = m.ConfigUC.UpdateCompanyAuthStatus(m.Context, e.ID, "disconnected")
+					}
+					
+					// Jitter to prevent API throttling
+					time.Sleep(200 * time.Millisecond)
+				}(entry)
 			}
 		}
 	}()

@@ -3,20 +3,18 @@ package notif
 import (
 	"context"
 	"fmt"
-	"time"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/shipment"
 
-	"go.mau.fi/whatsmeow"
-	waProto "go.mau.fi/whatsmeow/binary/proto"
 	"go.mau.fi/whatsmeow/types"
 )
 
 // SendStatusAlert sends a WhatsApp and/or email alert when a shipment transitions.
-func SendStatusAlert(ctx context.Context, wa *whatsmeow.Client, cfg *config.Config, companyName, jidStr, tracking, status, email string) {
-	if jidStr == "" {
+// It uses the WhatsAppSender interface to ensure messages are enqueued with jitter and backpressure.
+func SendStatusAlert(ctx context.Context, sender models.WhatsAppSender, cfg *config.Config, companyName, jidStr, tracking, status, email, destCountry string) {
+	if jidStr == "" || sender == nil {
 		return
 	}
 	jid, err := types.ParseJID(jidStr)
@@ -40,43 +38,16 @@ func SendStatusAlert(ctx context.Context, wa *whatsmeow.Client, cfg *config.Conf
 		msg = fmt.Sprintf("🛬 *NOTICE OF ARRIVAL*\n\nTracking ID: *%s*\nStatus: *ARRIVED AT DESTINATION*\n\nYour shipment has successfully arrived in the destination country and is securely held at our facility. A regional agent will contact the recipient shortly.%s", tracking, link)
 
 		if email != "" && cfg != nil {
-			SendDeliveryEmail(cfg, &shipment.Shipment{
-				TrackingID:     tracking,
-				RecipientEmail: email,
-			}, companyName)
+			SendDeliveryEmail(cfg, email, tracking, "", companyName, destCountry)
 		}
 	default:
-		return
-	}
-
-	// Add Bot Footer
-	msg += "\n\n_🤖Bot_"
-
-	content := &waProto.Message{
-		Conversation: models.StrPtr(msg),
-	}
-
-	if wa.Store.ID == nil {
-		logger.Warn().Str("chat", jidStr).Msg("Skipping status alert: Bot session not initialized (Store.ID is nil)")
 		return
 	}
 
 	// Ensure we send to the bare JID (all devices)
 	bareJid := types.JID{User: jid.User, Server: jid.Server}
 
-	_, err = wa.SendMessage(ctx, bareJid, content)
-	if err != nil {
-		logger.Error().Err(err).Str("chat", jidStr).Msg("Failed to send status alert")
-	} else {
-		logger.Info().Str("chat", jidStr).Str("status", status).Msg("Status alert sent")
-	}
-}
-
-// SendStatusAlertAsync dispatches a status alert in the background with a 15s timeout.
-func SendStatusAlertAsync(wa *whatsmeow.Client, cfg *config.Config, companyName, jidStr, tracking, status, email string) {
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
-		SendStatusAlert(ctx, wa, cfg, companyName, jidStr, tracking, status, email)
-	}()
+	// sender.Send automatically adds the bot footer and enqueues to the jitter queue
+	sender.Send(bareJid, msg)
+	logger.Info().Str("chat", jidStr).Str("status", status).Msg("Status alert enqueued")
 }

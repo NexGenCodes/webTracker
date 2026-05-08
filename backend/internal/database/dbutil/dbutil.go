@@ -2,6 +2,8 @@ package dbutil
 
 import (
 	"database/sql"
+	"fmt"
+	"strconv"
 	"time"
 )
 
@@ -15,7 +17,16 @@ func ToNullTime(t time.Time) sql.NullTime {
 	return sql.NullTime{Time: t, Valid: !t.IsZero()}
 }
 
-// ToNullFloat64 converts a float64 to sql.NullFloat64.
-func ToNullFloat64(f float64) sql.NullFloat64 {
-	return sql.NullFloat64{Float64: f, Valid: true}
+// FloatToNullNumeric converts a float64 to sql.NullString for NUMERIC columns.
+func FloatToNullNumeric(f float64) sql.NullString {
+	return sql.NullString{String: fmt.Sprintf("%.2f", f), Valid: true}
+}
+
+// NullNumericToFloat converts a sql.NullString from a NUMERIC column back to float64.
+func NullNumericToFloat(ns sql.NullString) float64 {
+	if !ns.Valid || ns.String == "" {
+		return 0
+	}
+	f, _ := strconv.ParseFloat(ns.String, 64)
+	return f
 }

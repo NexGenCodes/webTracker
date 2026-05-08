@@ -11,6 +11,12 @@ type LoginRequest struct {
 	Password string `json:"password" validate:"required"`
 }
 
+// AdminLoginRequest payload for /api/auth/admin-login
+type AdminLoginRequest struct {
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required"`
+}
+
 // RegisterIntentRequest payload for /api/auth/register-intent
 type RegisterIntentRequest struct {
 	CompanyName string `json:"company_name" validate:"required"`
@@ -20,7 +26,8 @@ type RegisterIntentRequest struct {
 
 // VerifyOTPRequest payload for /api/auth/verify-otp
 type VerifyOTPRequest struct {
-	OTP string `json:"otp" validate:"required,len=6"`
+	Email string `json:"email" validate:"required,email"`
+	OTP   string `json:"otp" validate:"required,len=6"`
 }
 
 // SetupCompanyRequest payload for /api/auth/setup
@@ -49,13 +56,12 @@ type JWTClaims struct {
 	jwt.RegisteredClaims
 }
 
-// OTPClaims custom claims for the stateless OTP token
-type OTPClaims struct {
+// PendingUserPayload is the JSON stored in Redis for registration
+type PendingUserPayload struct {
 	CompanyName    string `json:"company_name"`
 	Email          string `json:"email"`
 	HashedOTP      string `json:"hashed_otp"`
 	HashedPassword string `json:"hashed_password"`
-	jwt.RegisteredClaims
 }
 
 // ForgotPasswordRequest payload for /api/auth/forgot-password
@@ -70,10 +76,9 @@ type ResetPasswordRequest struct {
 	NewPassword string `json:"new_password" validate:"required,min=8"`
 }
 
-// ResetPasswordClaims custom claims for the stateless password reset token
-type ResetPasswordClaims struct {
+// PendingResetPayload is the JSON stored in Redis for password reset
+type PendingResetPayload struct {
 	Email     string `json:"email"`
 	HashedOTP string `json:"hashed_otp"`
-	jwt.RegisteredClaims
 }
 

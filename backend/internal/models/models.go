@@ -17,6 +17,8 @@ type WhatsAppSender interface {
 	Send(chat types.JID, text string)
 	SendImage(chat, sender types.JID, imageBytes []byte, caption string, quotedID string, quotedText string) error
 	SetTyping(chat types.JID, typing bool)
+	MarkRead(chat, sender types.JID, messageID string)
+	React(chat, sender types.JID, messageID string, emoji string)
 	GetWAClient() *whatsmeow.Client
 	GetCompanyName() string
 }
@@ -27,7 +29,6 @@ type BotInstance interface {
 	GetPrefix() string
 	GetCompanyName() string
 	GetTier() string
-	GetJobs() chan Job
 	GetCurrentQR() string
 }
 
@@ -56,11 +57,21 @@ type ShipmentUsecase interface {
 	CreateWithPrefix(ctx context.Context, companyID uuid.UUID, s *db.Shipment, prefix string) (string, error)
 	FindSimilar(ctx context.Context, companyID uuid.UUID, userJid, phone string) (string, error)
 	CheckShipmentCap(ctx context.Context, cfg *config.Config, companyID uuid.UUID, adminEmail string, planType string, expiry sql.NullTime) (int64, error)
+	ProcessTransitions(ctx context.Context, companyID uuid.UUID, now time.Time) ([]TransitionResult, error)
+	CountDailyStats(ctx context.Context, companyID uuid.UUID, since time.Time) (created int64, delivered int64, err error)
+	RunAgedCleanup(ctx context.Context, companyID uuid.UUID, deliveredCutoff, allCutoff time.Time) (int64, error)
+}
+
+type TransitionResult struct {
+	TrackingID     string
+	NewStatus      string
+	UserJID        string
+	RecipientEmail string
 }
 
 type ShipmentService interface {
-	CalculateDeparture(now time.Time, originTZ string) time.Time
-	CalculateArrival(departure time.Time, senderCountry, receiverCountry string) (time.Time, time.Time)
+	CalculateDeparture(now time.Time, originCountry string) time.Time
+	CalculateArrival(departure time.Time, destinationCountry string) (time.Time, time.Time)
 	ResolveTimezone(country string) string
 }
 
@@ -167,4 +178,12 @@ func StrPtr(s string) *string {
 
 func Uint64Ptr(u uint64) *uint64 {
 	return &u
+}
+
+func Int64Ptr(i int64) *int64 {
+	return &i
+}
+
+func BoolPtr(b bool) *bool {
+	return &b
 }

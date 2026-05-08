@@ -64,10 +64,19 @@ CREATE TABLE IF NOT EXISTS shipment (
     recipient_address TEXT,
     destination TEXT,
     cargo_type TEXT,
-    weight DOUBLE PRECISION,
-    cost DOUBLE PRECISION,
+    weight NUMERIC(12,2),
+    cost NUMERIC(12,2),
     
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS payments (
+    id SERIAL PRIMARY KEY,
+    company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
+    reference TEXT UNIQUE NOT NULL,
+    amount NUMERIC(12,2),
+    status TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS telemetry (
@@ -160,15 +169,6 @@ BEGIN
 END
 $$;
 
-CREATE TABLE IF NOT EXISTS payments (
-    id SERIAL PRIMARY KEY,
-    company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
-    reference TEXT UNIQUE NOT NULL,
-    amount DOUBLE PRECISION,
-    status TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
 CREATE TABLE IF NOT EXISTS plans (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -197,3 +197,11 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 
 CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS super_admins (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

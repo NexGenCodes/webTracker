@@ -14,12 +14,12 @@ type Config struct {
 	DatabaseURL    string `env:"DATABASE_URL"`
 	DirectURL      string `env:"DIRECT_URL"`
 	GeminiAPIKey   string `env:"GEMINI_API_KEY"`
-	AdminTimezone  string `env:"ADMIN_TIMEZONE" env-default:"Africa/Lagos"`
 	HealthcheckURL string `env:"HEALTHCHECK_URL"`
 	LogPath        string `env:"LOG_PATH"`
 	LogLevel       string `env:"LOG_LEVEL" env-default:"info"`
-	WorkerPoolSize int    `env:"WORKER_POOL_SIZE" env-default:"5"`
-	BufferSize     int    `env:"BUFFER_SIZE" env-default:"100"`
+	WorkerPoolSize int    `env:"WORKER_POOL_SIZE" env-default:"10"`
+	BufferSize     int    `env:"BUFFER_SIZE" env-default:"5000"`
+	RedisURL       string `env:"REDIS_URL" env-default:"localhost:6379"`
 
 	// Notification Config
 	SMTPHost     string `env:"SMTP_HOST"`
@@ -44,6 +44,7 @@ type Config struct {
 	JWTSecret         string `env:"JWT_SECRET"`
 	JWTPrivateKeyPath string `env:"JWT_PRIVATE_KEY_PATH" env-default:"jwt_private.pem"`
 	JWTPublicKeyPath  string `env:"JWT_PUBLIC_KEY_PATH" env-default:"jwt_public.pem"`
+	JWTKeyID          string `env:"JWT_KEY_ID"`
 
 	// Frontend URL for magic links
 	FrontendURL string `env:"FRONTEND_URL" env-default:"http://localhost:3000"`

@@ -35,27 +35,25 @@ type Dispatcher struct {
 	cfg           *config.Config
 	shipUC        models.ShipmentUsecase
 	configUC      models.ConfigUsecase
-	sender        models.WhatsAppSender
-	handlers      map[string]Handler
-	AwbCmd        string
-	CompanyName   string
-	Tier          string
-	BotPhone      string
-	AdminTimezone string
+	sender      models.WhatsAppSender
+	handlers    map[string]Handler
+	AwbCmd      string
+	CompanyName string
+	Tier        string
+	BotPhone    string
 }
 
-func NewDispatcher(cfg *config.Config, shipUC models.ShipmentUsecase, configUC models.ConfigUsecase, sender models.WhatsAppSender, awbCmd string, companyName string, botPhone string, adminTimezone string, tier string) *Dispatcher {
+func NewDispatcher(cfg *config.Config, shipUC models.ShipmentUsecase, configUC models.ConfigUsecase, sender models.WhatsAppSender, awbCmd string, companyName string, botPhone string, tier string) *Dispatcher {
 	d := &Dispatcher{
-		cfg:           cfg,
-		shipUC:        shipUC,
-		configUC:      configUC,
-		sender:        sender,
-		handlers:      make(map[string]Handler),
-		AwbCmd:        awbCmd,
-		CompanyName:   companyName,
-		Tier:          tier,
-		BotPhone:      botPhone,
-		AdminTimezone: adminTimezone,
+		cfg:         cfg,
+		shipUC:      shipUC,
+		configUC:    configUC,
+		sender:      sender,
+		handlers:    make(map[string]Handler),
+		AwbCmd:      awbCmd,
+		CompanyName: companyName,
+		Tier:        tier,
+		BotPhone:    botPhone,
 	}
 	d.registerDefaults()
 	return d
@@ -101,7 +99,6 @@ func (d *Dispatcher) Dispatch(ctx context.Context, companyID uuid.UUID, text str
 		switch h := handler.(type) {
 		case *StatsHandler:
 			h.CompanyName = d.CompanyName
-			h.AdminTimezone = d.AdminTimezone
 		case *InfoHandler:
 			h.CompanyName = d.CompanyName
 			h.CompanyPrefix = d.AwbCmd
@@ -111,7 +108,6 @@ func (d *Dispatcher) Dispatch(ctx context.Context, companyID uuid.UUID, text str
 		case *EditHandler:
 			h.CompanyName = d.CompanyName
 			h.CompanyPrefix = d.AwbCmd
-			h.AdminTimezone = d.AdminTimezone
 			h.Sender = d.sender
 			h.Cfg = d.cfg
 		case *StatusHandler:
@@ -130,7 +126,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, companyID uuid.UUID, text str
 			}
 		}
 
-		isPublicCmd := rawCmd == "info" || rawCmd == "help"
+		isPublicCmd := rawCmd == "info" || rawCmd == "help" || rawCmd == "lang"
 		if !isPublicCmd && !isOwnerOnlyCmd {
 			if isAdmin {
 				logger.Info().Str("cmd", rawCmd).Str("sender", senderPhone).Msg("Admin command authorized")

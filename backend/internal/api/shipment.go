@@ -153,8 +153,8 @@ func (h *ShipmentHandler) Create(c *fiber.Ctx) error {
 		now := time.Now()
 
 		// Use industrial status calculation algorithms instead of hardcoded defaults
-		departure := h.shipmentUC.Service.CalculateDeparture(now, "Africa/Lagos") // Default origin TZ
-		arrival, outForDelivery := h.shipmentUC.Service.CalculateArrival(departure, req.SenderCountry, req.ReceiverCountry)
+		departure := h.shipmentUC.Service.CalculateDeparture(now, req.SenderCountry)
+		arrival, outForDelivery := h.shipmentUC.Service.CalculateArrival(departure, req.ReceiverCountry)
 
 		params = db.CreateShipmentParams{
 			TrackingID:           trackingID,
@@ -164,7 +164,7 @@ func (h *ShipmentHandler) Create(c *fiber.Ctx) error {
 			ScheduledTransitTime: dbutil.ToNullTime(departure),
 			OutfordeliveryTime:   dbutil.ToNullTime(outForDelivery),
 			ExpectedDeliveryTime: dbutil.ToNullTime(arrival),
-			SenderTimezone:       dbutil.ToNullString("Africa/Lagos"),
+			SenderTimezone:       dbutil.ToNullString(h.shipmentUC.Service.ResolveTimezone(req.SenderCountry)),
 			RecipientTimezone:    dbutil.ToNullString(h.shipmentUC.Service.ResolveTimezone(req.ReceiverCountry)),
 			SenderName:           dbutil.ToNullString(req.SenderName),
 			SenderPhone:          dbutil.ToNullString(req.SenderPhone),
@@ -175,8 +175,8 @@ func (h *ShipmentHandler) Create(c *fiber.Ctx) error {
 			RecipientAddress:     dbutil.ToNullString(req.ReceiverAddress),
 			Destination:          dbutil.ToNullString(req.ReceiverCountry),
 			CargoType:            dbutil.ToNullString(req.CargoType),
-			Weight:               dbutil.ToNullFloat64(req.Weight),
-			Cost:                 dbutil.ToNullFloat64(req.Cost),
+			Weight:               dbutil.FloatToNullNumeric(req.Weight),
+			Cost:                 dbutil.FloatToNullNumeric(req.Cost),
 			UpdatedAt:            dbutil.ToNullTime(now),
 		}
 
@@ -242,7 +242,7 @@ func (h *ShipmentHandler) UpdateStatus(c *fiber.Ctx) error {
 	// Send instant alert for manual admin overrides
 	if h.bots != nil {
 		if bot, err := h.bots.GetBot(companyID); err == nil {
-			notif.SendStatusAlertAsync(bot.GetWAClient(), h.cfg, bot.GetCompanyName(), ship.UserJid, ship.TrackingID, req.Status, ship.RecipientEmail.String)
+			notif.SendStatusAlert(c.Context(), bot.GetSender(), h.cfg, bot.GetCompanyName(), ship.UserJid, ship.TrackingID, req.Status, ship.RecipientEmail.String, ship.Destination.String)
 		}
 	}
 
@@ -382,8 +382,8 @@ func (h *ShipmentHandler) BulkCreateCSV(c *fiber.Ctx) error {
 			}
 			now := time.Now()
 
-			departure := h.shipmentUC.Service.CalculateDeparture(now, "Africa/Lagos")
-			arrival, outForDelivery := h.shipmentUC.Service.CalculateArrival(departure, m.SenderCountry, m.ReceiverCountry)
+			departure := h.shipmentUC.Service.CalculateDeparture(now, m.SenderCountry)
+			arrival, outForDelivery := h.shipmentUC.Service.CalculateArrival(departure, m.ReceiverCountry)
 
 			insertErr = h.shipmentUC.Create(c.Context(), companyID, db.CreateShipmentParams{
 				TrackingID:           trackingID,
@@ -393,7 +393,7 @@ func (h *ShipmentHandler) BulkCreateCSV(c *fiber.Ctx) error {
 				ScheduledTransitTime: dbutil.ToNullTime(departure),
 				OutfordeliveryTime:   dbutil.ToNullTime(outForDelivery),
 				ExpectedDeliveryTime: dbutil.ToNullTime(arrival),
-				SenderTimezone:       dbutil.ToNullString("Africa/Lagos"),
+				SenderTimezone:       dbutil.ToNullString(h.shipmentUC.Service.ResolveTimezone(m.SenderCountry)),
 				RecipientTimezone:    dbutil.ToNullString(h.shipmentUC.Service.ResolveTimezone(m.ReceiverCountry)),
 				SenderName:           dbutil.ToNullString(m.SenderName),
 				Origin:               dbutil.ToNullString(m.SenderCountry),
@@ -403,7 +403,7 @@ func (h *ShipmentHandler) BulkCreateCSV(c *fiber.Ctx) error {
 				RecipientAddress:     dbutil.ToNullString(m.ReceiverAddress),
 				Destination:          dbutil.ToNullString(m.ReceiverCountry),
 				CargoType:            dbutil.ToNullString(m.CargoType),
-				Weight:               dbutil.ToNullFloat64(m.Weight),
+				Weight:               dbutil.FloatToNullNumeric(m.Weight),
 				UpdatedAt:            dbutil.ToNullTime(now),
 			})
 
@@ -435,6 +435,10 @@ func (h *ShipmentHandler) BulkCreateCSV(c *fiber.Ctx) error {
 }
 
 // BulkUpdateStatusRequest for BulkUpdateStatus endpoint
+// maxBulkIDs is the maximum number of shipments that can be updated in a single bulk request.
+// This prevents resource exhaustion from unbounded DB queries and WhatsApp alert loops.
+const maxBulkIDs = 500
+
 type BulkUpdateStatusRequest struct {
 	IDs    []string `json:"ids" validate:"required,min=1"`
 	Status string   `json:"status" validate:"required"`
@@ -456,6 +460,12 @@ func (h *ShipmentHandler) BulkUpdateStatus(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
+	if len(req.IDs) > maxBulkIDs {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": fmt.Sprintf("Too many IDs. Maximum is %d per request.", maxBulkIDs),
+		})
+	}
+
 	if err := h.shipmentUC.BulkUpdateStatus(c.Context(), companyID, req.IDs, req.Status); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -475,7 +485,7 @@ func (h *ShipmentHandler) BulkUpdateStatus(c *fiber.Ctx) error {
 				defer cancel()
 				for _, id := range ids {
 					if ship, err := shipUC.Track(ctx, companyID, id); err == nil {
-						notif.SendStatusAlert(ctx, bot.GetWAClient(), cfg, bot.GetCompanyName(), ship.UserJid, ship.TrackingID, status, ship.RecipientEmail.String)
+						notif.SendStatusAlert(ctx, bot.GetSender(), cfg, bot.GetCompanyName(), ship.UserJid, ship.TrackingID, status, ship.RecipientEmail.String, ship.Destination.String)
 					}
 				}
 			}()

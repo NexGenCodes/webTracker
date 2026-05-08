@@ -1,9 +1,11 @@
 package auth
 
 import (
-	"strings"
-	"os"
 	"fmt"
+	"os"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
@@ -11,13 +13,40 @@ import (
 
 // JWTAuth returns a middleware that validates a JWT token from cookies or Authorization header
 func JWTAuth(publicKeyPath string) fiber.Handler {
-	// Read public key once (or lazily)
 	var publicKey interface{}
-	if keyBytes, err := os.ReadFile(publicKeyPath); err == nil {
-		if key, err := jwt.ParseECPublicKeyFromPEM(keyBytes); err == nil {
-			publicKey = key
+	var mu sync.RWMutex
+	var lastAttempt time.Time
+
+	loadKey := func() interface{} {
+		mu.RLock()
+		if publicKey != nil {
+			defer mu.RUnlock()
+			return publicKey
 		}
+		mu.RUnlock()
+
+		mu.Lock()
+		defer mu.Unlock()
+		if publicKey != nil {
+			return publicKey
+		}
+
+		// Throttle disk reads to once every 10 seconds if file is missing
+		if time.Since(lastAttempt) < 10*time.Second {
+			return nil
+		}
+		lastAttempt = time.Now()
+
+		if keyBytes, err := os.ReadFile(publicKeyPath); err == nil {
+			if key, err := jwt.ParseECPublicKeyFromPEM(keyBytes); err == nil {
+				publicKey = key
+			}
+		}
+		return publicKey
 	}
+
+	// Try loading initially
+	loadKey()
 
 	return func(c *fiber.Ctx) error {
 		path := c.Path()
@@ -56,18 +85,12 @@ func JWTAuth(publicKeyPath string) fiber.Handler {
 			if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
 				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 			}
-			if publicKey == nil {
-				// Try reloading just in case
-				if keyBytes, err := os.ReadFile(publicKeyPath); err == nil {
-					if key, err := jwt.ParseECPublicKeyFromPEM(keyBytes); err == nil {
-						publicKey = key
-					}
-				}
-			}
-			if publicKey == nil {
+			
+			key := loadKey()
+			if key == nil {
 				return nil, fmt.Errorf("public key not loaded")
 			}
-			return publicKey, nil
+			return key, nil
 		})
 
 		if err != nil || !token.Valid {

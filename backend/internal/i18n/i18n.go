@@ -43,6 +43,17 @@ var Translations = map[Language]map[string]string{
 		"MSG_EDIT_SUCCESS":     "✅ *Shipment Details Updated*\n\n🆔 *%s*\n\n📝 *Modified Fields:*\n• %s\n\n━━━━━━━━━━━━━━━━━━━━━━━\n_Please wait while we generate your updated digital receipt..._",
 		"MSG_STATS_HEADER":     "📊 *%s System Metrics*",
 		"MSG_STATUS_DASHBOARD": "🖥️ *Operations Dashboard*",
+
+		"email_delivery_title":      "Notice of Arrival",
+		"email_delivery_greeting":   "Hello",
+		"email_delivery_body1":      "This is an official notification to inform you that your package (Tracking ID: <strong>%s</strong>) has successfully arrived in your country.",
+		"email_delivery_body2":      "It is currently securely held at our local depot. One of our regional dispatchers will be contacting you shortly to coordinate the final delivery details to your address.",
+		"email_delivery_lbl_track":  "Tracking ID:",
+		"email_delivery_lbl_status": "Status:",
+		"email_delivery_val_status": "ARRIVED AT DESTINATION",
+		"email_delivery_lbl_date":   "Arrival Date:",
+		"email_delivery_footer1":    "Thank you for choosing %s. We appreciate your patience during this final transit phase.",
+		"email_delivery_footer2":    "This is an automated message. Please await further contact from our local agent.",
 	},
 	PT: {
 		"receipt_receiver":    "DESTINATÁRIO",
@@ -72,6 +83,17 @@ var Translations = map[Language]map[string]string{
 		"MSG_EDIT_SUCCESS":     "✅ *Detalhes do Envio Atualizados*\n\n🆔 *%s*\n\n📝 *Campos Modificados:*\n• %s\n\n━━━━━━━━━━━━━━━━━━━━━━━\n_Por favor, aguarde enquanto geramos seu recibo digital atualizado..._",
 		"MSG_STATS_HEADER":     "📊 *Métricas do Sistema %s*",
 		"MSG_STATUS_DASHBOARD": "🖥️ *Painel de Operações*",
+
+		"email_delivery_title":      "Aviso de Chegada",
+		"email_delivery_greeting":   "Olá",
+		"email_delivery_body1":      "Esta é uma notificação oficial para informar que seu pacote (ID de Rastreamento: <strong>%s</strong>) chegou com sucesso ao seu país.",
+		"email_delivery_body2":      "Atualmente, está guardado de forma segura em nosso depósito local. Um de nossos despachantes regionais entrará em contato em breve para coordenar os detalhes finais de entrega no seu endereço.",
+		"email_delivery_lbl_track":  "ID de Rastreamento:",
+		"email_delivery_lbl_status": "Status:",
+		"email_delivery_val_status": "CHEGOU AO DESTINO",
+		"email_delivery_lbl_date":   "Data de Chegada:",
+		"email_delivery_footer1":    "Obrigado por escolher a %s. Agradecemos sua paciência durante esta fase final de trânsito.",
+		"email_delivery_footer2":    "Esta é uma mensagem automática. Por favor, aguarde o contato do nosso agente local.",
 	},
 	ES: {
 		"receipt_receiver":    "DESTINATARIO",
@@ -101,6 +123,17 @@ var Translations = map[Language]map[string]string{
 		"MSG_EDIT_SUCCESS":     "✅ *Detalles de Envío Actualizados*\n\n🆔 *%s*\n\n📝 *Campos Modificados:*\n• %s\n\n━━━━━━━━━━━━━━━━━━━━━━━\n_Por favor, espere mientras generamos su recibo digital actualizado..._",
 		"MSG_STATS_HEADER":     "📊 *Métricas del Sistema %s*",
 		"MSG_STATUS_DASHBOARD": "🖥️ *Panel de Operaciones*",
+
+		"email_delivery_title":      "Aviso de Llegada",
+		"email_delivery_greeting":   "Hola",
+		"email_delivery_body1":      "Esta es una notificación oficial para informarle que su paquete (ID de Rastreo: <strong>%s</strong>) ha llegado con éxito a su país.",
+		"email_delivery_body2":      "Actualmente se encuentra asegurado en nuestro depósito local. Uno de nuestros despachadores regionales se comunicará con usted en breve para coordinar los detalles finales de entrega en su dirección.",
+		"email_delivery_lbl_track":  "ID de Rastreo:",
+		"email_delivery_lbl_status": "Estado:",
+		"email_delivery_val_status": "LLEGÓ AL DESTINO",
+		"email_delivery_lbl_date":   "Fecha de Llegada:",
+		"email_delivery_footer1":    "Gracias por elegir %s. Apreciamos su paciencia durante esta fase final de tránsito.",
+		"email_delivery_footer2":    "Este es un mensaje automatizado. Por favor, espere más contacto de nuestro agente local.",
 	},
 	DE: {
 		"receipt_receiver":    "EMPFÄNGER",
@@ -130,6 +163,17 @@ var Translations = map[Language]map[string]string{
 		"MSG_EDIT_SUCCESS":     "✅ *Sendungsdetails Aktualisiert*\n\n🆔 *%s*\n\n📝 *Geänderte Felder:*\n• %s\n\n━━━━━━━━━━━━━━━━━━━━━━━\n_Bitte warten Sie, während wir Ihre aktualisierte digitale Quittung generieren..._",
 		"MSG_STATS_HEADER":     "📊 *%s Systemmetriken*",
 		"MSG_STATUS_DASHBOARD": "🖥️ *Operations-Dashboard*",
+
+		"email_delivery_title":      "Ankunftsbenachrichtigung",
+		"email_delivery_greeting":   "Hallo",
+		"email_delivery_body1":      "Dies ist eine offizielle Benachrichtigung, um Sie darüber zu informieren, dass Ihr Paket (Tracking-ID: <strong>%s</strong>) erfolgreich in Ihrem Land angekommen ist.",
+		"email_delivery_body2":      "Es wird derzeit sicher in unserem lokalen Depot aufbewahrt. Einer unserer regionalen Disponenten wird sich in Kürze mit Ihnen in Verbindung setzen, um die endgültigen Lieferdetails an Ihre Adresse zu koordinieren.",
+		"email_delivery_lbl_track":  "Tracking-ID:",
+		"email_delivery_lbl_status": "Status:",
+		"email_delivery_val_status": "AM ZIEL ANGEKOMMEN",
+		"email_delivery_lbl_date":   "Ankunftsdatum:",
+		"email_delivery_footer1":    "Vielen Dank, dass Sie %s gewählt haben. Wir schätzen Ihre Geduld während dieser letzten Transitphase.",
+		"email_delivery_footer2":    "Dies ist eine automatisierte Nachricht. Bitte warten Sie auf weiteren Kontakt von unserem lokalen Agenten.",
 	},
 }
 
@@ -165,4 +209,18 @@ func GetDateFormat(lang Language) string {
 	default:
 		return "02/01/2006"
 	}
+}
+
+func GetLanguageForCountry(country string) Language {
+	c := strings.ToLower(strings.TrimSpace(country))
+	if strings.Contains(c, "brazil") || strings.Contains(c, "brasil") || strings.Contains(c, "portugal") || strings.Contains(c, "angola") || strings.Contains(c, "mozambique") {
+		return PT
+	}
+	if strings.Contains(c, "spain") || strings.Contains(c, "españa") || strings.Contains(c, "mexico") || strings.Contains(c, "colombia") || strings.Contains(c, "argentina") || strings.Contains(c, "chile") || strings.Contains(c, "peru") || strings.Contains(c, "venezuela") || strings.Contains(c, "ecuador") {
+		return ES
+	}
+	if strings.Contains(c, "germany") || strings.Contains(c, "deutschland") || strings.Contains(c, "austria") || strings.Contains(c, "switzerland") {
+		return DE
+	}
+	return EN
 }

@@ -25,9 +25,10 @@ func Connect(dsn string) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to open pgx connection: %w", err)
 	}
 
-	// Connection pool size optimized for multi-tenant worker environment via Supabase Pooler
-	db.SetMaxOpenConns(50)
-	db.SetMaxIdleConns(15)
+	// Connection pool sized to match Asynq worker concurrency (150) + API headroom (20).
+	// Previous value of 50 caused connection starvation when all 150 workers hit the DB.
+	db.SetMaxOpenConns(170)
+	db.SetMaxIdleConns(30)
 	db.SetConnMaxLifetime(30 * time.Minute)
 	db.SetConnMaxIdleTime(5 * time.Minute)
 
