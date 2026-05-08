@@ -51,8 +51,11 @@ func (w *Worker) Start() {
 	defer w.WG.Done()
 	logger.Info().Int("worker_id", w.ID).Msg("Worker started")
 
-	sem := make(chan struct{}, 10) // Bounded concurrency: max 10 concurrent jobs
-
+	poolSize := w.Cfg.WorkerPoolSize
+	if poolSize <= 0 {
+		poolSize = 10
+	}
+	sem := make(chan struct{}, poolSize) // Bounded concurrency based on config
 	for job := range w.Jobs {
 		sem <- struct{}{}
 		go func(j models.Job) {
@@ -84,7 +87,11 @@ func (w *Worker) process(job models.Job) {
 		remaining  int64 = -1 // -1 means not checked yet
 	)
 
-	g, gctx := errgroup.WithContext(w.Context)
+	// Add a 15 second timeout for all operations inside process
+	processCtx, processCancel := context.WithTimeout(w.Context, 15*time.Second)
+	defer processCancel()
+
+	g, gctx := errgroup.WithContext(processCtx)
 
 	// A. User Language
 	g.Go(func() error {
@@ -122,7 +129,7 @@ func (w *Worker) process(job models.Job) {
 	defer sender.SetTyping(job.ChatJID, false)
 
 	// 2. Check for Commands
-	ctx := utils.WithValues(w.Context, job.SenderJID.String(), job.SenderPhone, job.IsAdmin, job.ChatJID.String(), job.MessageID, job.Text)
+	ctx := utils.WithValues(processCtx, job.SenderJID.String(), job.SenderPhone, job.IsAdmin, job.ChatJID.String(), job.MessageID, job.Text)
 
 	botPhone := ""
 	wa := bot.GetWAClient()
@@ -149,7 +156,7 @@ func (w *Worker) process(job models.Job) {
 	// X. Extract Document Text (if any)
 	if job.RawMessage != nil && job.RawMessage.Message.GetDocumentMessage() != nil {
 		doc := job.RawMessage.Message.GetDocumentMessage()
-		data, err := wa.Download(w.Context, doc)
+		data, err := wa.Download(processCtx, doc)
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to download document message")
 		} else {
@@ -179,7 +186,7 @@ func (w *Worker) process(job models.Job) {
 	// BUT the regex struggled to extract all the required fields.
 	// If it's just a partial message, we skip AI and immediately report the missing fields.
 	if isManifest && (m.ReceiverName == "" || m.ReceiverPhone == "" || m.ReceiverAddress == "" || m.SenderName == "" || m.ReceiverCountry == "") {
-		aiCtx, aiCancel := context.WithTimeout(w.Context, 7*time.Second)
+		aiCtx, aiCancel := context.WithTimeout(processCtx, 7*time.Second)
 		defer aiCancel()
 		if aiM, err := parser.ParseAI(aiCtx, job.Text, w.Cfg.GeminiAPIKey); err == nil {
 			m.Merge(aiM)
@@ -252,7 +259,7 @@ func (w *Worker) process(job models.Job) {
 	}
 
 	//  Deduplication & Billing Check in Parallel
-	g, gctx = errgroup.WithContext(w.Context)
+	g, gctx = errgroup.WithContext(processCtx)
 
 	g.Go(func() error {
 		var err error
@@ -310,7 +317,7 @@ func (w *Worker) process(job models.Job) {
 		Cost:                 sql.NullFloat64{Float64: newShipment.Cost, Valid: true},
 	}
 
-	trackingID, err := w.ShipmentUC.CreateWithPrefix(w.Context, job.CompanyID, dbShip, bot.GetPrefix())
+	trackingID, err := w.ShipmentUC.CreateWithPrefix(processCtx, job.CompanyID, dbShip, bot.GetPrefix())
 	if err != nil {
 		logger.GlobalVitals.IncInsertFailure()
 		logger.Error().Err(err).Str("jid", job.SenderJID.String()).Msg("Failed to insert shipment information")

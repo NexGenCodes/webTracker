@@ -78,15 +78,20 @@ func HandleEvent(bot *BotInstance, evt interface{}, queue chan<- models.Job, cfg
 
 	switch v := evt.(type) {
 	case *events.JoinedGroup:
-		logger.Info().Str("chat", v.JID.String()).Msg("[RBAC EVENT] Joined group, re-verifying authority")
-		verifyGroupAuthority(bot, configUC, v.JID)
+		go func() {
+			logger.Info().Str("chat", v.JID.String()).Msg("[RBAC EVENT] Joined group, re-verifying authority")
+			VerifyGroupAuthority(bot, configUC, v.JID)
+		}()
 
 	case *events.GroupInfo:
-		logger.Info().Str("chat", v.JID.String()).Msg("[RBAC EVENT] Group info updated, re-verifying authority")
-		verifyGroupAuthority(bot, configUC, v.JID)
+		go func() {
+			logger.Info().Str("chat", v.JID.String()).Msg("[RBAC EVENT] Group info updated, re-verifying authority")
+			VerifyGroupAuthority(bot, configUC, v.JID)
+		}()
 
 	case *events.Message:
-		checkCacheCleanup(bot)
+		go func(v *events.Message) {
+			checkCacheCleanup(bot)
 		text := ""
 		if v.Message.GetConversation() != "" {
 			text = v.Message.GetConversation()
@@ -146,7 +151,7 @@ func HandleEvent(bot *BotInstance, evt interface{}, queue chan<- models.Job, cfg
 				isAuthorized, _ = val.(bool)
 			} else {
 				// Not in memory? Re-verify and populate cache
-				isAuthorized = verifyGroupAuthority(bot, configUC, chatJID)
+				isAuthorized = VerifyGroupAuthority(bot, configUC, chatJID)
 			}
 
 			// DIAGNOSTIC LOG (As requested: non-blocking, just log)
@@ -169,7 +174,7 @@ func HandleEvent(bot *BotInstance, evt interface{}, queue chan<- models.Job, cfg
 								isSenderAdmin = isAdminEntry
 							} else {
 								// If not in cache, re-verify (group might have changed)
-								verifyGroupAuthority(bot, configUC, chatJID)
+								VerifyGroupAuthority(bot, configUC, chatJID)
 								if groupAdminsNew, okNew := bot.ParticipantsCache.Load(chatJID.String()); okNew {
 									if newAdmins, ok := groupAdminsNew.(map[string]bool); ok {
 										isSenderAdmin = newAdmins[senderBare]
@@ -179,7 +184,7 @@ func HandleEvent(bot *BotInstance, evt interface{}, queue chan<- models.Job, cfg
 						}
 					} else {
 						// No cache? Re-verify
-						verifyGroupAuthority(bot, configUC, chatJID)
+						VerifyGroupAuthority(bot, configUC, chatJID)
 						if groupAdminsNew, okNew := bot.ParticipantsCache.Load(chatJID.String()); okNew {
 							if newAdmins, ok := groupAdminsNew.(map[string]bool); ok {
 								isSenderAdmin = newAdmins[senderBare]
@@ -230,7 +235,7 @@ func HandleEvent(bot *BotInstance, evt interface{}, queue chan<- models.Job, cfg
 			logger.Debug().Str("sender", senderPhone).Str("botPhone", botPhone).Msg("[RBAC DEBUG] Account identified as REGULAR USER")
 		}
 
-		queue <- models.Job{
+		jobPayload := models.Job{
 			CompanyID:   companyID,
 			ChatJID:     v.Info.Chat,
 			SenderJID:   v.Info.Sender,
@@ -240,15 +245,22 @@ func HandleEvent(bot *BotInstance, evt interface{}, queue chan<- models.Job, cfg
 			IsAdmin:     isAdmin,
 			RawMessage:  v,
 		}
+
+		// Blocking queue push: safely applies backpressure without stalling the whatsmeow socket reader
+		queue <- jobPayload
+	}(v)
 	}
 }
 
-// verifyGroupAuthority performs a real-time check. Updates both DB and in-memory cache.
-func verifyGroupAuthority(bot *BotInstance, configUC models.ConfigUsecase, chat types.JID) bool {
+// VerifyGroupAuthority performs a real-time check. Updates both DB and in-memory cache.
+func VerifyGroupAuthority(bot *BotInstance, configUC models.ConfigUsecase, chat types.JID) bool {
 	client := bot.WA
 	companyID := bot.CompanyID
 
-	resp, err := client.GetGroupInfo(context.Background(), chat)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	resp, err := client.GetGroupInfo(ctx, chat)
 	if err != nil {
 		logger.Error().Err(err).Str("chat", chat.String()).Msg("[RBAC EVENT] Failed to fetch group info")
 		return false
