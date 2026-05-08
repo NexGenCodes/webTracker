@@ -2,7 +2,7 @@
 
 import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { adminLoginAction } from '@/app/actions/auth';
+import { adminLoginAction } from '@/actions/auth';
 import { ShieldCheck, Lock, Mail, Loader2, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 

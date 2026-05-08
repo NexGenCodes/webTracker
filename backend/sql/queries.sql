@@ -13,7 +13,7 @@ SELECT * FROM companies WHERE id = $1;
 
 
 -- name: UpdateCompanySettings :exec
-UPDATE companies SET name = $2, admin_email = $3, logo_url = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $1;
+UPDATE companies SET name = $2, admin_email = $3, logo_url = $4, brand_color = $5, tracking_prefix = $6, updated_at = CURRENT_TIMESTAMP WHERE id = $1;
 
 -- name: UpdateCompanyAuthStatus :exec
 UPDATE companies SET auth_status = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1;

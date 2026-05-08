@@ -129,3 +129,69 @@ export async function getWhatsAppQR(companyId: string): Promise<ActionResult<{ p
         return { success: false, error: 'Network error. Please check your connection.' };
     }
 }
+
+export interface CompanySettings {
+    name: string;
+    admin_email: string;
+    logo_url: string;
+    brand_color: string;
+    tracking_prefix: string;
+}
+
+export async function getCompanySettings(companyId: string): Promise<ActionResult<CompanySettings>> {
+    try {
+        const { createClient } = await import('@/lib/supabase/server');
+        const supabase = await createClient();
+
+        const { data, error } = await supabase
+            .from('companies')
+            .select('name, admin_email, logo_url, brand_color, tracking_prefix')
+            .eq('id', companyId)
+            .single();
+
+        if (error || !data) {
+            return { success: false, error: error?.message || 'Failed to fetch settings.' };
+        }
+
+        return {
+            success: true,
+            data: {
+                name: data.name ?? '',
+                admin_email: data.admin_email ?? '',
+                logo_url: data.logo_url ?? '',
+                brand_color: data.brand_color ?? '#6366f1',
+                tracking_prefix: data.tracking_prefix ?? '',
+            },
+        };
+    } catch {
+        return { success: false, error: 'Failed to load settings.' };
+    }
+}
+
+export async function updateCompanySettings(companyId: string, settings: CompanySettings): Promise<ActionResult> {
+    try {
+        const session = await getServerSession();
+        if (!session.user?.company_id || session.user.company_id !== companyId) {
+            return { success: false, error: 'Unauthorized.' };
+        }
+
+        const res = await fetch(`${getApiUrl()}/api/company/settings`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session.token}`,
+            },
+            body: JSON.stringify(settings),
+        });
+
+        const resData = await res.json();
+        if (!res.ok) {
+            return { success: false, error: resData.error || 'Failed to update settings.' };
+        }
+
+        return { success: true };
+    } catch {
+        return { success: false, error: 'Network error. Please check your connection.' };
+    }
+}
+

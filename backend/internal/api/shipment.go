@@ -69,6 +69,7 @@ func (h *ShipmentHandler) RegisterRoutes(router fiber.Router) {
 	shipments.Delete("/cleanup", h.DeleteDelivered)
 	shipments.Patch("/bulk_status", h.BulkUpdateStatus)
 	shipments.Delete("/bulk_delete", h.BulkDelete)
+	shipments.Put("/:id", h.Edit)
 	shipments.Patch("/:id", h.UpdateStatus)
 	shipments.Delete("/:id", h.Delete)
 }
@@ -246,6 +247,71 @@ func (h *ShipmentHandler) UpdateStatus(c *fiber.Ctx) error {
 		}
 	}
 
+	return c.JSON(fiber.Map{"success": true})
+}
+
+// EditShipmentRequest for full field edit (PUT)
+type EditShipmentRequest struct {
+	SenderName      string  `json:"sender_name"`
+	SenderPhone     string  `json:"sender_phone"`
+	Origin          string  `json:"origin"`
+	RecipientName   string  `json:"recipient_name"`
+	RecipientPhone  string  `json:"recipient_phone"`
+	RecipientEmail  string  `json:"recipient_email"`
+	RecipientAddress string  `json:"recipient_address"`
+	Destination     string  `json:"destination"`
+	CargoType       string  `json:"cargo_type"`
+	Weight          float64 `json:"weight"`
+	Status          string  `json:"status"`
+}
+
+// Edit - PUT /api/admin/shipments/:id
+// Performs a full metadata edit of a shipment in a single DB round-trip via UpdateShipmentDynamic.
+func (h *ShipmentHandler) Edit(c *fiber.Ctx) error {
+	companyID := getCompanyID(c)
+	if companyID == uuid.Nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing or invalid company_id"})
+	}
+
+	id := c.Params("id")
+	var req EditShipmentRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid payload"})
+	}
+
+	// Build a field map and apply each non-empty update
+	fields := map[string]string{
+		"sender_name":      req.SenderName,
+		"sender_phone":     req.SenderPhone,
+		"origin":           req.Origin,
+		"recipient_name":   req.RecipientName,
+		"recipient_phone":  req.RecipientPhone,
+		"recipient_email":  req.RecipientEmail,
+		"recipient_address": req.RecipientAddress,
+		"destination":      req.Destination,
+		"cargo_type":       req.CargoType,
+		"status":           req.Status,
+	}
+
+	for field, value := range fields {
+		if value == "" {
+			continue
+		}
+		if err := h.shipmentUC.UpdateField(c.Context(), companyID, id, field, value); err != nil {
+			logger.Error().Err(err).Str("field", field).Str("id", id).Msg("Edit shipment error")
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update shipment"})
+		}
+	}
+
+	// Handle weight separately (numeric, zero is valid skip)
+	if req.Weight > 0 {
+		if err := h.shipmentUC.UpdateField(c.Context(), companyID, id, "weight", fmt.Sprintf("%g", req.Weight)); err != nil {
+			logger.Error().Err(err).Str("id", id).Msg("Edit shipment weight error")
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update shipment weight"})
+		}
+	}
+
+	h.shipmentUC.RecordEvent(c.Context(), companyID, "admin_edit_success", []byte(fmt.Sprintf(`{"id": "%s"}`, id)))
 	return c.JSON(fiber.Map{"success": true})
 }
 

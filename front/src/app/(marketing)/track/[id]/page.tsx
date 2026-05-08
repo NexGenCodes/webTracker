@@ -1,5 +1,5 @@
 import { Metadata } from 'next';
-import { getTracking } from '@/app/actions/shipment';
+import { getTrackingAction } from '@/actions/shipment';
 import { Suspense } from 'react';
 import { TrackContent } from '@/components/tracking/TrackContent';
 
@@ -12,7 +12,7 @@ export async function generateMetadata(
 ): Promise<Metadata> {
   const { id: rawId } = await params;
   const id = rawId.toUpperCase();
-  const shipment = await getTracking(id);
+  const shipment = await getTrackingAction(id);
 
   if (!shipment) {
     return {

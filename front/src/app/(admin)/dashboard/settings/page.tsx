@@ -4,20 +4,19 @@ import { useState, useEffect } from 'react';
 import { Settings, Loader2, CheckCircle2, UserCircle2, AlertTriangle, Trash2, Unplug } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useMultiTenant } from '@/components/providers/MultiTenantProvider';
-import { createClient } from '@/lib/supabase/client';
-import { disconnectWhatsApp, deleteAccount } from '@/app/actions/setup';
-import { logoutAction } from '@/app/actions/auth';
+import { disconnectWhatsApp, deleteAccount, getCompanySettings, updateCompanySettings } from '@/actions/setup';
+import { logoutAction } from '@/actions/auth';
 import toast from 'react-hot-toast';
 
 export default function SettingsPage() {
     const { companyId, loading, user } = useMultiTenant();
 
-    const [settingsForm, setSettingsForm] = useState({ 
-        name: '', 
-        admin_email: '', 
-        logo_url: '', 
+    const [settingsForm, setSettingsForm] = useState({
+        name: '',
+        admin_email: '',
+        logo_url: '',
         brand_color: '#6366f1',
-        tracking_prefix: '' 
+        tracking_prefix: ''
     });
     const [isSaving, setIsSaving] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
@@ -29,55 +28,39 @@ export default function SettingsPage() {
     const [disconnectConfirmText, setDisconnectConfirmText] = useState('');
     const [companyLoading, setCompanyLoading] = useState(true);
 
-    const supabase = createClient();
-
     useEffect(() => {
         if (!companyId) return;
 
         const fetchCompanyData = async () => {
-            try {
-                const { data, error } = await supabase
-                    .from('companies')
-                    .select('name, admin_email, logo_url, brand_color, tracking_prefix')
-                    .eq('id', companyId)
-                    .single();
-
-                if (data && !error) {
-                    setSettingsForm({
-                        name: data.name || '',
-                        admin_email: data.admin_email || '',
-                        logo_url: data.logo_url || '',
-                        brand_color: data.brand_color || '#6366f1',
-                        tracking_prefix: data.tracking_prefix || ''
-                    });
-                }
-            } catch (err) {
-                console.error('Error fetching settings:', err);
-            } finally {
-                setCompanyLoading(false);
+            const result = await getCompanySettings(companyId);
+            if (result.success && result.data) {
+                setSettingsForm({
+                    name: result.data.name || '',
+                    admin_email: result.data.admin_email || '',
+                    logo_url: result.data.logo_url || '',
+                    brand_color: result.data.brand_color || '#6366f1',
+                    tracking_prefix: result.data.tracking_prefix || '',
+                });
+            } else {
+                toast.error(result.error || 'Failed to load settings.');
             }
+            setCompanyLoading(false);
         };
 
         fetchCompanyData();
-    }, [companyId, supabase]);
+    }, [companyId]);
 
     const handleSettingsSave = async () => {
+        if (!companyId) return;
         setIsSaving(true);
-        try {
-            const { error } = await supabase
-                .from('companies')
-                .update(settingsForm)
-                .eq('id', companyId);
-
-            if (error) throw error;
+        const result = await updateCompanySettings(companyId, settingsForm);
+        if (result.success) {
             setSaveSuccess(true);
             setTimeout(() => setSaveSuccess(false), 3000);
-        } catch (error) {
-            console.error('Error saving settings:', error);
-            alert("Failed to save settings");
-        } finally {
-            setIsSaving(false);
+        } else {
+            toast.error(result.error || 'Failed to save settings.');
         }
+        setIsSaving(false);
     };
 
     const confirmName = settingsForm.name || settingsForm.admin_email || '';
@@ -90,7 +73,7 @@ export default function SettingsPage() {
 
         setIsDisconnecting(true);
         if (!companyId) return;
-        
+
         const result = await disconnectWhatsApp(companyId);
         if (result.success) {
             toast.success("Bot disconnected successfully.");
@@ -106,11 +89,11 @@ export default function SettingsPage() {
     const handleDeleteAccount = async () => {
         setIsDeleting(true);
         if (!companyId) return;
-        
+
         const result = await deleteAccount(companyId);
         if (result.success) {
             toast.success("Account deleted. Redirecting...");
-            
+
             // Clear session and force full reload to auth
             await logoutAction();
             window.location.href = '/auth';

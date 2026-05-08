@@ -101,6 +101,7 @@ type ConfigUsecase interface {
 	GetPlatformAnalytics(ctx context.Context) (db.GetPlatformAnalyticsRow, error)
 	UpdateCompanyPlan(ctx context.Context, companyID uuid.UUID, planType string) error
 	UpdateCompanySubscription(ctx context.Context, companyID uuid.UUID, subStatus string, expiry time.Time) error
+	UpdateCompanySettings(ctx context.Context, companyID uuid.UUID, name, adminEmail, logoUrl, brandColor, trackingPrefix string) error
 	GetCompanyPayments(ctx context.Context, companyID uuid.UUID, limit, offset int32) ([]db.Payment, error)
 }
 

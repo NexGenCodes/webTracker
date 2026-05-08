@@ -2,7 +2,7 @@
 
 import React, { useState, useTransition } from 'react';
 import { Smartphone, Unplug, Loader2, AlertTriangle, X } from 'lucide-react';
-import { disconnectWhatsApp } from '@/app/actions/setup';
+import { disconnectWhatsApp } from '@/actions/setup';
 import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 

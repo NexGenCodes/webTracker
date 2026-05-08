@@ -1325,14 +1325,16 @@ func (q *Queries) UpdateCompanyPlan(ctx context.Context, arg UpdateCompanyPlanPa
 }
 
 const updateCompanySettings = `-- name: UpdateCompanySettings :exec
-UPDATE companies SET name = $2, admin_email = $3, logo_url = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $1
+UPDATE companies SET name = $2, admin_email = $3, logo_url = $4, brand_color = $5, tracking_prefix = $6, updated_at = CURRENT_TIMESTAMP WHERE id = $1
 `
 
 type UpdateCompanySettingsParams struct {
-	ID         uuid.UUID      `json:"id"`
-	Name       sql.NullString `json:"name"`
-	AdminEmail string         `json:"admin_email"`
-	LogoUrl    sql.NullString `json:"logo_url"`
+	ID             uuid.UUID      `json:"id"`
+	Name           sql.NullString `json:"name"`
+	AdminEmail     string         `json:"admin_email"`
+	LogoUrl        sql.NullString `json:"logo_url"`
+	BrandColor     sql.NullString `json:"brand_color"`
+	TrackingPrefix sql.NullString `json:"tracking_prefix"`
 }
 
 func (q *Queries) UpdateCompanySettings(ctx context.Context, arg UpdateCompanySettingsParams) error {
@@ -1341,6 +1343,8 @@ func (q *Queries) UpdateCompanySettings(ctx context.Context, arg UpdateCompanySe
 		arg.Name,
 		arg.AdminEmail,
 		arg.LogoUrl,
+		arg.BrandColor,
+		arg.TrackingPrefix,
 	)
 	return err
 }

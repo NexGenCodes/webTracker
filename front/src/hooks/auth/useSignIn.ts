@@ -3,7 +3,7 @@ import { useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { signInSchema, SignInForm } from '@/lib/validations/auth';
-import { loginAction } from '@/app/actions/auth';
+import { loginAction } from '@/actions/auth';
 import { useMultiTenant } from '@/components/providers/MultiTenantProvider';
 import { useRouter } from 'next/navigation';
 

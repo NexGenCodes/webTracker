@@ -12,7 +12,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { MobileNavOverlay } from './MobileNavOverlay';
 
-import { logoutAction, checkAuthAction } from '@/app/actions/auth';
+import { logoutAction, checkAuthAction } from '@/actions/auth';
 
 const dashboardNavLinks = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },

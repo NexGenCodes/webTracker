@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import { getPlansAction, getPaymentHistoryAction } from '@/app/actions/billing';
+import { getPlansAction, getPaymentHistoryAction } from '@/actions/billing';
 import BillingClient from '@/components/billing/BillingClient';
 import { Loader2 } from 'lucide-react';
 import { getServerSession } from '@/lib/auth';
@@ -32,9 +32,9 @@ export default async function BillingPage() {
                 <Loader2 className="w-8 h-8 text-accent animate-spin" />
             </div>
         }>
-            <BillingClient 
-                initialPlans={plans} 
-                initialPayments={payments} 
+            <BillingClient
+                initialPlans={plans}
+                initialPayments={payments}
                 companyData={companyData}
             />
         </Suspense>

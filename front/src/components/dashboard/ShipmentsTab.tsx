@@ -10,7 +10,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
-import { deleteShipmentAction, updateShipmentAction } from '@/app/actions/shipment';
+import { bulkDeleteAction, bulkStatusAction, deleteShipmentAction } from '@/actions/shipment';
 import { ShipmentModal, ShipmentFormValues } from './ShipmentModal';
 import toast from 'react-hot-toast';
 
@@ -57,11 +57,7 @@ export function ShipmentsTab({ companyId, jwt }: ShipmentsTabProps) {
             }
 
             const { data, error, count } = await query;
-
             if (error) throw error;
-
-            // Normalize field names if they come from DB as snake_case but components expect snake_case (which we used in Modal)
-            // Actually the Modal uses snake_case because of how DB typically stores them.
             return { shipments: data, total: count || 0 };
         },
         enabled: !!companyId,
@@ -69,10 +65,10 @@ export function ShipmentsTab({ companyId, jwt }: ShipmentsTabProps) {
 
     const totalPages = Math.ceil((data?.total || 0) / pageSize);
 
-    const handleDelete = async (id: string) => {
+    const handleDelete = async (trackingId: string) => {
         if (!confirm('Are you sure you want to delete this shipment?')) return;
 
-        const result = await deleteShipmentAction(id, companyId);
+        const result = await deleteShipmentAction(trackingId);
         if (result.success) {
             toast.success('Shipment deleted.');
             refetch();
@@ -95,7 +91,8 @@ export function ShipmentsTab({ companyId, jwt }: ShipmentsTabProps) {
         if (selectedIds.length === (data?.shipments?.length || 0)) {
             setSelectedIds([]);
         } else {
-            setSelectedIds(data?.shipments?.map((s: Record<string, unknown>) => s.id as string) || []);
+            // tracking_id is the primary key — shipment table has no `id` column
+            setSelectedIds(data?.shipments?.map((s: Record<string, unknown>) => s.tracking_id as string) || []);
         }
     };
 
@@ -108,19 +105,27 @@ export function ShipmentsTab({ companyId, jwt }: ShipmentsTabProps) {
     const handleBulkDelete = async () => {
         if (!confirm(`Are you sure you want to delete ${selectedIds.length} shipments?`)) return;
 
-        const results = await Promise.all(selectedIds.map(id => deleteShipmentAction(id, companyId)));
-        const successCount = results.filter(r => r.success).length;
-
-        toast.success(`Successfully deleted ${successCount} shipments.`);
+        // Single Go API request — not N individual calls
+        const result = await bulkDeleteAction(selectedIds);
+        if (result.success) {
+            const data = result.data as Record<string, unknown>;
+            toast.success(`Successfully deleted ${data?.deleted ?? selectedIds.length} shipments.`);
+        } else {
+            toast.error(result.error || 'Bulk delete failed.');
+        }
         setSelectedIds([]);
         refetch();
     };
 
     const handleBulkStatusUpdate = async (status: string) => {
-        const results = await Promise.all(selectedIds.map(id => updateShipmentAction(id, companyId, { status })));
-        const successCount = results.filter(r => r.success).length;
-
-        toast.success(`Successfully updated ${successCount} shipments to ${status}.`);
+        // Single Go API request — triggers async WhatsApp alerts in backend
+        const result = await bulkStatusAction(selectedIds, status);
+        if (result.success) {
+            const data = result.data as Record<string, unknown>;
+            toast.success(`Updated ${data?.updated ?? selectedIds.length} shipments to ${status}.`);
+        } else {
+            toast.error(result.error || 'Bulk update failed.');
+        }
         setSelectedIds([]);
         refetch();
     };
@@ -253,13 +258,13 @@ export function ShipmentsTab({ companyId, jwt }: ShipmentsTabProps) {
                                                 initial={{ opacity: 0 }}
                                                 animate={{ opacity: 1 }}
                                                 exit={{ opacity: 0 }}
-                                                className={`group hover:bg-surface/50 transition-colors ${selectedIds.includes(shipment.id as string) ? 'bg-accent/5' : ''}`}
+                                                className={`group hover:bg-surface/50 transition-colors ${selectedIds.includes(shipment.tracking_id as string) ? 'bg-accent/5' : ''}`}
                                             >
                                                 <td className="px-6 py-4">
                                                     <input
                                                         type="checkbox"
-                                                        checked={selectedIds.includes(shipment.id as string)}
-                                                        onChange={() => toggleSelect(shipment.id as string)}
+                                                        checked={selectedIds.includes(shipment.tracking_id as string)}
+                                                        onChange={() => toggleSelect(shipment.tracking_id as string)}
                                                         className="w-4 h-4 rounded border-border/50 bg-surface accent-accent cursor-pointer"
                                                     />
                                                 </td>
@@ -307,7 +312,7 @@ export function ShipmentsTab({ companyId, jwt }: ShipmentsTabProps) {
                                                             <Edit size={16} />
                                                         </button>
                                                         <button
-                                                            onClick={() => handleDelete(shipment.id as string)}
+                                                            onClick={() => handleDelete(shipment.tracking_id as string)}
                                                             className="p-2 hover:bg-error/10 rounded-lg text-text-muted hover:text-error transition-all"
                                                             title="Delete"
                                                         >

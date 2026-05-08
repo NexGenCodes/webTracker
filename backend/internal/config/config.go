@@ -19,7 +19,7 @@ type Config struct {
 	LogLevel       string `env:"LOG_LEVEL" env-default:"info"`
 	WorkerPoolSize int    `env:"WORKER_POOL_SIZE" env-default:"10"`
 	BufferSize     int    `env:"BUFFER_SIZE" env-default:"5000"`
-	RedisURL       string `env:"REDIS_URL" env-default:"localhost:6379"`
+	RedisURL       string `env:"REDIS_URL" env-default:"redis://localhost:6379"`
 
 	// Notification Config
 	SMTPHost     string `env:"SMTP_HOST"`

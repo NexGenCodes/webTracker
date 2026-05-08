@@ -105,8 +105,15 @@ func (a *App) Init() error {
 	a.HttpServer = transport_http.NewServer(a.Cfg, a.ShipmentUC, a.ConfigUC, a.SqlPool, a)
 
 	// Parse Redis connection options for Asynq Server/Scheduler (client reuses cache.AsynqClient)
-	opt, _ := asynq.ParseRedisURI(a.Cfg.RedisURL)
-	redisConnOpt := asynq.RedisClientOpt{Addr: opt.(asynq.RedisClientOpt).Addr, Password: opt.(asynq.RedisClientOpt).Password, DB: opt.(asynq.RedisClientOpt).DB}
+	opt, err := asynq.ParseRedisURI(a.Cfg.RedisURL)
+	if err != nil {
+		return fmt.Errorf("asynq redis URI parse: %w", err)
+	}
+	redisOpt, ok := opt.(asynq.RedisClientOpt)
+	if !ok {
+		return fmt.Errorf("unexpected asynq redis option type: %T", opt)
+	}
+	redisConnOpt := asynq.RedisClientOpt{Addr: redisOpt.Addr, Password: redisOpt.Password, DB: redisOpt.DB}
 
 	// Initialize the global Worker — reuse the shared Asynq client to avoid connection leak
 	a.Worker = &worker.Worker{
@@ -290,9 +297,6 @@ func (a *App) Shutdown() error {
 			errs = append(errs, err)
 		}
 	}
-
-	// Close Redis and Asynq clients last — other components may still need them during shutdown
-	cache.Close()
 
 	if len(errs) > 0 {
 		return fmt.Errorf("shutdown encountered errors: %v", errs)

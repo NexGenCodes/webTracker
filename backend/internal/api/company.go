@@ -7,6 +7,7 @@ import (
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
+	"webtracker-bot/internal/auth"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
@@ -44,6 +45,7 @@ func (h *CompanyHandler) RegisterRoutes(app *fiber.App) {
 		},
 	})
 
+	api.Put("/settings", h.updateSettings)
 	api.Post("/activate", h.activateBot)
 	api.Post("/deactivate", h.deactivateBot)
 	api.Post("/pair", pairLimiter, h.pairBot)
@@ -191,3 +193,50 @@ func (h *CompanyHandler) getQR(c *fiber.Ctx) error {
 }
 
 
+type UpdateSettingsRequest struct {
+	Name           string `json:"name"`
+	AdminEmail     string `json:"admin_email"`
+	LogoUrl        string `json:"logo_url"`
+	BrandColor     string `json:"brand_color"`
+	TrackingPrefix string `json:"tracking_prefix"`
+}
+
+func (h *CompanyHandler) updateSettings(c *fiber.Ctx) error {
+	companyID := getCompanyID(c)
+	if companyID == uuid.Nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing or invalid company_id"})
+	}
+
+	var req UpdateSettingsRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid payload"})
+	}
+
+	if req.Name == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "name is required"})
+	}
+	if len(req.TrackingPrefix) > 5 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "tracking_prefix must be 5 characters or fewer"})
+	}
+	if req.BrandColor != "" && !strings.HasPrefix(req.BrandColor, "#") {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "brand_color must be a hex code (e.g. #6366f1)"})
+	}
+
+	if err := h.configUC.UpdateCompanySettings(c.Context(), companyID, req.Name, req.AdminEmail, req.LogoUrl, req.BrandColor, req.TrackingPrefix); err != nil {
+		logger.Error().Err(err).Str("company", companyID.String()).Msg("Failed to update company settings")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update settings"})
+	}
+
+	// Emit audit log — best-effort, non-blocking
+	actorEmail := ""
+	if user, ok := c.Locals("user").(*auth.JWTClaims); ok && user != nil {
+		actorEmail = user.Email
+	}
+	_ = h.configUC.LogAudit(c.Context(), actorEmail, "update_settings", companyID, map[string]interface{}{
+		"name":            req.Name,
+		"admin_email":     req.AdminEmail,
+		"tracking_prefix": req.TrackingPrefix,
+	})
+
+	return c.JSON(fiber.Map{"success": true})
+}

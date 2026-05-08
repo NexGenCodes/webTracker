@@ -7,7 +7,7 @@ import { useForm, SubmitHandler, Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { PremiumInput, PremiumTextarea } from '@/components/shared/PremiumInput';
-import { createShipmentAction, updateShipmentAction } from '@/app/actions/shipment';
+import { createShipmentAction, editShipmentAction } from '@/actions/shipment';
 import toast from 'react-hot-toast';
 
 const shipmentSchema = z.object({
@@ -86,9 +86,18 @@ export function ShipmentModal({ isOpen, onClose, companyId, shipment, onSuccess 
         try {
             let result;
             if (isEdit && shipment) {
-                result = await updateShipmentAction(shipment.id, companyId, values as Record<string, unknown>);
+                result = await editShipmentAction(
+                    shipment.tracking_id ?? shipment.id,
+                    values as Record<string, unknown>,
+                );
             } else {
-                result = await createShipmentAction(companyId, values as Record<string, unknown>);
+                // Create: action handles snake→camelCase mapping for Go API
+                result = await createShipmentAction(values as {
+                    sender_name: string; sender_phone?: string; origin: string;
+                    recipient_name: string; recipient_phone: string; recipient_email: string;
+                    recipient_address: string; destination: string;
+                    cargo_type?: string; weight: number;
+                });
             }
 
             if (result.success) {

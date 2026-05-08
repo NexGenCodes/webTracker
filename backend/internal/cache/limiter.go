@@ -89,7 +89,7 @@ func (l *LoginFailLimiter) Increment(ctx context.Context, email string) (int64, 
 	}
 	pipe := RedisClient.Pipeline()
 	incr := pipe.Incr(ctx, l.key(email))
-	pipe.Expire(ctx, l.key(email), l.window)
+	pipe.ExpireNX(ctx, l.key(email), l.window)
 	if _, err := pipe.Exec(ctx); err != nil && err != redis.Nil {
 		return 0, err
 	}

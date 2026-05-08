@@ -2,7 +2,7 @@ import { useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { forgotPasswordSchema, resetPasswordSchema, ForgotPasswordForm, ResetPasswordForm } from '@/lib/validations/auth';
-import { forgotPasswordAction, resetPasswordAction } from '@/app/actions/auth';
+import { forgotPasswordAction, resetPasswordAction } from '@/actions/auth';
 
 export function usePasswordReset(
     setError: (msg: string | null) => void,

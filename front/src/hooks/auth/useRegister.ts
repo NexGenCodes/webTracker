@@ -2,7 +2,7 @@ import { useState, useTransition, useRef, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { registerSchema, RegisterForm } from '@/lib/validations/auth';
-import { registerIntentAction, verifyOtpAction } from '@/app/actions/auth';
+import { registerIntentAction, verifyOtpAction } from '@/actions/auth';
 import { useRouter } from 'next/navigation';
 import { useMultiTenant } from '@/components/providers/MultiTenantProvider';
 

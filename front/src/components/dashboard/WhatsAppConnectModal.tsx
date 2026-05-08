@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useTransition, useCallback } from 'react';
 import { Smartphone, XCircle, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { pairWhatsApp, getWhatsAppQR } from '@/app/actions/setup';
+import { pairWhatsApp, getWhatsAppQR } from '@/actions/setup';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
 import { createClient } from '@/lib/supabase/client';
 

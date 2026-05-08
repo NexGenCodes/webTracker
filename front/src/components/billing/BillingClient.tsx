@@ -3,7 +3,7 @@
 import { useState, useTransition, useEffect } from 'react';
 import { useMultiTenant } from '@/components/providers/MultiTenantProvider';
 import { CheckCircle2, Zap, ArrowRight, HelpCircle, Loader2, Clock, ExternalLink, ShieldCheck } from 'lucide-react';
-import { subscribeAction, PlanData, checkPaymentStatusAction, getPaymentHistoryAction, PaymentData } from '@/app/actions/billing';
+import { subscribeAction, PlanData, checkPaymentStatusAction, getPaymentHistoryAction, PaymentData } from '@/actions/billing';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 

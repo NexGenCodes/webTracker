@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { CheckCircle, ArrowRight, Loader2 } from 'lucide-react';
 import { cn, formatPrice } from '@/lib/utils';
 import Link from 'next/link';
-import { getPlansAction, PlanData } from '@/app/actions/billing';
+import { getPlansAction, PlanData } from '@/actions/billing';
 import { useI18n } from '@/components/providers/I18nContext';
 import { useMultiTenant } from '@/components/providers/MultiTenantProvider';
 
@@ -86,16 +86,16 @@ export function PricingSection() {
               let priceDisplay = '';
               let yearlyBilled = '';
               if (isCustom) {
-                  priceDisplay = dict.marketing?.pricing?.custom || 'Custom';
+                priceDisplay = dict.marketing?.pricing?.custom || 'Custom';
               } else {
-                  const basePrice = plan.price;
-                  if (isYearly) {
-                      const yearlyMonthly = basePrice * 0.85; // 15% discount
-                      priceDisplay = formatPrice(yearlyMonthly, plan.currency);
-                      yearlyBilled = formatPrice(yearlyMonthly * 12, plan.currency);
-                  } else {
-                      priceDisplay = formatPrice(basePrice, plan.currency);
-                  }
+                const basePrice = plan.price;
+                if (isYearly) {
+                  const yearlyMonthly = basePrice * 0.85; // 15% discount
+                  priceDisplay = formatPrice(yearlyMonthly, plan.currency);
+                  yearlyBilled = formatPrice(yearlyMonthly * 12, plan.currency);
+                } else {
+                  priceDisplay = formatPrice(basePrice, plan.currency);
+                }
               }
 
               return (

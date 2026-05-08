@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { checkAuthAction } from '@/app/actions/auth';
+import { checkAuthAction } from '@/actions/auth';
 import { useRouter, usePathname } from 'next/navigation';
 
 type AppUser = {
@@ -21,16 +21,16 @@ const MultiTenantContext = createContext<MultiTenantContextType>({
     user: null,
     companyId: null,
     loading: false,
-    refreshAuth: async () => {},
+    refreshAuth: async () => { },
 });
 
 export const useMultiTenant = () => useContext(MultiTenantContext);
 
-export default function MultiTenantProvider({ 
-    children, 
-    initialUser = null, 
-    initialCompanyId = null 
-}: { 
+export default function MultiTenantProvider({
+    children,
+    initialUser = null,
+    initialCompanyId = null
+}: {
     children: React.ReactNode;
     initialUser?: AppUser | null;
     initialCompanyId?: string | null;
@@ -44,7 +44,7 @@ export default function MultiTenantProvider({
     const initializeAuth = async () => {
         try {
             const { user } = await checkAuthAction();
-            
+
             if (user) {
                 setUser({
                     email: user.email,
@@ -85,7 +85,7 @@ export default function MultiTenantProvider({
                     if (!user && (pathname.startsWith('/dashboard') || pathname.startsWith('/track') || pathname.startsWith('/admin'))) {
                         router.push('/auth');
                     }
-                }).catch(() => {});
+                }).catch(() => { });
             }
         };
         document.addEventListener('visibilitychange', handleVisibility);

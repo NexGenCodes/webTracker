@@ -3,8 +3,8 @@
 import React, { useState } from 'react';
 import { Sparkles, Loader2, Clipboard, CheckCircle2, Package, MapPin, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { parseManifestAction } from '@/app/actions/shipment';
-import { createShipmentAction } from '@/app/actions/shipment';
+import { parseManifestAction } from '@/actions/shipment';
+import { createShipmentAction } from '@/actions/shipment';
 import toast from 'react-hot-toast';
 
 interface AIParserTabProps {
@@ -62,6 +62,7 @@ export function AIParserTab({ companyId }: AIParserTabProps) {
                 recipient_name: parsedData.receiverName || '',
                 recipient_phone: parsedData.receiverPhone || '',
                 recipient_address: parsedData.receiverAddress || '',
+                recipient_email: parsedData.receiverEmail || '',
                 destination: parsedData.receiverCountry || '',
                 sender_name: parsedData.senderName || 'AI Manifest',
                 origin: parsedData.senderCountry || 'N/A',
@@ -69,7 +70,7 @@ export function AIParserTab({ companyId }: AIParserTabProps) {
                 cargo_type: parsedData.cargoType || 'General Cargo',
             };
 
-            const result = await createShipmentAction(companyId, shipmentData);
+            const result = await createShipmentAction(shipmentData);
             if (result.success) {
                 toast.success('Shipment created successfully!');
                 setParsedData(null);

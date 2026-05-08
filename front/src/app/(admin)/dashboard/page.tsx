@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getServerSession } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
-import { getJwtTokenAction } from '@/app/actions/auth';
+import { getJwtTokenAction } from '@/actions/auth';
 import DashboardClient from '@/components/dashboard/DashboardClient';
 
 export default async function DashboardPage() {
@@ -43,10 +43,10 @@ export default async function DashboardPage() {
     };
 
     return (
-        <DashboardClient 
-            initialCompanyData={companyData} 
-            initialStats={stats} 
-            user={user} 
+        <DashboardClient
+            initialCompanyData={companyData}
+            initialStats={stats}
+            user={user}
             companyId={user.company_id}
             jwt={jwt}
         />

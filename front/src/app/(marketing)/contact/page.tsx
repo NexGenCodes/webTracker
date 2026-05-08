@@ -8,7 +8,7 @@ import { Mail, Phone, MapPin, Send, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { CONTACT_EMAIL, CONTACT_PHONE, CONTACT_HQ } from "@/constants";
 import { useState, useRef } from "react";
-import { submitContactMessage } from "@/app/actions/contact";
+import { submitContactMessage } from "@/actions/contact";
 import toast from 'react-hot-toast';
 
 export default function ContactPage() {

@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { TrackingSearch } from '@/components/tracking/TrackingSearch';
-import { getTracking } from '@/app/actions/shipment';
+import { getTrackingAction } from '@/actions/shipment';
 import { createClient } from '@/lib/supabase/client';
 import { AlertCircle, ShieldCheck, Package } from 'lucide-react';
 import { ShipmentData } from '@/types/shipment';
@@ -91,7 +91,7 @@ export function TrackContent({ initialId: propId }: TrackProps) {
     setShippingData(null);
 
     try {
-      const data = await getTracking(id);
+      const data = await getTrackingAction(id);
       if (data) {
         setShippingData(data);
         toast.success(dict.admin?.success || 'Shipment found', {
@@ -126,7 +126,7 @@ export function TrackContent({ initialId: propId }: TrackProps) {
     if (!shippingData?.trackingNumber) return;
 
     const supabase = createClient();
-        const channel = supabase
+    const channel = supabase
       .channel(`tracking-${shippingData.trackingNumber}`)
       .on(
         'postgres_changes',
@@ -210,9 +210,9 @@ export function TrackContent({ initialId: propId }: TrackProps) {
               ) : (
                 <>
                   {shippingData.isArchived && (
-                     <div className="mb-12 border-b border-border/50 pb-8">
-                       <ShipmentTerminalState type="delivered" dict={dict} />
-                     </div>
+                    <div className="mb-12 border-b border-border/50 pb-8">
+                      <ShipmentTerminalState type="delivered" dict={dict} />
+                    </div>
                   )}
                   <ShipmentMapBar
                     shippingData={shippingData}

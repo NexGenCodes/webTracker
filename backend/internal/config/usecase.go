@@ -120,12 +120,14 @@ func (u *Usecase) GetCompanyByID(ctx context.Context, companyID uuid.UUID) (db.C
 	return company, nil
 }
 
-func (u *Usecase) UpdateCompanySettings(ctx context.Context, companyID uuid.UUID, name, adminEmail, logoUrl string) error {
+func (u *Usecase) UpdateCompanySettings(ctx context.Context, companyID uuid.UUID, name, adminEmail, logoUrl, brandColor, trackingPrefix string) error {
 	err := u.repo.UpdateCompanySettings(ctx, db.UpdateCompanySettingsParams{
-		ID:         companyID,
-		Name:       sql.NullString{String: name, Valid: name != ""},
-		AdminEmail: adminEmail,
-		LogoUrl:    sql.NullString{String: logoUrl, Valid: logoUrl != ""},
+		ID:             companyID,
+		Name:           sql.NullString{String: name, Valid: name != ""},
+		AdminEmail:     adminEmail,
+		LogoUrl:        sql.NullString{String: logoUrl, Valid: logoUrl != ""},
+		BrandColor:     sql.NullString{String: brandColor, Valid: brandColor != ""},
+		TrackingPrefix: sql.NullString{String: trackingPrefix, Valid: trackingPrefix != ""},
 	})
 	if err == nil {
 		cache.Del(ctx, cache.CompanyKey(companyID.String()))
