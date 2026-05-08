@@ -120,19 +120,11 @@ func (h *EditHandler) Execute(ctx context.Context, shipUC models.ShipmentUsecase
 			continue
 		}
 
-		// Special Date Parsing — resolve timezone from shipment's origin country
+		// Special Date Parsing — Force UTC for all manual edits
 		if field == "scheduled_transit_time" || field == "expected_delivery_time" || field == "outfordelivery_time" {
-			originShip, _ := shipUC.Track(ctx, companyID, trackingID)
-			var loc *time.Location
-			if originShip != nil && originShip.Origin.Valid {
-				originTZ := shipUC.GetService().ResolveTimezone(originShip.Origin.String)
-				loc, _ = time.LoadLocation(originTZ)
-			}
-			if loc == nil {
-				loc = time.UTC
-			}
-			now := time.Now().In(loc)
-
+			loc := time.UTC
+			now := time.Now().UTC()
+			
 			parsedDate, ok := utils.ParseNaturalDate(value, now, loc)
 			if !ok {
 				logger.Warn().Str("field", field).Str("value", value).Msg("Failed to parse date in edit command")
@@ -167,18 +159,15 @@ func (h *EditHandler) Execute(ctx context.Context, shipUC models.ShipmentUsecase
 	// If departure was edited, but arrival was NOT explicitly edited in this command,
 	// we auto-sync arrival to be exactly Departure + 1 day.
 	if departureUpdated && !arrivalExplicitlyUpdated {
+		// Departure edited -> Auto-sync Arrival to Departure + 1
 		dbShip, _ := shipUC.Track(ctx, companyID, trackingID)
 		if dbShip != nil {
-			destTZ := shipUC.GetService().ResolveTimezone(dbShip.Destination.String)
-			destLoc, _ := time.LoadLocation(destTZ)
-			if destLoc == nil {
-				destLoc = time.UTC
-			}
+			loc := time.UTC
 
 			// Add exactly 1 day
-			arrivalDate := newDeparture.In(destLoc).AddDate(0, 0, 1)
-			ofd := time.Date(arrivalDate.Year(), arrivalDate.Month(), arrivalDate.Day(), 8, 30, 0, 0, destLoc).UTC()
-			arrival := time.Date(arrivalDate.Year(), arrivalDate.Month(), arrivalDate.Day(), 14, 0, 0, 0, destLoc).UTC()
+			arrivalDate := newDeparture.In(loc).AddDate(0, 0, 1)
+			ofd := time.Date(arrivalDate.Year(), arrivalDate.Month(), arrivalDate.Day(), 8, 30, 0, 0, loc).UTC()
+			arrival := time.Date(arrivalDate.Year(), arrivalDate.Month(), arrivalDate.Day(), 14, 0, 0, 0, loc).UTC()
 
 			_ = shipUC.UpdateField(ctx, companyID, trackingID, "expected_delivery_time", arrival.Format("2006-01-02 15:04:05"))
 			_ = shipUC.UpdateField(ctx, companyID, trackingID, "outfordelivery_time", ofd.Format("2006-01-02 15:04:05"))
