@@ -133,21 +133,28 @@ func (h *EditHandler) Execute(ctx context.Context, shipUC models.ShipmentUsecase
 
 			if parsedDate, ok := utils.ParseNaturalDate(value, now, loc); ok {
 				value = parsedDate.UTC().Format("2006-01-02 15:04:05")
+				if field == "scheduled_transit_time" {
+					departureUpdated = true
+					newDeparture = parsedDate.UTC()
+				}
 			} else {
-				// Fallback to strict format
-				_, err := time.Parse("2006-01-02", value)
-				if err != nil {
-					_, err = time.Parse("2006-01-02 15:04:05", value)
-					if err != nil {
-						continue // Skip invalid date
-					}
+				// Strict format fallback
+				var strictTime time.Time
+				var parseErr error
+				strictTime, parseErr = time.Parse("2006-01-02", value)
+				if parseErr != nil {
+					strictTime, parseErr = time.Parse("2006-01-02 15:04:05", value)
+				}
+				if parseErr != nil {
+					continue // Skip invalid date
+				}
+				value = strictTime.UTC().Format("2006-01-02 15:04:05")
+				if field == "scheduled_transit_time" {
+					departureUpdated = true
+					newDeparture = strictTime.UTC()
 				}
 			}
 
-			if field == "scheduled_transit_time" {
-				departureUpdated = true
-				newDeparture, _ = time.Parse("2006-01-02 15:04:05", value)
-			}
 			if field == "expected_delivery_time" {
 				arrivalExplicitlyUpdated = true
 			}

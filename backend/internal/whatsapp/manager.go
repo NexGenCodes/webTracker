@@ -2,6 +2,7 @@ package whatsapp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -22,6 +23,9 @@ import (
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 )
+
+// ErrAlreadyPaired is returned when the device is already linked to WhatsApp.
+var ErrAlreadyPaired = errors.New("already_connected")
 
 // Manager orchestrates multiple BotInstances across different companies.
 type Manager struct {
@@ -389,7 +393,7 @@ func (m *Manager) GeneratePairingCode(ctx context.Context, companyID uuid.UUID, 
 
 	waClient := bot.GetWAClient()
 	if waClient.Store.ID != nil {
-		return "", fmt.Errorf("device is already paired")
+		return "", ErrAlreadyPaired
 	}
 
 	// Do not forcefully disconnect if already connected.
@@ -420,7 +424,7 @@ func (m *Manager) GetQR(ctx context.Context, companyID uuid.UUID) (string, error
 
 	waClient := bot.GetWAClient()
 	if waClient.Store.ID != nil {
-		return "", fmt.Errorf("device is already paired")
+		return "", ErrAlreadyPaired
 	}
 
 	// Ensure connection is active to receive QR events

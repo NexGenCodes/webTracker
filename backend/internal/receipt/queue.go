@@ -27,9 +27,15 @@ var (
 	queue    chan Job
 	once     sync.Once
 	shutOnce sync.Once
+	// inflight prevents the same tracking ID from generating two receipts
+	// within a 60-second window (guards against Asynq retries / race conditions).
+	inflight sync.Map
 )
 
-const QueueSize = 100
+const (
+	QueueSize    = 100
+	inflightTTL  = 60 * time.Second
+)
 
 func InitProcessor() {
 	once.Do(func() {
@@ -58,17 +64,38 @@ func Shutdown() {
 }
 
 // Enqueue adds a receipt rendering job to the queue.
+// If the same tracking ID was enqueued within the last 60 seconds, the call
+// is silently ignored to prevent duplicate receipts from Asynq retries.
 func Enqueue(job Job) {
 	if queue == nil {
 		logger.Error().Msg("Receipt processor not initialized")
 		return
 	}
+
+	key := job.TrackingID
+	if _, loaded := inflight.LoadOrStore(key, struct{}{}); loaded {
+		logger.Warn().Str("tracking_id", key).Msg("Receipt deduplicated: already in-flight")
+		return
+	}
+	// Auto-expire the dedup key after TTL so edits can regenerate later
+	go func() {
+		time.Sleep(inflightTTL)
+		inflight.Delete(key)
+	}()
+
 	select {
 	case queue <- job:
 		logger.Debug().Str("tracking_id", job.TrackingID).Msg("Receipt enqueued")
 	default:
 		logger.Warn().Str("tracking_id", job.TrackingID).Msg("Receipt queue full, dropping job")
+		inflight.Delete(key) // Allow retry since we dropped it
 	}
+}
+
+// ClearInflight removes the dedup guard for a tracking ID, allowing an immediate
+// re-render. Call this before enqueueing a receipt for an edited shipment.
+func ClearInflight(trackingID string) {
+	inflight.Delete(trackingID)
 }
 
 func startWorker(id int) {

@@ -22,6 +22,7 @@ export async function pairWhatsApp(companyId: string, phone: string): Promise<Ac
 
         const resData = await res.json();
         if (!res.ok) {
+            // 409 means device is already paired — surface the sentinel
             return { success: false, error: resData.error || 'Failed to request pairing code.' };
         }
 
@@ -121,6 +122,7 @@ export async function getWhatsAppQR(companyId: string): Promise<ActionResult<{ p
 
         const resData = await res.json();
         if (!res.ok) {
+            // 409 means device is already paired — surface the sentinel
             return { success: false, error: resData.error || 'Failed to fetch QR code.' };
         }
 

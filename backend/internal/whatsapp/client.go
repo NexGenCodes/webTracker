@@ -48,6 +48,7 @@ func NewClientForDevice(device *store.Device, name string) *whatsmeow.Client {
 	}
 	device.PushName = name
 	device.Platform = name
+	device.BusinessName = name
 
 	client := whatsmeow.NewClient(device, waLog.Stdout("whatsapp", "INFO", true))
 	client.EnableAutoReconnect = true

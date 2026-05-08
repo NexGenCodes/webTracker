@@ -88,10 +88,14 @@ func EnqueueWhatsAppMessage(client *asynq.Client, job models.Job) error {
 		return fmt.Errorf("failed to marshal whatsapp message payload: %v", err)
 	}
 
-	task := asynq.NewTask(TypeWhatsAppMessage, b, asynq.MaxRetry(3), asynq.Timeout(15*time.Second))
+	task := asynq.NewTask(TypeWhatsAppMessage, b, asynq.MaxRetry(3), asynq.Timeout(1*time.Minute))
 
-	_, err = client.EnqueueContext(context.Background(), task)
-	return err
+	// Use MessageID as TaskID for idempotency — prevents processing same message twice
+	_, err = client.EnqueueContext(context.Background(), task, asynq.TaskID(job.MessageID))
+	if err != nil && err != asynq.ErrTaskIDConflict {
+		return err
+	}
+	return nil
 }
 
 // OutboundAlertPayload defines the payload for an outbound WhatsApp status alert.

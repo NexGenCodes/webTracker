@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useTransition, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Smartphone, XCircle, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { pairWhatsApp, getWhatsAppQR } from '@/actions/setup';
@@ -38,17 +39,20 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
 
     const [isPending, startTransition] = useTransition();
 
+    const router = useRouter();
+
     const handleConnected = useCallback(() => {
         setPairStatus(prev => {
             if (prev === 'connected') return prev;
             setTimeout(() => {
                 onSuccess();
                 onClose();
+                router.refresh();
             }, 1000);
             return 'connected';
         });
         setPairError('');
-    }, [onSuccess, onClose]);
+    }, [onSuccess, onClose, router]);
 
     const handleFetchQR = useCallback(() => {
         if (!companyId) return;
@@ -59,7 +63,8 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
                 setPairStatus(prev => prev === 'idle' ? 'waiting' : prev);
             } else {
                 const msg = response.error || 'Could not fetch QR code.';
-                if (msg.toLowerCase().includes('already connected')) {
+                // Exact sentinel from the backend (409 already_connected)
+                if (msg === 'already_connected') {
                     handleConnected();
                 } else {
                     setPairError(msg);
@@ -175,7 +180,8 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
                 setPairStatus('waiting');
             } else {
                 const msg = response.error || 'Code not received. Check phone format.';
-                if (msg.toLowerCase().includes('already connected')) {
+                // Exact sentinel from the backend (409 already_connected)
+                if (msg === 'already_connected') {
                     handleConnected();
                 } else {
                     setPairError(msg);

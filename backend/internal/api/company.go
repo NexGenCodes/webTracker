@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"strings"
 	"time"
 	"webtracker-bot/internal/billing"
@@ -8,6 +9,7 @@ import (
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/auth"
+	"webtracker-bot/internal/whatsapp"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
@@ -166,6 +168,9 @@ func (h *CompanyHandler) pairBot(c *fiber.Ctx) error {
 
 	code, err := h.bots.GeneratePairingCode(c.Context(), companyID, req.Phone)
 	if err != nil {
+		if errors.Is(err, whatsapp.ErrAlreadyPaired) {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "already_connected"})
+		}
 		logger.Error().Err(err).Str("company", companyID.String()).Msg("Failed to generate pairing code")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -185,6 +190,9 @@ func (h *CompanyHandler) getQR(c *fiber.Ctx) error {
 
 	code, err := h.bots.GetQR(c.Context(), companyID)
 	if err != nil {
+		if errors.Is(err, whatsapp.ErrAlreadyPaired) {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "already_connected"})
+		}
 		logger.Error().Err(err).Str("company", companyID.String()).Msg("Failed to generate QR code")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}

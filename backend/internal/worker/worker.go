@@ -174,6 +174,8 @@ func (w *Worker) process(workerCtx context.Context, job models.Job) {
 		// If it was an edit, we need to regenerate the receipt
 		if res.EditID != "" {
 			logger.Info().Str("edit_id", res.EditID).Msg("Edit detected, triggering receipt regeneration")
+			// Clear the dedup guard so the edited receipt always gets generated
+			receipt.ClearInflight(res.EditID)
 			w.generateAndSendReceipt(bot, job, res.EditID, lang)
 		}
 
@@ -359,13 +361,16 @@ func (w *Worker) process(workerCtx context.Context, job models.Job) {
 	}
 	logger.GlobalVitals.IncInsertSuccess()
 
-	// Generate and send receipt
-	w.generateAndSendReceipt(bot, job, trackingID, lang)
-
 	logger.Info().
 		Str("tracking_id", trackingID).
 		Str("jid", job.SenderJID.String()).
 		Msg("Shipment created successfully")
+
+	// React ✅ immediately — before the (slow) receipt render
+	sender.React(job.ChatJID, job.SenderJID, job.MessageID, "✅")
+
+	// Generate and send receipt (async queue — does not block)
+	w.generateAndSendReceipt(bot, job, trackingID, lang)
 
 	// 10. Send tracking ID and link as follow-up message
 	baseURL := w.FrontendURL
@@ -378,9 +383,6 @@ func (w *Worker) process(workerCtx context.Context, job models.Job) {
 		trackingMsg += "\n\n_✨ Parsed by AI_"
 	}
 	sender.Reply(job.ChatJID, job.SenderJID, trackingMsg, job.MessageID, job.Text)
-
-	// Change reaction to success since shipment was created
-	sender.React(job.ChatJID, job.SenderJID, job.MessageID, "✅")
 }
 
 func (w *Worker) generateAndSendReceipt(bot models.BotInstance, job models.Job, id string, lang i18n.Language) {
