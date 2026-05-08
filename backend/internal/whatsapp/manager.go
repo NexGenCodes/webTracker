@@ -328,12 +328,12 @@ func (m *Manager) HandleWAEvent(bot *BotInstance, evt interface{}) {
 		_ = m.ConfigUC.UpdateCompanyAuthStatus(m.Context, bot.CompanyID, "pending")
 		// 2. Clear the WhatsApp phone in the database
 		_ = m.ConfigUC.UpdateCompanyWhatsAppPhone(m.Context, bot.CompanyID, "")
-		
+
 		// 3. Forcefully delete local store session cryptographic keys
 		if bot.GetWAClient().Store != nil {
 			_ = bot.GetWAClient().Store.Delete(m.Context)
 		}
-		
+
 		// 4. Deactivate the bot from memory
 		_ = m.DeactivateBot(bot.CompanyID)
 	case *events.Disconnected:
@@ -454,8 +454,6 @@ func (m *Manager) GetQR(ctx context.Context, companyID uuid.UUID) (string, error
 	return "", fmt.Errorf("qr code not available yet, please try again in a moment")
 }
 
-
-
 // LivenessCheck audits all active bots and corrects auth_status if
 // a bot is tracked as "active" in the DB but is actually disconnected.
 // Called by the cron scheduler.
@@ -485,7 +483,7 @@ func (m *Manager) LivenessCheck() {
 
 			if !client.IsConnected() && client.Store != nil && client.Store.ID != nil {
 				sem <- struct{}{} // acquire
-				
+
 				go func(e struct {
 					ID  uuid.UUID
 					Bot *BotInstance
@@ -505,7 +503,7 @@ func (m *Manager) LivenessCheck() {
 						logger.Error().Err(err).Str("company_id", e.ID.String()).Msg("[LivenessCheck] Reconnect failed")
 						_ = m.ConfigUC.UpdateCompanyAuthStatus(m.Context, e.ID, "disconnected")
 					}
-					
+
 					// Jitter to prevent API throttling
 					time.Sleep(200 * time.Millisecond)
 				}(entry)

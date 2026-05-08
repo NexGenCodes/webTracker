@@ -47,6 +47,7 @@ func NewClientForDevice(device *store.Device, name string) *whatsmeow.Client {
 		name = "AIRWAYBILL"
 	}
 	device.PushName = name
+	device.Platform = name
 
 	client := whatsmeow.NewClient(device, waLog.Stdout("whatsapp", "INFO", true))
 	client.EnableAutoReconnect = true
@@ -55,8 +56,6 @@ func NewClientForDevice(device *store.Device, name string) *whatsmeow.Client {
 	logger.Info().Str("device_name", name).Msg("WhatsApp client initialized")
 	return client
 }
-
-
 
 // Global caches removed to support multi-tenancy. State is now held per bot in BotInstance.
 const maxCacheAge = 1 * time.Hour
@@ -99,165 +98,165 @@ func HandleEvent(bot *BotInstance, evt interface{}, cfg *config.Config, configUC
 	case *events.Message:
 		go func(v *events.Message) {
 			checkCacheCleanup(bot)
-		text := ""
-		if v.Message.GetConversation() != "" {
-			text = v.Message.GetConversation()
-		} else if v.Message.GetExtendedTextMessage().GetText() != "" {
-			text = v.Message.GetExtendedTextMessage().GetText()
-		}
+			text := ""
+			if v.Message.GetConversation() != "" {
+				text = v.Message.GetConversation()
+			} else if v.Message.GetExtendedTextMessage().GetText() != "" {
+				text = v.Message.GetExtendedTextMessage().GetText()
+			}
 
-		docMsg := v.Message.GetDocumentMessage()
-		if text == "" && docMsg == nil {
-			return
-		}
+			docMsg := v.Message.GetDocumentMessage()
+			if text == "" && docMsg == nil {
+				return
+			}
 
-		// Identify Chat / Sender Context
-		chatJID := v.Info.Chat
-		isGroup := chatJID.Server == "g.us"
+			// Identify Chat / Sender Context
+			chatJID := v.Info.Chat
+			isGroup := chatJID.Server == "g.us"
 
-		senderPhone := utils.GetBarePhone(v.Info.Sender.User)
+			senderPhone := utils.GetBarePhone(v.Info.Sender.User)
 
-		// 1. Identify Bot Identity (Phone & LID) from cache or store
-		bot.IdentityCache.RLock()
-		botPhone := bot.IdentityCache.BotPhone
-		botLID := bot.IdentityCache.BotLID
-		bot.IdentityCache.RUnlock()
+			// 1. Identify Bot Identity (Phone & LID) from cache or store
+			bot.IdentityCache.RLock()
+			botPhone := bot.IdentityCache.BotPhone
+			botLID := bot.IdentityCache.BotLID
+			bot.IdentityCache.RUnlock()
 
-		if botPhone == "" && client.Store.ID != nil {
-			botPhone = utils.GetBarePhone(client.Store.ID.User)
-			bot.IdentityCache.Lock()
-			bot.IdentityCache.BotPhone = botPhone
-			bot.IdentityCache.Unlock()
-		}
-		if botLID == "" {
-			botLID, _ = configUC.GetSystemConfig(context.Background(), companyID, "bot_lid")
-			bot.IdentityCache.Lock()
-			bot.IdentityCache.BotLID = botLID
-			bot.IdentityCache.Unlock()
-		}
-
-		// 2. Persistent Bot LID Mapping (Update cache if found)
-		if v.Info.IsFromMe && client.Store.ID != nil {
-			senderPhone = botPhone
-			newLID := utils.GetBarePhone(v.Info.Sender.User)
-			if newLID != "" && newLID != botLID {
-				botLID = newLID
+			if botPhone == "" && client.Store.ID != nil {
+				botPhone = utils.GetBarePhone(client.Store.ID.User)
+				bot.IdentityCache.Lock()
+				bot.IdentityCache.BotPhone = botPhone
+				bot.IdentityCache.Unlock()
+			}
+			if botLID == "" {
+				botLID, _ = configUC.GetSystemConfig(context.Background(), companyID, "bot_lid")
 				bot.IdentityCache.Lock()
 				bot.IdentityCache.BotLID = botLID
 				bot.IdentityCache.Unlock()
-				_ = configUC.SetSystemConfig(context.Background(), companyID, "bot_lid", botLID)
-			}
-		}
-
-		isAuthorized := false  // Bot's permission in group
-		isSenderAdmin := false // Sender's permission to control bot
-
-		if isGroup {
-			// FAST CHECK: Use in-memory Go Map (sync.Map)
-			if val, ok := bot.AuthCache.Load(chatJID.String()); ok {
-				isAuthorized, _ = val.(bool)
-			} else {
-				// Not in memory? Re-verify and populate cache
-				isAuthorized = VerifyGroupAuthority(bot, configUC, chatJID)
 			}
 
-			// DIAGNOSTIC LOG (As requested: non-blocking, just log)
-			logger.Info().
-				Str("group", chatJID.String()).
-				Bool("is_authorized", isAuthorized).
-				Msg("[RBAC DIAGNOSTIC] Current authorization status")
+			// 2. Persistent Bot LID Mapping (Update cache if found)
+			if v.Info.IsFromMe && client.Store.ID != nil {
+				senderPhone = botPhone
+				newLID := utils.GetBarePhone(v.Info.Sender.User)
+				if newLID != "" && newLID != botLID {
+					botLID = newLID
+					bot.IdentityCache.Lock()
+					bot.IdentityCache.BotLID = botLID
+					bot.IdentityCache.Unlock()
+					_ = configUC.SetSystemConfig(context.Background(), companyID, "bot_lid", botLID)
+				}
+			}
 
-			// If Bot IS authorized, check Sender permissions
-			if isAuthorized {
-				if v.Info.IsFromMe {
-					isSenderAdmin = true
-				} else if strings.HasPrefix(text, "!") || strings.HasPrefix(text, "#") {
-					// Check Cache First
-					senderBare := utils.GetBarePhone(v.Info.Sender.User)
-					if groupAdmins, ok := bot.ParticipantsCache.Load(chatJID.String()); ok {
-						admins, _ := groupAdmins.(map[string]bool)
-						if admins != nil {
-							if isAdminEntry, exist := admins[senderBare]; exist {
-								isSenderAdmin = isAdminEntry
-							} else {
-								// If not in cache, re-verify (group might have changed)
-								VerifyGroupAuthority(bot, configUC, chatJID)
-								if groupAdminsNew, okNew := bot.ParticipantsCache.Load(chatJID.String()); okNew {
-									if newAdmins, ok := groupAdminsNew.(map[string]bool); ok {
-										isSenderAdmin = newAdmins[senderBare]
+			isAuthorized := false  // Bot's permission in group
+			isSenderAdmin := false // Sender's permission to control bot
+
+			if isGroup {
+				// FAST CHECK: Use in-memory Go Map (sync.Map)
+				if val, ok := bot.AuthCache.Load(chatJID.String()); ok {
+					isAuthorized, _ = val.(bool)
+				} else {
+					// Not in memory? Re-verify and populate cache
+					isAuthorized = VerifyGroupAuthority(bot, configUC, chatJID)
+				}
+
+				// DIAGNOSTIC LOG (As requested: non-blocking, just log)
+				logger.Info().
+					Str("group", chatJID.String()).
+					Bool("is_authorized", isAuthorized).
+					Msg("[RBAC DIAGNOSTIC] Current authorization status")
+
+				// If Bot IS authorized, check Sender permissions
+				if isAuthorized {
+					if v.Info.IsFromMe {
+						isSenderAdmin = true
+					} else if strings.HasPrefix(text, "!") || strings.HasPrefix(text, "#") {
+						// Check Cache First
+						senderBare := utils.GetBarePhone(v.Info.Sender.User)
+						if groupAdmins, ok := bot.ParticipantsCache.Load(chatJID.String()); ok {
+							admins, _ := groupAdmins.(map[string]bool)
+							if admins != nil {
+								if isAdminEntry, exist := admins[senderBare]; exist {
+									isSenderAdmin = isAdminEntry
+								} else {
+									// If not in cache, re-verify (group might have changed)
+									VerifyGroupAuthority(bot, configUC, chatJID)
+									if groupAdminsNew, okNew := bot.ParticipantsCache.Load(chatJID.String()); okNew {
+										if newAdmins, ok := groupAdminsNew.(map[string]bool); ok {
+											isSenderAdmin = newAdmins[senderBare]
+										}
 									}
 								}
 							}
-						}
-					} else {
-						// No cache? Re-verify
-						VerifyGroupAuthority(bot, configUC, chatJID)
-						if groupAdminsNew, okNew := bot.ParticipantsCache.Load(chatJID.String()); okNew {
-							if newAdmins, ok := groupAdminsNew.(map[string]bool); ok {
-								isSenderAdmin = newAdmins[senderBare]
+						} else {
+							// No cache? Re-verify
+							VerifyGroupAuthority(bot, configUC, chatJID)
+							if groupAdminsNew, okNew := bot.ParticipantsCache.Load(chatJID.String()); okNew {
+								if newAdmins, ok := groupAdminsNew.(map[string]bool); ok {
+									isSenderAdmin = newAdmins[senderBare]
+								}
 							}
 						}
 					}
 				}
-			}
 
-			// STRICT RULE: If bot is not Admin/Owner, it completely ignores the group.
-			if !isAuthorized {
-				logger.Debug().Str("group", chatJID.String()).Msg("[RBAC DEBUG] Bot ignored group: Not an Admin/Owner")
-				return
-			}
-		} else {
-			// Private chat rules
-			isSelfChat := chatJID.User == botPhone || (botLID != "" && chatJID.User == botLID)
-
-			if isSelfChat {
-				isAuthorized = true // Always allow Note to Self
-			} else if cfg.AllowPrivateChat {
-				isAuthorized = true
+				// STRICT RULE: If bot is not Admin/Owner, it completely ignores the group.
+				if !isAuthorized {
+					logger.Debug().Str("group", chatJID.String()).Msg("[RBAC DEBUG] Bot ignored group: Not an Admin/Owner")
+					return
+				}
 			} else {
-				hasGroups, _ := configUC.HasAuthorizedGroups(context.Background(), companyID)
-				isAuthorized = !hasGroups // Failover: Allow private if no groups exist
+				// Private chat rules
+				isSelfChat := chatJID.User == botPhone || (botLID != "" && chatJID.User == botLID)
+
+				if isSelfChat {
+					isAuthorized = true // Always allow Note to Self
+				} else if cfg.AllowPrivateChat {
+					isAuthorized = true
+				} else {
+					hasGroups, _ := configUC.HasAuthorizedGroups(context.Background(), companyID)
+					isAuthorized = !hasGroups // Failover: Allow private if no groups exist
+				}
+
+				if !isAuthorized {
+					logger.Debug().
+						Str("chat", chatJID.String()).
+						Str("sender", senderPhone).
+						Msg("[RBAC DEBUG] Ignoring unauthorized private chat")
+					return
+				}
 			}
 
-			if !isAuthorized {
-				logger.Debug().
-					Str("chat", chatJID.String()).
-					Str("sender", senderPhone).
-					Msg("[RBAC DEBUG] Ignoring unauthorized private chat")
-				return
+			if v.Info.IsFromMe {
+				isSenderAdmin = true // Always trust self
 			}
-		}
 
-		if v.Info.IsFromMe {
-			isSenderAdmin = true // Always trust self
-		}
+			// In Diagnostic mode, we only block if it's strictly required for command authorization
+			// But for now, we'll let everything through to the dispatcher as requested
+			isAdmin := isSenderAdmin || (senderPhone == botPhone)
 
-		// In Diagnostic mode, we only block if it's strictly required for command authorization
-		// But for now, we'll let everything through to the dispatcher as requested
-		isAdmin := isSenderAdmin || (senderPhone == botPhone)
+			if isAdmin {
+				logger.Info().Str("sender", senderPhone).Msg("[RBAC DEBUG] Account identified as ADMIN (Bot Owner or Group Admin)")
+			} else {
+				logger.Debug().Str("sender", senderPhone).Str("botPhone", botPhone).Msg("[RBAC DEBUG] Account identified as REGULAR USER")
+			}
 
-		if isAdmin {
-			logger.Info().Str("sender", senderPhone).Msg("[RBAC DEBUG] Account identified as ADMIN (Bot Owner or Group Admin)")
-		} else {
-			logger.Debug().Str("sender", senderPhone).Str("botPhone", botPhone).Msg("[RBAC DEBUG] Account identified as REGULAR USER")
-		}
+			jobPayload := models.Job{
+				CompanyID:   companyID,
+				ChatJID:     v.Info.Chat,
+				SenderJID:   v.Info.Sender,
+				MessageID:   v.Info.ID,
+				Text:        strings.TrimSpace(text),
+				SenderPhone: senderPhone,
+				IsAdmin:     isAdmin,
+				RawMessage:  v,
+			}
 
-		jobPayload := models.Job{
-			CompanyID:   companyID,
-			ChatJID:     v.Info.Chat,
-			SenderJID:   v.Info.Sender,
-			MessageID:   v.Info.ID,
-			Text:        strings.TrimSpace(text),
-			SenderPhone: senderPhone,
-			IsAdmin:     isAdmin,
-			RawMessage:  v,
-		}
-
-		// Enqueue the job asynchronously via Redis/Asynq
-		if err := tasks.EnqueueWhatsAppMessage(bot.AsynqClient, jobPayload); err != nil {
-			logger.Error().Err(err).Msg("Failed to enqueue WhatsApp message job")
-		}
-	}(v)
+			// Enqueue the job asynchronously via Redis/Asynq
+			if err := tasks.EnqueueWhatsAppMessage(bot.AsynqClient, jobPayload); err != nil {
+				logger.Error().Err(err).Msg("Failed to enqueue WhatsApp message job")
+			}
+		}(v)
 	}
 }
 
@@ -322,4 +321,3 @@ func verifyGroupAuthorityInternal(bot *BotInstance, configUC models.ConfigUsecas
 
 	return isAuth
 }
-
