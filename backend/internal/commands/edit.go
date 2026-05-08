@@ -101,6 +101,10 @@ func (h *EditHandler) Execute(ctx context.Context, shipUC models.ShipmentUsecase
 
 	// 3. Apply Updates
 	var updatedFields []string
+	departureUpdated := false
+	var newDeparture time.Time
+	arrivalExplicitlyUpdated := false
+	var newArrival time.Time
 
 	for field, value := range updates {
 		// Strict Policy: Weight is fixed
@@ -136,6 +140,15 @@ func (h *EditHandler) Execute(ctx context.Context, shipUC models.ShipmentUsecase
 			}
 
 			value = parsedDate.UTC().Format("2006-01-02 15:04:05")
+			if field == "scheduled_transit_time" {
+				departureUpdated = true
+				newDeparture = parsedDate.UTC()
+			}
+
+			if field == "expected_delivery_time" {
+				arrivalExplicitlyUpdated = true
+				newArrival = parsedDate.UTC()
+			}
 		}
 
 		err := shipUC.UpdateField(ctx, companyID, trackingID, field, value)
@@ -150,9 +163,35 @@ func (h *EditHandler) Execute(ctx context.Context, shipUC models.ShipmentUsecase
 		return Result{Message: "⚠️ *UPDATE FAILED*\n_None of the fields could be updated. Check your format (e.g., label: value)._"}
 	}
 
-	// 4. Persistence & Schedule Sync (Resolve Status based on new dates)
-	// We no longer auto-sync arrival to departure or vice-versa as per user request.
-	// We only ensure the shipment's STATUS matches the updated timeline.
+	// 4. Automatic Arrival/OFD Sync (Strict +1 Logic)
+	// If departure was edited, but arrival was NOT explicitly edited in this command,
+	// we auto-sync arrival to be exactly Departure + 1 day.
+	if departureUpdated && !arrivalExplicitlyUpdated {
+		dbShip, _ := shipUC.Track(ctx, companyID, trackingID)
+		if dbShip != nil {
+			destTZ := shipUC.GetService().ResolveTimezone(dbShip.Destination.String)
+			destLoc, _ := time.LoadLocation(destTZ)
+			if destLoc == nil {
+				destLoc = time.UTC
+			}
+
+			// Add exactly 1 day
+			arrivalDate := newDeparture.In(destLoc).AddDate(0, 0, 1)
+			ofd := time.Date(arrivalDate.Year(), arrivalDate.Month(), arrivalDate.Day(), 8, 30, 0, 0, destLoc).UTC()
+			arrival := time.Date(arrivalDate.Year(), arrivalDate.Month(), arrivalDate.Day(), 14, 0, 0, 0, destLoc).UTC()
+
+			_ = shipUC.UpdateField(ctx, companyID, trackingID, "expected_delivery_time", arrival.Format("2006-01-02 15:04:05"))
+			_ = shipUC.UpdateField(ctx, companyID, trackingID, "outfordelivery_time", ofd.Format("2006-01-02 15:04:05"))
+			updatedFields = append(updatedFields, "ARRIVAL (AUTO-SYNC +1D)")
+		}
+	} else if arrivalExplicitlyUpdated {
+		// Arrival edited -> Auto-sync OutForDelivery to 4 hours before arrival for consistency
+		_ = shipUC.UpdateField(ctx, companyID, trackingID, "outfordelivery_time", newArrival.Add(-4*time.Hour).Format("2006-01-02 15:04:05"))
+		updatedFields = append(updatedFields, "OFD (CONSISTENCY-SYNC)")
+	}
+
+	// 5. Persistence & Schedule Sync (Resolve Status based on new dates)
+	// We ensure the shipment's STATUS matches the updated timeline.
 	dbShip, _ := shipUC.Track(ctx, companyID, trackingID)
 	if dbShip != nil {
 		// Resolve status
