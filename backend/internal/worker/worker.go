@@ -17,6 +17,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
 
+	"webtracker-bot/internal/billing"
 	"webtracker-bot/internal/commands"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/database/db"
@@ -136,13 +137,16 @@ func (w *Worker) process(workerCtx context.Context, job models.Job) {
 	lang := i18n.Language(langStr)
 
 	// Subscription Guard: Block expired or inactive tenants from using the bot
-	if company.SubscriptionStatus.String != "active" && company.SubscriptionStatus.String != "trialing" {
-		logger.Info().Str("company_id", job.CompanyID.String()).Str("status", company.SubscriptionStatus.String).Msg("Ignoring message from inactive subscription")
-		return
-	}
-	if company.SubscriptionExpiry.Valid && company.SubscriptionExpiry.Time.Before(time.Now()) {
-		logger.Info().Str("company_id", job.CompanyID.String()).Msg("Ignoring message from expired subscription")
-		return
+	// The super admin is always free to access anything and bypasses all billing checks.
+	if !billing.IsSuperAdminEmail(w.Cfg, company.AdminEmail) {
+		if company.SubscriptionStatus.String != "active" && company.SubscriptionStatus.String != "trialing" {
+			logger.Info().Str("company_id", job.CompanyID.String()).Str("status", company.SubscriptionStatus.String).Msg("Ignoring message from inactive subscription")
+			return
+		}
+		if company.SubscriptionExpiry.Valid && company.SubscriptionExpiry.Time.Before(time.Now()) {
+			logger.Info().Str("company_id", job.CompanyID.String()).Msg("Ignoring message from expired subscription")
+			return
+		}
 	}
 
 	// A. Initial Feedback (Typing, Reading, Reacting)

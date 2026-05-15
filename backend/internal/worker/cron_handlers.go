@@ -10,6 +10,7 @@ import (
 	"github.com/hibiken/asynq"
 	"go.mau.fi/whatsmeow/types"
 
+	"webtracker-bot/internal/billing"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/notif"
 	"webtracker-bot/internal/tasks"
@@ -47,6 +48,27 @@ func (w *Worker) HandleCronCompanyPulse(ctx context.Context, t *asynq.Task) erro
 
 	companyID := payload.CompanyID
 	now := time.Now().UTC()
+
+	// 1. Subscription Check (Proactive Deactivation)
+	// Regular admins should be disconnected if their trial ends, but the super admin remains free.
+	company, err := w.ConfigUC.GetCompanyByID(ctx, companyID)
+	if err == nil {
+		if !billing.IsSuperAdminEmail(w.Cfg, company.AdminEmail) {
+			expired := company.SubscriptionExpiry.Valid && company.SubscriptionExpiry.Time.Before(now)
+			inactive := company.SubscriptionStatus.String != "active" && company.SubscriptionStatus.String != "trialing"
+
+			if expired || inactive {
+				logger.Warn().
+					Str("company", companyID.String()).
+					Str("email", company.AdminEmail).
+					Msg("Subscription expired or inactive. Proactively deactivating bot.")
+
+				// Forcefully disconnect/deactivate the bot instance
+				_ = w.Bots.DeactivateBot(companyID)
+				return nil // Stop processing for this company
+			}
+		}
+	}
 
 	// Multi-round processing (up to 3 rounds) to catch cascading transitions
 	// (e.g. OutForDelivery -> Delivered if the logic allows it, though usually 1-by-1)

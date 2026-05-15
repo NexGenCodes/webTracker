@@ -115,5 +115,11 @@ func (cfg *Config) Validate() error {
 	if cfg.GeminiAPIKey == "" {
 		return fmt.Errorf("GEMINI_API_KEY is missing")
 	}
+	if cfg.RedisURL == "" {
+		return fmt.Errorf("REDIS_URL is missing")
+	}
+	if !strings.HasPrefix(cfg.RedisURL, "redis://") && !strings.HasPrefix(cfg.RedisURL, "rediss://") {
+		return fmt.Errorf("REDIS_URL has invalid scheme %q — expected format: redis://localhost:6379", cfg.RedisURL)
+	}
 	return nil
 }

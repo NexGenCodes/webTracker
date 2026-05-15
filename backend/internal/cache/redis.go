@@ -31,7 +31,7 @@ func InitRedis(redisURL string) error {
 	// Initialize standard Redis client for caching, OTPs, Rate Limiting
 	opt, err := redis.ParseURL(redisURL)
 	if err != nil {
-		return fmt.Errorf("invalid REDIS_URL: %w", err)
+		return fmt.Errorf("invalid REDIS_URL (expected redis://host:port): %w", err)
 	}
 
 	client := redis.NewClient(opt)

@@ -10,6 +10,9 @@ WorkingDirectory=/opt/webtracker
 ExecStart=/opt/webtracker/bot
 Restart=always
 RestartSec=10
+# Stop restarting if 5 failures occur within 5 minutes (crash loop protection)
+StartLimitIntervalSec=300
+StartLimitBurst=5
 # Assumes .env is present in the working directory
 EnvironmentFile=/opt/webtracker/.env
 
