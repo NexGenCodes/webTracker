@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     Package, Smartphone,
-    CheckCircle2, AlertTriangle, XCircle,
+    CheckCircle2, AlertTriangle, XCircle, WifiOff, Loader2,
     UserCircle2, Activity, TrendingUp, Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -62,13 +62,15 @@ const StatusBadge = ({ status }: { status: string }) => {
     const config: Record<string, { icon: typeof CheckCircle2; color: string; label: string }> = {
         active: { icon: CheckCircle2, color: 'text-success', label: 'Active' },
         pending: { icon: AlertTriangle, color: 'text-warning', label: 'Pending Setup' },
+        reconnecting: { icon: Loader2, color: 'text-warning', label: 'Reconnecting' },
+        disconnected: { icon: WifiOff, color: 'text-error', label: 'Disconnected' },
         suspended: { icon: XCircle, color: 'text-error', label: 'Suspended' },
         expired: { icon: XCircle, color: 'text-error', label: 'Expired' },
     };
     const c = config[status] || config.pending;
     return (
         <div className={`flex items-center gap-2 px-3 py-1 rounded-full bg-surface border border-border/50 shadow-sm ${c.color}`}>
-            <c.icon size={12} className={status === 'active' ? 'animate-pulse' : ''} />
+            <c.icon size={12} className={status === 'active' ? 'animate-pulse' : status === 'reconnecting' ? 'animate-spin' : ''} />
             <span className="text-[10px] font-black uppercase tracking-widest">{c.label}</span>
         </div>
     );
@@ -196,7 +198,10 @@ export default function DashboardClient({ initialCompanyData, initialStats, user
     }, [expiryDateString]);
 
     const subscriptionStatus = isExpired ? 'expired' : (companyData?.subscription_status || 'active');
-    const overallStatus = whatsappConnected ? subscriptionStatus : 'pending';
+    const authStatus = companyData?.auth_status || 'pending';
+    const overallStatus = whatsappConnected
+        ? subscriptionStatus
+        : (authStatus === 'reconnecting' || authStatus === 'disconnected' ? authStatus : 'pending');
 
     return (
         <div 

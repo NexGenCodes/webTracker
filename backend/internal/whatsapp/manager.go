@@ -230,9 +230,27 @@ func (m *Manager) InitBotForCompany(c db.Company) error {
 		jid := types.NewJID(phone, "s.whatsapp.net")
 		device, err = m.WAStore.GetDevice(m.Context, jid)
 		if err != nil || device == nil {
-			device = m.WAStore.NewDevice()
+			// Fallback: scan all stored devices for a matching phone
+			logger.Warn().Str("phone", phone).Err(err).Msg("Device lookup by JID failed, scanning all stored devices")
+			allDevices, scanErr := m.WAStore.GetAllDevices(m.Context)
+			if scanErr == nil {
+				for _, d := range allDevices {
+					if d.ID != nil && d.ID.User == phone {
+						device = d
+						logger.Info().Str("phone", phone).Msg("Recovered device session from store scan")
+						break
+					}
+				}
+			}
+			if device == nil {
+				logger.Warn().Str("phone", phone).Msg("No stored session found, creating new device")
+				device = m.WAStore.NewDevice()
+			}
+		} else {
+			logger.Info().Str("phone", phone).Bool("has_session", device.ID != nil).Msg("Device found by JID lookup")
 		}
 	} else {
+		logger.Info().Str("company", c.ID.String()).Msg("No WhatsApp phone stored, creating new device")
 		device = m.WAStore.NewDevice()
 	}
 
@@ -285,11 +303,20 @@ func (m *Manager) InitBotForCompany(c db.Company) error {
 	m.BotsMu.Unlock()
 
 	if waClient.Store.ID != nil {
+		logger.Info().Str("company", c.ID.String()).Str("phone", phone).Msg("Stored session found, connecting to WhatsApp")
 		if !waClient.IsConnected() {
 			if err := waClient.Connect(); err != nil {
+				logger.Error().Err(err).Str("company", c.ID.String()).Msg("Failed to connect with stored session")
 				return fmt.Errorf("failed to connect: %w", err)
 			}
 		}
+	} else if c.AuthStatus.Valid && c.AuthStatus.String == "active" {
+		// Session was lost but DB still says active — correct the dashboard state
+		logger.Warn().
+			Str("company", c.ID.String()).
+			Str("phone", phone).
+			Msg("Session lost: no stored device ID but auth_status='active'. Updating to 'disconnected'.")
+		_ = m.ConfigUC.UpdateCompanyAuthStatus(m.Context, c.ID, "disconnected")
 	}
 
 	return nil
@@ -346,6 +373,9 @@ func (m *Manager) HandleWAEvent(bot *BotInstance, evt interface{}) {
 		// Update DB to reflect reconnecting state (only on first attempt to avoid write spam)
 		if bot.ReconnectCount == 1 {
 			_ = m.ConfigUC.UpdateCompanyAuthStatus(m.Context, bot.CompanyID, "reconnecting")
+		} else if bot.ReconnectCount >= 5 {
+			// Escalate: auto-reconnect has failed repeatedly — mark as disconnected
+			_ = m.ConfigUC.UpdateCompanyAuthStatus(m.Context, bot.CompanyID, "disconnected")
 		}
 
 		logger.Info().
