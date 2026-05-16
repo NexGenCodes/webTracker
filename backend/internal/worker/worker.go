@@ -149,7 +149,19 @@ func (w *Worker) process(workerCtx context.Context, job models.Job) {
 		}
 	}
 
+	// 1. Intent Detection (Pre-reaction filtering)
+	isCommand := len(job.Text) > 1 && (job.Text[0] == '!' || job.Text[0] == '#' || job.Text[0] == '/')
+	isManifest, isPartial := w.isPotentialManifest(job.Text)
+	hasDocument := job.RawMessage != nil && job.RawMessage.Message.GetDocumentMessage() != nil
+
+	// If it's not a command, not a manifest, and doesn't have a document, ignore it immediately.
+	// This prevents the bot from reacting to normal admin conversations.
+	if !isCommand && !isManifest && !isPartial && !hasDocument {
+		return
+	}
+
 	// A. Initial Feedback (Typing, Reading, Reacting)
+	// We only get here if the message is something the bot should actually process.
 	sender := bot.GetSender()
 
 	sender.MarkRead(job.ChatJID, job.SenderJID, job.MessageID)
@@ -208,7 +220,7 @@ func (w *Worker) process(workerCtx context.Context, job models.Job) {
 	}
 
 	// 2. Initial Checks
-	isManifest, isPartial := w.isPotentialManifest(job.Text)
+	isManifest, isPartial = w.isPotentialManifest(job.Text)
 	if !isManifest && !isPartial {
 		return // Completely unrelated message
 	}
