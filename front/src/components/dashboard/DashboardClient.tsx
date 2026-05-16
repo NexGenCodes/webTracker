@@ -144,8 +144,20 @@ export default function DashboardClient({ initialCompanyData, initialStats, user
 
         const companyChannel = supabase
             .channel(`company-global-${companyId}`)
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'companies', filter: `id=eq.${companyId}` }, () => {
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'companies', filter: `id=eq.${companyId}` }, (payload) => {
                 queryClient.invalidateQueries({ queryKey: ['company', companyId] });
+                
+                // Refresh the router if connection status changes to sync server components
+                if (payload.old && payload.new && payload.old.auth_status !== payload.new.auth_status) {
+                    router.refresh();
+                    
+                    // Show a toast notification for better UX
+                    if (payload.new.auth_status === 'active') {
+                        toast.success('WhatsApp connected successfully!');
+                    } else if (payload.new.auth_status === 'disconnected') {
+                        toast.error('WhatsApp disconnected.');
+                    }
+                }
             });
 
         const statsChannel = supabase
