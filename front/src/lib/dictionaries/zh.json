@@ -54,6 +54,7 @@
     "backToHome": "Back to Home"
   },
   "shipment": {
+    "found": "已找到货件",
     "status": "当前状态",
     "destination": "目的地",
     "details": "货物详情",

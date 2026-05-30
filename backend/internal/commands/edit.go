@@ -159,15 +159,15 @@ func (h *EditHandler) Execute(ctx context.Context, shipUC models.ShipmentUsecase
 	// If departure was edited, but arrival was NOT explicitly edited in this command,
 	// we auto-sync arrival to be exactly Departure + 1 day.
 	if departureUpdated && !arrivalExplicitlyUpdated {
-		// Departure edited -> Auto-sync Arrival to Departure + 1
+		// Departure edited -> Auto-sync Arrival to Departure + 1 using CalculateArrival (respects destination timezone)
 		dbShip, _ := shipUC.Track(ctx, companyID, trackingID)
 		if dbShip != nil {
-			loc := time.UTC
-
-			// Add exactly 1 day
-			arrivalDate := newDeparture.In(loc).AddDate(0, 0, 1)
-			ofd := time.Date(arrivalDate.Year(), arrivalDate.Month(), arrivalDate.Day(), 8, 30, 0, 0, loc).UTC()
-			arrival := time.Date(arrivalDate.Year(), arrivalDate.Month(), arrivalDate.Day(), 14, 0, 0, 0, loc).UTC()
+			service := shipUC.GetService()
+			dest := dbShip.Destination.String
+			if dest == "" {
+				dest = "Local Delivery"
+			}
+			arrival, ofd := service.CalculateArrival(newDeparture, dest)
 
 			_ = shipUC.UpdateField(ctx, companyID, trackingID, "expected_delivery_time", arrival.Format("2006-01-02 15:04:05"))
 			_ = shipUC.UpdateField(ctx, companyID, trackingID, "outfordelivery_time", ofd.Format("2006-01-02 15:04:05"))

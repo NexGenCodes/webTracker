@@ -2,6 +2,7 @@ package shipment
 
 import (
 	"math/rand/v2"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -142,8 +143,15 @@ func (c *Calculator) ResolveTimezone(country string) string {
 		return tz
 	}
 
-	// 2. Fuzzy match (starts with or contains)
-	for name, tz := range CountryTimezoneMap {
+	// 2. Fuzzy match (starts with or contains) with sorted keys for deterministic matching
+	var keys []string
+	for name := range CountryTimezoneMap {
+		keys = append(keys, name)
+	}
+	sort.Strings(keys)
+
+	for _, name := range keys {
+		tz := CountryTimezoneMap[name]
 		if strings.Contains(country, name) || strings.Contains(name, country) {
 			return tz
 		}
@@ -154,7 +162,7 @@ func (c *Calculator) ResolveTimezone(country string) string {
 
 // CalculateDeparture (Algorithm A) determines when the package officially goes "In Transit".
 // Resolves the timezone from the origin country — no hardcoded admin timezone needed.
-// Rule: departure = now + 1 hour. If that falls between 11 PM and 8 AM, snap to 8 AM.
+// Rule: departure = now + 1 hour. If that falls between 10 PM and 8 AM, snap to 8 AM.
 func (c *Calculator) CalculateDeparture(now time.Time, originCountry string) time.Time {
 	tz := c.ResolveTimezone(originCountry)
 	loc, err := loadLocation(tz)
@@ -165,9 +173,9 @@ func (c *Calculator) CalculateDeparture(now time.Time, originCountry string) tim
 	// Transit starts exactly 1 hour after creation in origin local time
 	transit := now.In(loc).Add(1 * time.Hour)
 
-	// Cap: if departure falls between 11 PM and 8 AM, snap to next 8 AM
-	if transit.Hour() >= 23 {
-		// After 11 PM: Push to 8:00 AM next day
+	// Cap: if departure falls between 10 PM and 8 AM, snap to next 8 AM
+	if transit.Hour() >= 22 {
+		// At or after 10 PM: Push to 8:00 AM next day
 		next := transit.AddDate(0, 0, 1)
 		transit = time.Date(next.Year(), next.Month(), next.Day(), 8, 0, 0, 0, loc)
 	} else if transit.Hour() < 8 {
@@ -203,6 +211,11 @@ func (c *Calculator) CalculateArrival(departure time.Time, destinationCountry st
 	hour := 10 + rand.IntN(6) // 10, 11, 12, 13, 14, 15
 	minute := rand.IntN(60)
 	arrival := time.Date(arrivalDate.Year(), arrivalDate.Month(), arrivalDate.Day(), hour, minute, 0, 0, loc).UTC()
+
+	// Ensure outForDelivery is at least 2 hours before arrival to prevent rapid cascading transitions
+	if arrival.Sub(outForDelivery) < 2*time.Hour {
+		outForDelivery = arrival.Add(-2 * time.Hour)
+	}
 
 	return arrival, outForDelivery
 }

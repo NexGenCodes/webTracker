@@ -94,7 +94,7 @@ export function TrackContent({ initialId: propId }: TrackProps) {
       const data = await getTrackingAction(id);
       if (data) {
         setShippingData(data);
-        toast.success(dict.admin?.success || 'Shipment found', {
+        toast.success(dict.shipment?.found || 'Shipment found', {
           icon: '📦',
         });
       } else {

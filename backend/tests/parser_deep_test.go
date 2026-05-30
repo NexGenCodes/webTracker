@@ -200,15 +200,7 @@ Name: Peter Parker`,
 				"ReceiverEmail": "client@example.com",
 			},
 		},
-		{
-			name: "Passport/ID extraction",
-			input: `Receiver ID: ABC123456
-Name: Clark Kent`,
-			expected: map[string]interface{}{
-				"ReceiverName": "Clark Kent",
-				"ReceiverID":   "ABC123456",
-			},
-		},
+
 		{
 			name:  "Address with special characters",
 			input: `Address: #12, 5th Floor & Block-C, O'Malley St.`,

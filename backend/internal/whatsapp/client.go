@@ -24,6 +24,23 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
+func isPotentialManifest(text string) bool {
+	if text == "" {
+		return false
+	}
+	text = strings.TrimSpace(text)
+	upper := strings.ToUpper(text)
+	if strings.HasPrefix(upper, "SENDER") || strings.Contains(upper, "SENDER\n") || strings.Contains(upper, "SENDER\r\n") {
+		return true
+	}
+	// Also assume it's a potential manifest if it has multiple lines and looks structured.
+	lines := strings.Split(text, "\n")
+	if len(lines) >= 3 {
+		return true
+	}
+	return false
+}
+
 // NewStore initializes a new SQL store for the WhatsApp client.
 func NewStore(dsn string) (*sqlstore.Container, error) {
 	dbLog := waLog.Stdout("Database", "DEBUG", true)
@@ -115,6 +132,16 @@ func HandleEvent(bot *BotInstance, evt interface{}, cfg *config.Config, configUC
 			docMsg := v.Message.GetDocumentMessage()
 			if text == "" && docMsg == nil {
 				return
+			}
+
+			// Pre-filtering: Only process commands, potential manifests, or documents.
+			if docMsg == nil {
+				trimmed := strings.TrimSpace(text)
+				isCommand := strings.HasPrefix(trimmed, "!") || strings.HasPrefix(trimmed, "#")
+				if !isCommand && !isPotentialManifest(trimmed) {
+					logger.Debug().Msg("[FILTER] Ignored conversational message (not a command or manifest)")
+					return
+				}
 			}
 
 			// Identify Chat / Sender Context

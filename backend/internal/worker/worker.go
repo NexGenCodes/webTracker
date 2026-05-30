@@ -259,10 +259,8 @@ func (w *Worker) process(workerCtx context.Context, job models.Job) {
 			Msg("Information incomplete after parsing")
 
 		// Specifically list the exact missing fields
-		msg := "📝 *INFORMATION INCOMPLETE*\n\n━━━━━━━━━━━━━━━━━━━━━━━\n" +
-			"The system could not parse the following required fields:\n" +
-			"• " + strings.Join(missing, "\n• ") + "\n" +
-			"━━━━━━━━━━━━━━━━━━━━━━━\n\n_Please provide the missing data to proceed._"
+		missingStr := "• " + strings.Join(missing, "\n• ")
+		msg := i18n.T(lang, "MSG_INFO_INCOMPLETE", missingStr)
 		sender.Reply(job.ChatJID, job.SenderJID, msg, job.MessageID, job.Text)
 		sender.React(job.ChatJID, job.SenderJID, job.MessageID, "⚠️")
 		return

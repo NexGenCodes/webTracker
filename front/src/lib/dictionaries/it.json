@@ -54,6 +54,7 @@
     "backToHome": "Back to Home"
   },
   "shipment": {
+    "found": "Spedizione trovata",
     "status": "Stato Attuale",
     "destination": "Destinazione",
     "details": "Dettagli Spedizione",

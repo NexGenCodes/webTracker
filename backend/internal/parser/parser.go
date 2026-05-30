@@ -52,24 +52,23 @@ func GetLabelMappings() []uncompiledLabelMap{
 	// Supports standard 's, smart ’s, plural s, and plural possessive s'
 	possessive := `(?:['’]s|s['’]|s)?`
 	return []uncompiledLabelMap{
-		{"ReceiverName", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|reciever|rcvr|consignee|destinatario|destinatário|dirección|empfänger|destinataire|namen?)` + possessive + `\b(?:\s+is)?[\s\-:]+name\b[\s\-:]*`, 2},
-		{"ReceiverName", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|reciever|rcvr|consignee|destinatario|destinatário|empfänger|destinataire|to)` + possessive + `\b(?:\s+is)?[\s\-:]*`, 2},
+		{"ReceiverName", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|reciever|rcvr|consignee|destinatario|destinatário|empfänger|destinataire|namen?)` + possessive + `\b(?:\s+is)?[\s\-:]+name\b[\s\-:]*`, 2},
+		{"ReceiverName", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|reciever|rcvr|consignee|destinatario|destinatário|empfänger|destinataire|to)` + possessive + `\b(?:\s+is)?[\s\-:]*`, 1},
 		{"ReceiverName", `(?i)\bname\b(?:\s+is)?[\s\-:]*`, 1},
 		{"ReceiverPhone", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|reciever|rcvr|to|consignment|consignee|destinatario|destinatário|empfänger|destinataire)` + possessive + `\b[\s\-:]+\b(?:phone|mobile|mob|teléfono|telephon|telefone|tel|num|contact|telephone|mobil|number|ph|cell|whatsapp|handy|nr)\b[\s\-:]*`, 2},
 		{"ReceiverPhone", `(?i)\b(?:phone|mobile|mob|teléfono|telephon|telefone|tel|num|contact|telephone|mobil|number|ph|cell|whatsapp|handy|nr)\b[\s\-:]*`, 1},
 		{"ReceiverAddress", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|reciever|rcvr|to|consignment|consignee|destinatario|destinatário|empfänger|destinataire)` + possessive + `\b[\s\-:]+\b(?:address|addr|street|location|addres|addrs|dir|direction|dirección|morada|adresse|straße|strasse)\b[\s\-:]*`, 2},
 		{"ReceiverAddress", `(?i)\b(?:address|addr|street|location|addres|addrs|dir|direction|dirección|morada|adresse|straße|strasse)\b[\s\-:]*`, 1},
-		{"ReceiverCountry", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|reciever|rcvr|to|consignment|consignee|destinatario|destinatário|empfänger|destinataire)` + possessive + `\b[\s\-:]+\b(?:country|nation|state|city|pais|land|dest|destination|país|stadt|land|ort)\b[\s\-:]*`, 2},
-		{"ReceiverCountry", `(?i)\b(?:country|nation|state|city|pais|land|dest|destination|país|stadt|land|ort)\b[\s\-:]*`, 2},
-		{"ReceiverID", `(?i)\b(?:id|passport|passport\s*num|id\s*num|identity|identification|tin|nin|ssn|dni|passaporte|ausweis)\b[\s\-:]*`, 1},
-		{"ReceiverID", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|reciever|rcvr|to|consignment|consignee|destinatario|destinatário|empfänger|destinataire)` + possessive + `\b[\s\-:]+\b(?:id|passport|passport\s*num|id\s*num|identity|identification|tin|nin|ssn)\b[\s\-:]*`, 2},
+		{"ReceiverCountry", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|reciever|rcvr|to|consignment|consignee|destinatario|destinatário|empfänger|destinataire)` + possessive + `\b[\s\-:]+\b(?:country|county|nation|state|city|pais|land|dest|destination|país|stadt|land|ort)\b[\s\-:]*`, 2},
+		{"ReceiverCountry", `(?i)\b(?:country|county|nation|state|city|pais|land|dest|destination|país|stadt|land|ort)\b[\s\-:]*`, 2},
 		{"ReceiverEmail", `(?i)\b(?:receiver|recipient|reciver|recever|resiver|receive|recieve|reciever|rcvr|to|consignment|consignee|destinatario|destinatário|empfänger|destinataire)` + possessive + `\b[\s\-:]+\b(?:email|mail|e-mail)\b[\s\-:]*`, 2},
 		{"ReceiverEmail", `(?i)\b(?:email|mail|e-mail)\b[\s\-:]*`, 1},
 		{"SenderName", `(?i)\b(?:sender|sendr|from|shippr|shipper|sent by|remetente|remitente|absender|expéditeur|expediteur|source|origin)` + possessive + `\b[\s\-:]+name\b[\s\-:]*`, 2},
-		{"SenderName", `(?i)\b(?:sender|sendr|from|shippr|shipper|sent by|remetente|remitente|absender|expéditeur|expediteur)` + possessive + `\b[\s\-:]*`, 2},
-		{"SenderCountry", `(?i)\b(?:origin|sender` + possessive + `\s*country|sender` + possessive + `\s*nation|source` + possessive + `\s*country|from` + possessive + `\s*country)\b[\s\-:]*`, 2},
+		{"SenderName", `(?i)\b(?:sender|sendr|from|shippr|shipper|sent by|remetente|remitente|absender|expéditeur|expediteur)` + possessive + `\b[\s\-:]*`, 1},
+		{"SenderCountry", `(?i)\b(?:origin|sender` + possessive + `\s*(?:country|county)|sender` + possessive + `\s*nation|source` + possessive + `\s*(?:country|county)|from` + possessive + `\s*(?:country|county))\b[\s\-:]*`, 2},
 		{"CargoType", `(?i)\b(?:item|content|cargo|description|type|package|commodity|conteúdo|contenido|inhalt|ware|consignment)\b(?:\s+weight)?[\s\-:]*`, 1},
 		{"Weight", `(?i)\b(?:weight|wgt|mass|gross\s*weight|peso|gewicht|poids)\b[\s\-:]*`, 2},
+		// departure/arrival: used by !edit only — ParseRegex deliberately ignores these
 		{"scheduled_transit_time", `(?i)\b(?:departure|transit\s*time|depart|sent\s*date|start\s*date|transit|partida|salida|abfahrt)\b[\s\-:]*`, 2},
 		{"expected_delivery_time", `(?i)\b(?:arrival|delivery\s*time|arrive|expect|delivery\s*date|delivered\s*on|delivery|chegada|entrega|ankunft|zustellung)\b[\s\-:]*`, 2},
 	}
@@ -133,7 +132,6 @@ func ParseRegex(text string) models.Manifest {
 	m.ReceiverPhone = results["ReceiverPhone"]
 	m.ReceiverAddress = results["ReceiverAddress"]
 	m.ReceiverCountry = results["ReceiverCountry"]
-	m.ReceiverID = results["ReceiverID"]
 	m.ReceiverEmail = results["ReceiverEmail"]
 	m.SenderName = results["SenderName"]
 	m.SenderCountry = results["SenderCountry"]
@@ -231,7 +229,6 @@ func ParseEditPairs(text string) map[string]string {
 		"ReceiverPhone":          "recipient_phone",
 		"ReceiverAddress":        "recipient_address",
 		"ReceiverCountry":        "destination",
-		"ReceiverID":             "recipient_id",
 		"ReceiverEmail":          "recipient_email",
 		"SenderName":             "sender_name",
 		"SenderCountry":          "origin",

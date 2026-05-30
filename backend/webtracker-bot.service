@@ -1,7 +1,7 @@
 [Unit]
 Description=WebTracker WhatsApp Bot
-After=network.target
-
+After=network.target redis-server.service
+Wants=redis-server.service
 [Service]
 Type=simple
 # User will be replaced during deployment

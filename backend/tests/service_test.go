@@ -36,16 +36,16 @@ func TestAlgorithmA_Departure(t *testing.T) {
 			expected:      "2026-03-24 08:00:00",                        // 8 AM Same Day (capped)
 		},
 		{
-			name:          "Boundary 9:59 PM Lagos",
+			name:          "Boundary 8:59 PM Lagos",
 			originCountry: "Nigeria",
-			now:           time.Date(2026, 3, 24, 20, 59, 0, 0, time.UTC), // 9:59 PM Lagos
-			expected:      "2026-03-24 22:59:00",                          // 10:59 PM Lagos (within window, not capped)
+			now:           time.Date(2026, 3, 24, 19, 59, 0, 0, time.UTC), // 8:59 PM Lagos
+			expected:      "2026-03-24 21:59:00",                          // 9:59 PM Lagos (within window, not capped)
 		},
 		{
-			name:          "10 PM Lagos → 11 PM departure → capped",
+			name:          "9 PM Lagos → 10 PM departure → capped",
 			originCountry: "Nigeria",
-			now:           time.Date(2026, 3, 24, 21, 0, 0, 0, time.UTC), // 10 PM Lagos
-			expected:      "2026-03-25 08:00:00",                          // 11 PM (hour 23) → capped to 8 AM next day
+			now:           time.Date(2026, 3, 24, 20, 0, 0, 0, time.UTC), // 9 PM Lagos
+			expected:      "2026-03-25 08:00:00",                          // 10 PM (hour 22) → capped to 8 AM next day
 		},
 		{
 			name:          "Afghanistan origin (3 PM Kabul)",
@@ -89,14 +89,14 @@ func TestAlgorithmB_Arrival(t *testing.T) {
 			localArrival := arrival.In(loc)
 			localOFD := outForDelivery.In(loc)
 
-			// Expected Delivery: 9 AM - 5 PM local
-			assert.True(t, localArrival.Hour() >= 9 && localArrival.Hour() <= 16,
-				"Arrival at %v should be within 9-16", localArrival)
+			// Expected Delivery: 10 AM - 4 PM local
+			assert.True(t, localArrival.Hour() >= 10 && localArrival.Hour() <= 15,
+				"Arrival at %v should be within 10-15", localArrival)
 
-			// Out for Delivery: 7:30 AM - 9:00 AM local
+			// Out for Delivery: 8:00 AM - 10:00 AM local
 			ofdMinutes := localOFD.Hour()*60 + localOFD.Minute()
-			assert.True(t, ofdMinutes >= 7*60+30 && ofdMinutes <= 9*60,
-				"Out for Delivery at %v should be within 7:30-9:00", localOFD)
+			assert.True(t, ofdMinutes >= 8*60 && ofdMinutes <= 10*60,
+				"Out for Delivery at %v should be within 8:00-10:00", localOFD)
 
 			// Must be next day (not same day as departure)
 			depLocal := departure.In(loc)
@@ -109,7 +109,7 @@ func TestAlgorithmB_Arrival(t *testing.T) {
 func TestAlgorithmB_SundaySkip(t *testing.T) {
 	calc := &shipment.Calculator{}
 
-	// Saturday departure → arrival would be Sunday → should skip to Monday
+	// Saturday departure → arrival would be Sunday (no Sunday skip as per strict next-day logic)
 	// 2026-03-28 is a Saturday
 	saturdayDeparture := time.Date(2026, 3, 28, 10, 0, 0, 0, time.UTC)
 
@@ -117,6 +117,6 @@ func TestAlgorithmB_SundaySkip(t *testing.T) {
 	loc, _ := time.LoadLocation("Africa/Lagos")
 	localArrival := arrival.In(loc)
 
-	assert.Equal(t, time.Monday, localArrival.Weekday(),
-		"Sunday arrival should be pushed to Monday, got %v", localArrival.Weekday())
+	assert.Equal(t, time.Sunday, localArrival.Weekday(),
+		"Saturday departure should arrive on Sunday, got %v", localArrival.Weekday())
 }
