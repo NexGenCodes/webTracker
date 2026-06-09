@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"webtracker-bot/internal/auth"
+	"webtracker-bot/internal/billing"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/database/db"
 	"webtracker-bot/internal/database/dbutil"
@@ -102,7 +103,11 @@ func (h *ShipmentHandler) Create(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to look up company"})
 	}
-	remaining, err := h.shipmentUC.CheckShipmentCap(c.Context(), h.cfg, companyID, company.AdminEmail, company.PlanType.String, company.SubscriptionExpiry)
+	isSuperAdmin := false
+	if claims, ok := c.Locals("user").(*auth.JWTClaims); ok && billing.IsSuperAdminRole(claims.Role) {
+		isSuperAdmin = true
+	}
+	remaining, err := h.shipmentUC.CheckShipmentCap(c.Context(), companyID, isSuperAdmin, company.PlanType.String, company.SubscriptionExpiry)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to check shipment cap"})
 	}
@@ -403,7 +408,11 @@ func (h *ShipmentHandler) BulkCreateCSV(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to look up company"})
 	}
-	remaining, err := h.shipmentUC.CheckShipmentCap(c.Context(), h.cfg, companyID, company.AdminEmail, company.PlanType.String, company.SubscriptionExpiry)
+	isSuperAdmin := false
+	if claims, ok := c.Locals("user").(*auth.JWTClaims); ok && billing.IsSuperAdminRole(claims.Role) {
+		isSuperAdmin = true
+	}
+	remaining, err := h.shipmentUC.CheckShipmentCap(c.Context(), companyID, isSuperAdmin, company.PlanType.String, company.SubscriptionExpiry)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to check shipment cap"})
 	}

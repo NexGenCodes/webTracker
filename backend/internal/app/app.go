@@ -126,6 +126,7 @@ func (a *App) Init() error {
 		ShipmentService: a.ShipmentUC.GetService(),
 		Context:         a.Context,
 		AsynqClient:     cache.AsynqClient,
+		Queries:         querier,
 	}
 
 	poolSize := a.Cfg.WorkerPoolSize

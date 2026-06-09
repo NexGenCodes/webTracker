@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"time"
 	"webtracker-bot/internal/billing"
-	"webtracker-bot/internal/config"
 
 	"github.com/google/uuid"
 )
@@ -15,14 +14,13 @@ import (
 // A return value of -1 signals unlimited (super admin).
 func (u *Usecase) CheckShipmentCap(
 	ctx context.Context,
-	cfg *config.Config,
 	companyID uuid.UUID,
-	adminEmail string,
+	isSuperAdmin bool,
 	planType string,
 	expiry sql.NullTime,
 ) (remaining int64, err error) {
 	// Super admin is unlimited
-	if billing.IsSuperAdminEmail(cfg, adminEmail) {
+	if isSuperAdmin {
 		return -1, nil // -1 signals unlimited
 	}
 

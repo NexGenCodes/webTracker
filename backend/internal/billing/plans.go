@@ -90,8 +90,9 @@ func GetPlanByID(id string) (Plan, error) {
 	}
 }
 
-// IsSuperAdminEmail checks if the given email matches the configured super admin.
-// Lives in the billing package because it governs billing bypass logic.
+// Deprecated: IsSuperAdminEmail checks the email against the env var only.
+// Use IsSuperAdminRole (API handlers) or IsSuperAdminByEmail (workers/cron) instead.
+// Kept for backward compatibility within IsSuperAdminByEmail fallback path.
 func IsSuperAdminEmail(cfg *config.Config, email string) bool {
 	if cfg == nil || cfg.SuperAdminCompanyEmail == "" {
 		return false

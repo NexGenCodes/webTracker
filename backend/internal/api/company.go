@@ -4,11 +4,11 @@ import (
 	"errors"
 	"strings"
 	"time"
+	"webtracker-bot/internal/auth"
 	"webtracker-bot/internal/billing"
 	"webtracker-bot/internal/config"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
-	"webtracker-bot/internal/auth"
 	"webtracker-bot/internal/whatsapp"
 
 	"github.com/gofiber/fiber/v2"
@@ -62,8 +62,8 @@ func (h *CompanyHandler) checkSubscription(ctx *fiber.Ctx, companyID uuid.UUID) 
 		return fiber.NewError(fiber.StatusInternalServerError, "Failed to verify subscription status")
 	}
 
-	// Super admin bypasses all billing checks
-	if billing.IsSuperAdminEmail(h.cfg, company.AdminEmail) {
+	// Super admin bypasses all billing checks (RBAC: check JWT role, not email)
+	if claims, ok := ctx.Locals("user").(*auth.JWTClaims); ok && billing.IsSuperAdminRole(claims.Role) {
 		return nil
 	}
 

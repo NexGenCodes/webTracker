@@ -53,7 +53,11 @@ func (w *Worker) HandleCronCompanyPulse(ctx context.Context, t *asynq.Task) erro
 	// Regular admins should be disconnected if their trial ends, but the super admin remains free.
 	company, err := w.ConfigUC.GetCompanyByID(ctx, companyID)
 	if err == nil {
-		if !billing.IsSuperAdminEmail(w.Cfg, company.AdminEmail) {
+		dbCheckFunc := func(c context.Context, email string) bool {
+			_, err := w.Queries.GetSuperAdminByEmail(c, email)
+			return err == nil
+		}
+		if !billing.IsSuperAdminByEmail(ctx, w.Cfg, company.AdminEmail, dbCheckFunc) {
 			expired := company.SubscriptionExpiry.Valid && company.SubscriptionExpiry.Time.Before(now)
 			inactive := company.SubscriptionStatus.String != "active" && company.SubscriptionStatus.String != "trialing"
 

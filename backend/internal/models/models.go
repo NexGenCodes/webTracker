@@ -1,15 +1,15 @@
 package models
 
 import (
-	"github.com/google/uuid"
-	"go.mau.fi/whatsmeow/types"
-	"go.mau.fi/whatsmeow/types/events"
-	"go.mau.fi/whatsmeow"
-	"webtracker-bot/internal/database/db"
-	"webtracker-bot/internal/config"
 	"context"
 	"database/sql"
 	"time"
+
+	"github.com/google/uuid"
+	"go.mau.fi/whatsmeow"
+	"go.mau.fi/whatsmeow/types"
+	"go.mau.fi/whatsmeow/types/events"
+	"webtracker-bot/internal/database/db"
 )
 
 type WhatsAppSender interface {
@@ -56,7 +56,7 @@ type ShipmentUsecase interface {
 	CountCreatedSince(ctx context.Context, companyID uuid.UUID, since time.Time) (int64, error)
 	CreateWithPrefix(ctx context.Context, companyID uuid.UUID, s *db.Shipment, prefix string) (string, error)
 	FindSimilar(ctx context.Context, companyID uuid.UUID, userJid, phone string) (string, error)
-	CheckShipmentCap(ctx context.Context, cfg *config.Config, companyID uuid.UUID, adminEmail string, planType string, expiry sql.NullTime) (int64, error)
+	CheckShipmentCap(ctx context.Context, companyID uuid.UUID, isSuperAdmin bool, planType string, expiry sql.NullTime) (int64, error)
 	ProcessTransitions(ctx context.Context, companyID uuid.UUID, now time.Time) ([]TransitionResult, error)
 	CountDailyStats(ctx context.Context, companyID uuid.UUID, since time.Time) (created int64, delivered int64, err error)
 	RunAgedCleanup(ctx context.Context, companyID uuid.UUID, deliveredCutoff, allCutoff time.Time) (int64, error)

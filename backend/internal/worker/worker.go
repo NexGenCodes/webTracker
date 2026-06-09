@@ -50,6 +50,7 @@ type Worker struct {
 	ShipmentService shipment.Service
 	Context         context.Context
 	AsynqClient     *asynq.Client
+	Queries         db.Querier
 }
 
 // Start registers the Asynq handlers and begins processing.
@@ -138,7 +139,13 @@ func (w *Worker) process(workerCtx context.Context, job models.Job) {
 
 	// Subscription Guard: Block expired or inactive tenants from using the bot
 	// The super admin is always free to access anything and bypasses all billing checks.
-	if !billing.IsSuperAdminEmail(w.Cfg, company.AdminEmail) {
+	dbCheckFunc := func(ctx context.Context, email string) bool {
+		_, err := w.Queries.GetSuperAdminByEmail(ctx, email)
+		return err == nil
+	}
+	isSuperAdmin := billing.IsSuperAdminByEmail(gctx, w.Cfg, company.AdminEmail, dbCheckFunc)
+	
+	if !isSuperAdmin {
 		if company.SubscriptionStatus.String != "active" && company.SubscriptionStatus.String != "trialing" {
 			logger.Info().Str("company_id", job.CompanyID.String()).Str("status", company.SubscriptionStatus.String).Msg("Ignoring message from inactive subscription")
 			return
@@ -315,7 +322,7 @@ func (w *Worker) process(workerCtx context.Context, job models.Job) {
 
 	g.Go(func() error {
 		var err error
-		remaining, err = w.ShipmentUC.CheckShipmentCap(gctx, w.Cfg, job.CompanyID, company.AdminEmail, company.PlanType.String, company.SubscriptionExpiry)
+		remaining, err = w.ShipmentUC.CheckShipmentCap(gctx, job.CompanyID, isSuperAdmin, company.PlanType.String, company.SubscriptionExpiry)
 		return err
 	})
 
