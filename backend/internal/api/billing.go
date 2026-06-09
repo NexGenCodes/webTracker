@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"time"
 
 	"webtracker-bot/internal/billing"
 	"webtracker-bot/internal/config"
@@ -143,6 +144,15 @@ func (h *BillingHandler) getSubscriptionStatus(c *fiber.Ctx) error {
 	company, err := h.configUC.GetCompanyByID(c.Context(), companyID)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Company not found"})
+	}
+
+	// Super admin bypasses all billing checks
+	if billing.IsSuperAdminEmail(h.cfg, company.AdminEmail) {
+		return c.JSON(fiber.Map{
+			"status": "active",
+			"expiry": time.Now().AddDate(100, 0, 0), // Far in the future
+			"plan":   "pro",
+		})
 	}
 
 	return c.JSON(fiber.Map{
