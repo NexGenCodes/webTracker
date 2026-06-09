@@ -37,7 +37,7 @@ export interface CompanyData {
 interface DashboardClientProps {
     initialCompanyData: CompanyData | null;
     initialStats: { total: number; active: number; delivered: number };
-    user: { email: string; company_name: string; plan_type: string } | null;
+    user: { email: string; company_name: string; plan_type: string; role?: string } | null;
     companyId: string;
     jwt?: string;
 }
@@ -178,7 +178,7 @@ export default function DashboardClient({ initialCompanyData, initialStats, user
 
     // --- DERIVED STATE ---
     const companyName = companyData?.name || user?.company_name || 'CARGOHIVE';
-    const whatsappConnected = companyData?.auth_status === 'active';
+    const whatsappConnected = companyData?.auth_status === 'active' || user?.role === 'super_admin';
     const planType = (companyData?.plan_type || 'trial').toLowerCase();
     const currentPlan = PLAN_DETAILS[planType] || PLAN_DETAILS['trial'];
 
