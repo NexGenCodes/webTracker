@@ -100,7 +100,7 @@ export default function DashboardClient({ initialCompanyData, initialStats, user
             return data as CompanyData;
         },
         initialData: initialCompanyData,
-        staleTime: 30_000,
+        staleTime: 60_000,
         refetchOnWindowFocus: true,
     });
 
@@ -127,7 +127,7 @@ export default function DashboardClient({ initialCompanyData, initialStats, user
             };
         },
         initialData: initialStats,
-        staleTime: 30_000,
+        staleTime: 60_000,
         refetchOnWindowFocus: true,
     });
 
@@ -138,20 +138,25 @@ export default function DashboardClient({ initialCompanyData, initialStats, user
         }
     }, [companyError, router]);
 
-    // --- REALTIME SUBSCRIPTIONS (Invalidating React Query) ---
+    // --- REALTIME SUBSCRIPTIONS (Performant: direct cache writes + debounced stats) ---
     useEffect(() => {
         if (!companyId) return;
+
+        // Debounce timer for shipment stats — batches rapid INSERTs into one re-fetch
+        let statsDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
         const companyChannel = supabase
             .channel(`company-global-${companyId}`)
             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'companies', filter: `id=eq.${companyId}` }, (payload) => {
-                queryClient.invalidateQueries({ queryKey: ['company', companyId] });
-                
-                // Refresh the router if connection status changes to sync server components
+                // Direct cache write — skip the network round-trip entirely
+                const newData = payload.new as CompanyData;
+                queryClient.setQueryData(['company', companyId], (old: CompanyData | null) => ({
+                    ...old,
+                    ...newData,
+                }));
+
+                // Toast notifications for key status changes
                 if (payload.old && payload.new && payload.old.auth_status !== payload.new.auth_status) {
-                    router.refresh();
-                    
-                    // Show a toast notification for better UX
                     if (payload.new.auth_status === 'active') {
                         toast.success('WhatsApp connected successfully!');
                     } else if (payload.new.auth_status === 'disconnected') {
@@ -163,13 +168,18 @@ export default function DashboardClient({ initialCompanyData, initialStats, user
         const statsChannel = supabase
             .channel(`shipment-stats-${companyId}`)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'shipment', filter: `company_id=eq.${companyId}` }, () => {
-                queryClient.invalidateQueries({ queryKey: ['shipments', companyId] });
+                // Debounce: batch rapid shipment changes into a single re-fetch (2s window)
+                if (statsDebounceTimer) clearTimeout(statsDebounceTimer);
+                statsDebounceTimer = setTimeout(() => {
+                    queryClient.invalidateQueries({ queryKey: ['shipments', companyId] });
+                }, 2000);
             });
 
         companyChannel.subscribe();
         statsChannel.subscribe();
 
         return () => {
+            if (statsDebounceTimer) clearTimeout(statsDebounceTimer);
             supabase.removeChannel(companyChannel);
             supabase.removeChannel(statsChannel);
         };
@@ -355,10 +365,11 @@ export default function DashboardClient({ initialCompanyData, initialStats, user
                         icon: '🚀',
                         duration: 5000,
                     });
-                    queryClient.refetchQueries({ queryKey: ['company', companyId] });
-                    queryClient.refetchQueries({ queryKey: ['shipments', companyId] });
-                    // Hard refresh to re-render SSR server components with fresh auth_status
-                    router.refresh();
+                    // Optimistic cache write — instant UI update, no round-trip
+                    queryClient.setQueryData(['company', companyId], (old: CompanyData | null) => ({
+                        ...old,
+                        auth_status: 'active',
+                    }));
                 }}
             />
         </div>
