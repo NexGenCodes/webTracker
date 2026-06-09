@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"webtracker-bot/internal/config"
-	"webtracker-bot/internal/logger"
 )
 
 // SuperAdminChecker is a minimal interface for looking up super admin records.
@@ -23,19 +22,11 @@ func IsSuperAdminRole(role string) bool {
 }
 
 // IsSuperAdminByEmail checks whether the given email belongs to a super admin
-// using the database as the primary source of truth, with the env var as a fallback.
+// using the env var as the single source of truth.
 // Use this in background workers and cron jobs where there is no JWT context.
-func IsSuperAdminByEmail(ctx context.Context, cfg *config.Config, email string, dbCheck func(ctx context.Context, email string) bool) bool {
-	// 1. Database check (primary source of truth)
-	if dbCheck != nil && dbCheck(ctx, email) {
-		return true
-	}
-
-	// 2. Env var fallback (backward compatibility)
+func IsSuperAdminByEmail(cfg *config.Config, email string) bool {
 	if cfg != nil && cfg.SuperAdminCompanyEmail != "" && email == cfg.SuperAdminCompanyEmail {
-		logger.Debug().Str("email", email).Msg("[RBAC] Super admin matched via env var fallback (deprecated)")
 		return true
 	}
-
 	return false
 }

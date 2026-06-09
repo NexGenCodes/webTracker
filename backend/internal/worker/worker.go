@@ -139,11 +139,7 @@ func (w *Worker) process(workerCtx context.Context, job models.Job) {
 
 	// Subscription Guard: Block expired or inactive tenants from using the bot
 	// The super admin is always free to access anything and bypasses all billing checks.
-	dbCheckFunc := func(ctx context.Context, email string) bool {
-		_, err := w.Queries.GetSuperAdminByEmail(ctx, email)
-		return err == nil
-	}
-	isSuperAdmin := billing.IsSuperAdminByEmail(gctx, w.Cfg, company.AdminEmail, dbCheckFunc)
+	isSuperAdmin := billing.IsSuperAdminByEmail(w.Cfg, company.AdminEmail)
 	
 	if !isSuperAdmin {
 		if company.SubscriptionStatus.String != "active" && company.SubscriptionStatus.String != "trialing" {

@@ -428,6 +428,9 @@ func (s *Service) generateJWT(companyID uuid.UUID, companyName, email, planType,
 	}
 
 	role := "authenticated"
+	if s.cfg != nil && s.cfg.SuperAdminCompanyEmail != "" && email == s.cfg.SuperAdminCompanyEmail {
+		role = "super_admin"
+	}
 
 	claims := JWTClaims{
 		CompanyID:   companyID,
