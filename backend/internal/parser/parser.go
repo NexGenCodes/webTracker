@@ -95,7 +95,7 @@ func init() {
 	stopLabelsRe = regexp.MustCompile(`(?i)`+stopLabels)
 	expressLogisticsRe = regexp.MustCompile(`^(?i)express\s*logistics|shipping|document`)
 	dashesRe = regexp.MustCompile(`^[\-]+$`)
-	phoneLinesRe = regexp.MustCompile(`(?i)(?:\+?\d[\d\s\-\(\)]{7,}\d)`)
+	phoneLinesRe = regexp.MustCompile(`(?i)(?:\+\d[\d\s\-\(\)]{7,14}\d)`)
 	weightLinesRe = regexp.MustCompile(`(?i)(?:^|\s)([\d.,]+)\s*(?:kg|kgs|kilos|kg's)\b`)
 	labelSepRe = regexp.MustCompile(labelSep)
 
@@ -153,7 +153,7 @@ func ParseRegex(text string) models.Manifest {
 	}
 
 	if m.ReceiverPhone == "" {
-		m.ReceiverPhone = extractEntity(receiverZone, `(?i)(?:phone|mobile|mob|tel|num|contact|telephone|mobil|number|ph|cell|whatsapp)?[\s\-:]*([\+\d \t\-\(\).]{7,}\d)`)
+		m.ReceiverPhone = extractEntity(receiverZone, `(?i)(?:phone|mobile|mob|tel|num|contact|telephone|mobil|number|ph|cell|whatsapp)[\s\-:]*(\+\d[\d \t\-\(\).]{6,14}\d)`)
 	}
 	if m.ReceiverEmail == "" {
 		m.ReceiverEmail = extractEntity(text, `([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})`)
@@ -460,11 +460,16 @@ func ValidateEmail(email string) bool {
 }
 
 func ValidatePhone(phone string) bool {
+	trimmed := strings.TrimSpace(phone)
+	if !strings.HasPrefix(trimmed, "+") {
+		return false
+	}
 	digits := 0
-	for _, r := range phone {
+	for _, r := range trimmed {
 		if r >= '0' && r <= '9' {
 			digits++
 		}
 	}
-	return digits >= 5
+	// E.164: 7-15 digits (including country code)
+	return digits >= 7 && digits <= 15
 }

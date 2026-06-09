@@ -151,14 +151,33 @@ func (m *Manifest) Validate() []string {
 	}
 
 	check(m.ReceiverName, "Receiver Name")
-	check(m.ReceiverPhone, "Receiver Phone")
 	check(m.ReceiverAddress, "Receiver Address")
 	check(m.ReceiverCountry, "Receiver Country")
 	check(m.SenderName, "Sender Name")
 	check(m.SenderCountry, "Sender Country")
 
+	// Phone requires + prefix and 7-15 digits (E.164)
+	if !isValidPhone(m.ReceiverPhone) {
+		m.ReceiverPhone = "" // clear junk so upstream doesn't use it
+		missing = append(missing, "Receiver Phone (must start with +)")
+	}
+
 	m.MissingFields = missing
 	return missing
+}
+
+// isValidPhone checks E.164 format: must start with + and contain 7-15 digits.
+func isValidPhone(phone string) bool {
+	if phone == "" || phone[0] != '+' {
+		return false
+	}
+	digits := 0
+	for _, r := range phone {
+		if r >= '0' && r <= '9' {
+			digits++
+		}
+	}
+	return digits >= 7 && digits <= 15
 }
 
 type Job struct {
