@@ -23,41 +23,27 @@ jobs:
           GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o bot ./cmd/server/
           ls -lh bot
 
-      - name: Upload binary to EC2
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          source: backend/bot
-          target: /tmp/
-          strip_components: 1
-          timeout: 60s
-          command_timeout: 30s
-          rm: false
-          debug: false
+      - name: Save SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
 
-      - name: Deploy and restart services
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          timeout: 60s
-          command_timeout: 60s
-          script_stop: true
-          script: |
-            set -e
+      - name: Upload and deploy via SSH
+        run: |
+          set -e
+          # Upload binary via tar piped through SSH
+          tar czf - -C backend bot | ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "sudo tar xzf - -C /opt/webtracker && sudo chmod +x /opt/webtracker/bot"
 
-            echo "=== Installing binary ==="
-            sudo cp /opt/webtracker/bot /opt/webtracker/bot.bak
-            sudo mv /tmp/bot /opt/webtracker/bot
-            sudo chmod +x /opt/webtracker/bot
-
+          # Run deploy commands
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            'set -e
             echo "=== Creating API service ==="
-            sudo tee /etc/systemd/system/webtracker-api.service > /dev/null <<'SERVICEEOF'
+            sudo tee /etc/systemd/system/webtracker-api.service > /dev/null <<'\''SERVICEEOF'\''
             [Unit]
             Description=WebTracker HTTP API
             After=network.target redis-server.service
@@ -77,7 +63,7 @@ jobs:
             SERVICEEOF
 
             echo "=== Updating bot service ==="
-            sudo tee /etc/systemd/system/webtracker-bot.service > /dev/null <<'SERVICEEOF'
+            sudo tee /etc/systemd/system/webtracker-bot.service > /dev/null <<'\''SERVICEEOF'\''
             [Unit]
             Description=WebTracker WhatsApp Bot
             After=network.target redis-server.service
@@ -101,7 +87,7 @@ jobs:
             sudo systemctl enable webtracker-api.service
             sudo systemctl enable webtracker-bot.service
 
-            echo "=== Killing any process on port 8080 ==="
+            echo "=== Killing anything on port 8080 ==="
             sudo fuser -k 8080/tcp 2>/dev/null || true
             sleep 1
 
@@ -120,3 +106,4 @@ jobs:
             sudo systemctl status webtracker-bot.service --no-pager 2>&1 | head -5
             echo "--- Port 8080 ---"
             sudo ss -tlnp | grep 8080 || echo "NOT LISTENING"
+            '
