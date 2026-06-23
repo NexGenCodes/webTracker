@@ -37,7 +37,11 @@ func (h *StatusHandler) Execute(ctx context.Context, shipUC models.ShipmentUseca
 		logger.Error().Err(err).Msg("Database ping failed in !status")
 	}
 
-	groupsCount, _ := configUC.CountAuthorizedGroups(ctx, companyID)
+	groupsCount, err := configUC.CountAuthorizedGroups(ctx, companyID)
+	if err != nil {
+		groupsCount = 0
+		logger.Error().Err(err).Msg("Failed to count authorized groups in !status")
+	}
 
 	msg := i18n.T(i18nLang(lang), "MSG_STATUS_DASHBOARD") + "\n\n" +
 		fmt.Sprintf("📊 UPTIME:    *%s*\n", uptime.Truncate(time.Second)) +
