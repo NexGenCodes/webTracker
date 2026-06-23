@@ -19,6 +19,10 @@ export const viewport = {
   width: "device-width",
   initialScale: 1,
   userScalable: true,
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fafafa" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+  ],
 };
 
 export const metadata: Metadata = {
@@ -42,6 +46,9 @@ export default async function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[9999] focus:px-4 focus:py-2 focus:bg-accent focus:text-white focus:rounded-xl focus:text-sm focus:font-bold">
+          Skip to content
+        </a>
         <Providers initialUser={user} initialCompanyId={user?.company_id}>
           <Toaster position="top-left" toastOptions={{
             className: 'font-bold uppercase text-[11px] tracking-[0.1em] border shadow-2xl rounded-2xl p-4 min-w-[320px]',
@@ -75,7 +82,9 @@ export default async function RootLayout({
             }
           }} />
           <ClientTransitionProvider>
-            {children}
+            <main id="main-content">
+              {children}
+            </main>
             <SpeedInsights />
           </ClientTransitionProvider>
         </Providers>

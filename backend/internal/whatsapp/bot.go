@@ -33,7 +33,8 @@ type BotInstance struct {
 	GroupAuthFlight   singleflight.Group
 	ReconnectCount    int
 	LastReconnect     time.Time
-	KeepaliveCancel   context.CancelFunc // stops the keepalive goroutine
+	StateMu           sync.Mutex // guards ReconnectCount, LastReconnect
+	qrCancel          context.CancelFunc
 }
 
 // IdentityCacheData holds cached identity information for the bot.
@@ -63,4 +64,30 @@ func (b *BotInstance) GetCurrentQR() string {
 	b.QRMu.RLock()
 	defer b.QRMu.RUnlock()
 	return b.CurrentQR
+}
+
+func (b *BotInstance) IncrementReconnectCount() int {
+	b.StateMu.Lock()
+	defer b.StateMu.Unlock()
+	b.ReconnectCount++
+	return b.ReconnectCount
+}
+
+func (b *BotInstance) ResetReconnectState() {
+	b.StateMu.Lock()
+	defer b.StateMu.Unlock()
+	b.ReconnectCount = 0
+	b.LastReconnect = time.Time{}
+}
+
+func (b *BotInstance) GetReconnectCount() int {
+	b.StateMu.Lock()
+	defer b.StateMu.Unlock()
+	return b.ReconnectCount
+}
+
+func (b *BotInstance) SetReconnectCountZero() {
+	b.StateMu.Lock()
+	defer b.StateMu.Unlock()
+	b.ReconnectCount = 0
 }

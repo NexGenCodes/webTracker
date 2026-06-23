@@ -12,6 +12,12 @@ import (
 )
 
 func main() {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Fatal().Interface("panic", r).Msg("Application panicked — shutting down")
+		}
+	}()
+
 	flag.Parse()
 	memLimitMB := int64(700)
 	if envMem := os.Getenv("MAX_MEMORY_MB"); envMem != "" {

@@ -18,7 +18,8 @@ export async function middleware(request: NextRequest) {
   const jwt = request.cookies.get('jwt')?.value
 
   const isAuthPage = request.nextUrl.pathname.startsWith('/auth')
-  const isProtectedPage = request.nextUrl.pathname.startsWith('/admin') || request.nextUrl.pathname.startsWith('/dashboard') || request.nextUrl.pathname.startsWith('/super-admin')
+  const isAdminLoginPage = request.nextUrl.pathname === '/admin-login'
+  const isProtectedPage = !isAdminLoginPage && (request.nextUrl.pathname.startsWith('/admin') || request.nextUrl.pathname.startsWith('/dashboard') || request.nextUrl.pathname.startsWith('/super-admin'))
   const isSuperAdminPage = request.nextUrl.pathname.startsWith('/super-admin')
 
   let isValid = false

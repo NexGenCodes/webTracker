@@ -276,7 +276,7 @@ func TestShipmentUsecase_Deep(t *testing.T) {
 func TestConfigUsecase_Deep(t *testing.T) {
 	ctx := context.Background()
 	repo := new(MockQuerier)
-	uc := config.NewUsecase(repo, nil)
+	uc := config.NewUsecase(repo, nil, nil)
 
 	t.Run("RBAC_AuthorityCheck", func(t *testing.T) {
 		authParams := db.GetGroupAuthorityParams{CompanyID: testCompanyID, Jid: "group1"}

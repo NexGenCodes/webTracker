@@ -43,7 +43,7 @@ func (w *Worker) HandleCronPulse(ctx context.Context, t *asynq.Task) error {
 func (w *Worker) HandleCronCompanyPulse(ctx context.Context, t *asynq.Task) error {
 	var payload tasks.CronCompanyPulsePayload
 	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
-		return fmt.Errorf("failed to decode company pulse payload: %w", err)
+		return fmt.Errorf("failed to decode company pulse payload: %w", asynq.SkipRetry)
 	}
 
 	companyID := payload.CompanyID
@@ -53,7 +53,8 @@ func (w *Worker) HandleCronCompanyPulse(ctx context.Context, t *asynq.Task) erro
 	// Regular admins should be disconnected if their trial ends, but the super admin remains free.
 	company, err := w.ConfigUC.GetCompanyByID(ctx, companyID)
 	if err == nil {
-		if !billing.IsSuperAdminByEmail(w.Cfg, company.AdminEmail) {
+		isSuperAdmin, _ := billing.IsSuperAdminByEmail(ctx, w.ConfigUC, company.AdminEmail)
+		if !isSuperAdmin {
 			expired := company.SubscriptionExpiry.Valid && company.SubscriptionExpiry.Time.Before(now)
 			inactive := company.SubscriptionStatus.String != "active" && company.SubscriptionStatus.String != "trialing"
 
@@ -64,7 +65,9 @@ func (w *Worker) HandleCronCompanyPulse(ctx context.Context, t *asynq.Task) erro
 					Msg("Subscription expired or inactive. Proactively deactivating bot.")
 
 				// Forcefully disconnect/deactivate the bot instance
-				_ = w.Bots.DeactivateBot(companyID)
+				if err := w.Bots.DeactivateBot(companyID); err != nil {
+					logger.Error().Err(err).Str("company", companyID.String()).Msg("Cron pulse: failed to deactivate bot for expired subscription")
+				}
 				return nil // Stop processing for this company
 			}
 		}
@@ -91,7 +94,12 @@ func (w *Worker) HandleCronCompanyPulse(ctx context.Context, t *asynq.Task) erro
 				logger.Warn().Err(err).Str("company", companyID.String()).Msg("Company Pulse: Skipping alert, bot activation failed")
 				continue
 			}
-			bot, _ = w.Bots.GetBot(companyID)
+			var getErr error
+			bot, getErr = w.Bots.GetBot(companyID)
+			if getErr != nil {
+				logger.Error().Err(getErr).Str("company", companyID.String()).Msg("Company Pulse: Failed to get bot after activation")
+				continue
+			}
 		}
 
 		if bot == nil {
@@ -143,12 +151,19 @@ func (w *Worker) HandleCronDailyStats(ctx context.Context, t *asynq.Task) error 
 
 		bot, err := w.Bots.GetBot(companyID)
 		if err != nil {
-			if err := w.Bots.ActivateBot(ctx, companyID); err != nil {
+			if actErr := w.Bots.ActivateBot(ctx, companyID); actErr != nil {
+				logger.Warn().Err(actErr).Str("company", companyID.String()).Msg("Stats: failed to activate bot")
 				continue
 			}
-			bot, _ = w.Bots.GetBot(companyID)
+			var getErr error
+			bot, getErr = w.Bots.GetBot(companyID)
+			if getErr != nil {
+				logger.Warn().Err(getErr).Str("company", companyID.String()).Msg("Stats: failed to get bot after activation")
+				continue
+			}
 		}
 		if bot == nil {
+			logger.Warn().Str("company", companyID.String()).Msg("Stats: bot is nil after activation")
 			continue
 		}
 
@@ -218,16 +233,18 @@ func (w *Worker) HandleCronBotLiveness(ctx context.Context, t *asynq.Task) error
 func (w *Worker) HandleOutboundAlert(ctx context.Context, t *asynq.Task) error {
 	var payload tasks.OutboundAlertPayload
 	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
-		return fmt.Errorf("failed to decode outbound alert payload: %w", err)
+		return fmt.Errorf("failed to decode outbound alert payload: %w", asynq.SkipRetry)
 	}
 
 	bot, err := w.Bots.GetBot(payload.CompanyID)
 	if err != nil {
 		// Just re-activate and try to get it again
-		_ = w.Bots.ActivateBot(ctx, payload.CompanyID)
+		if actErr := w.Bots.ActivateBot(ctx, payload.CompanyID); actErr != nil {
+			logger.Error().Err(actErr).Str("company_id", payload.CompanyID.String()).Msg("Outbound alert: failed to reactivate bot")
+		}
 		bot, err = w.Bots.GetBot(payload.CompanyID)
 		if err != nil || bot == nil {
-			return fmt.Errorf("bot instance not found or failed to hydrate")
+			return fmt.Errorf("bot instance not found or failed to hydrate: %w", asynq.SkipRetry)
 		}
 	}
 

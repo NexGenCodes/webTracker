@@ -23,8 +23,10 @@ import (
 )
 
 var (
-	templateCache = make(map[string]*image.RGBA)
-	tmplMu        sync.RWMutex
+	templateCache    = make(map[string]*image.RGBA)
+	templateCacheMax = 64
+	templateOrder    = make([]string, 0, templateCacheMax)
+	tmplMu           sync.RWMutex
 
 	bufPool = sync.Pool{
 		New: func() interface{} {
@@ -114,7 +116,13 @@ func loadStaticTemplate(companyName string, lang i18n.Language) *image.RGBA {
 		draw.Draw(rgba, rgba.Bounds(), img, b.Min, draw.Src)
 	}
 
+	if len(templateCache) >= templateCacheMax {
+		evictKey := templateOrder[0]
+		delete(templateCache, evictKey)
+		templateOrder = templateOrder[1:]
+	}
 	templateCache[cacheKey] = rgba
+	templateOrder = append(templateOrder, cacheKey)
 	return rgba
 }
 

@@ -21,6 +21,7 @@ type WhatsAppSender interface {
 	React(chat, sender types.JID, messageID string, emoji string)
 	GetWAClient() *whatsmeow.Client
 	GetCompanyName() string
+	Stop()
 }
 
 type BotInstance interface {
@@ -78,6 +79,7 @@ type ShipmentService interface {
 type ConfigUsecase interface {
 	GetCompanyByID(ctx context.Context, id uuid.UUID) (db.Company, error)
 	GetAllCompanies(ctx context.Context) ([]uuid.UUID, error)
+	GetAllCompanyDetails(ctx context.Context) ([]db.Company, error)
 	GetAllActiveCompanies(ctx context.Context) ([]db.Company, error)
 	UpdateCompanyAuthStatus(ctx context.Context, id uuid.UUID, status string) error
 	UpdateCompanyWhatsAppPhone(ctx context.Context, id uuid.UUID, phone string) error
@@ -103,6 +105,7 @@ type ConfigUsecase interface {
 	UpdateCompanySubscription(ctx context.Context, companyID uuid.UUID, subStatus string, expiry time.Time) error
 	UpdateCompanySettings(ctx context.Context, companyID uuid.UUID, name, adminEmail, logoUrl, brandColor, trackingPrefix string) error
 	GetCompanyPayments(ctx context.Context, companyID uuid.UUID, limit, offset int32) ([]db.Payment, error)
+	IsSuperAdmin(ctx context.Context, email string) (bool, error)
 }
 
 type Manifest struct {

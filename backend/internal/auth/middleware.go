@@ -55,6 +55,7 @@ func JWTAuth(publicKeyPath string) fiber.Handler {
 			path == "/api/auth/register-intent" ||
 			path == "/api/auth/verify-otp" ||
 			path == "/api/auth/login" ||
+			path == "/api/auth/admin-login" ||
 			path == "/api/auth/logout" ||
 			path == "/api/auth/forgot-password" ||
 			path == "/api/auth/reset-password" ||

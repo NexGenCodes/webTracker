@@ -51,6 +51,7 @@ type Config struct {
 
 	// Super Admin — bypasses all billing, unlimited shipments
 	SuperAdminCompanyEmail string `env:"SUPERADMIN_COMPANY_EMAIL"`
+	SuperAdminPassword     string `env:"SUPERADMIN_PASSWORD"`
 }
 
 func GetWorkDir() string {

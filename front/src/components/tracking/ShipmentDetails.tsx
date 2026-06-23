@@ -25,7 +25,7 @@ export function ShipmentDetails({ shippingData, dict }: ShipmentDetailsProps) {
             { label: dict.shipment.weight || "Weight", value: `${shippingData.weight || 15} KGS` },
           ].map((detail, idx) => (
             <div key={idx} className="flex justify-between items-center py-2 md:py-6 border-b border-border last:border-0 group/item">
-              <span className="text-text-muted font-black text-[7px] md:text-sm uppercase tracking-widest">{detail.label}</span>
+              <span className="text-text-muted font-black text-[10px] md:text-sm uppercase tracking-widest">{detail.label}</span>
               <span className={cn("font-black text-text-main text-[10px] md:text-xl group-hover:text-accent transition-colors", detail.italic && "italic")}>{detail.value}</span>
             </div>
           ))}

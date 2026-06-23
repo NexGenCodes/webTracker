@@ -355,67 +355,104 @@ export default function BillingClient({ initialPlans, initialPayments, companyDa
                                         </p>
                                     </div>
                                 ) : (
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-left border-collapse">
-                                            <thead>
-                                                <tr className="bg-surface-muted/50 border-b border-border">
-                                                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-text-muted">Date</th>
-                                                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-text-muted">Reference</th>
-                                                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-text-muted">Amount</th>
-                                                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-text-muted">Status</th>
-                                                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-text-muted">Actions</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-border">
-                                                {payments.map((payment) => (
-                                                    <tr key={payment.id} className="hover:bg-surface-muted/30 transition-colors">
-                                                        <td className="px-6 py-4">
-                                                            <p className="text-sm font-bold text-text-main">
-                                                                {new Date(payment.created_at).toLocaleDateString(undefined, {
-                                                                    year: 'numeric',
-                                                                    month: 'short',
-                                                                    day: 'numeric'
-                                                                })}
-                                                            </p>
-                                                            <p className="text-[10px] text-text-muted uppercase">
-                                                                {new Date(payment.created_at).toLocaleTimeString(undefined, {
-                                                                    hour: '2-digit',
-                                                                    minute: '2-digit'
-                                                                })}
-                                                            </p>
-                                                        </td>
-                                                        <td className="px-6 py-4">
-                                                            <code className="text-[11px] font-mono bg-surface-muted px-2 py-1 rounded text-text-muted border border-border">
-                                                                {payment.reference}
-                                                            </code>
-                                                        </td>
-                                                        <td className="px-6 py-4">
-                                                            <span className="text-sm font-black text-text-main">
-                                                                {formatPrice(payment.amount, 'NGN')}
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-6 py-4">
-                                                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${payment.status === 'success' || payment.status === 'active'
-                                                                ? 'bg-green-500/10 text-green-500 border-green-500/20'
-                                                                : payment.status === 'pending'
-                                                                    ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
-                                                                    : 'bg-red-500/10 text-red-500 border-red-500/20'
-                                                                }`}>
-                                                                <div className={`w-1.5 h-1.5 rounded-full ${payment.status === 'success' || payment.status === 'active' ? 'bg-green-500' : payment.status === 'pending' ? 'bg-yellow-500' : 'bg-red-500'
-                                                                    }`} />
-                                                                {payment.status}
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-6 py-4">
-                                                            <button className="p-2 hover:bg-accent/10 hover:text-accent rounded-lg transition-colors text-text-muted flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
-                                                                <ExternalLink size={14} /> Receipt
-                                                            </button>
-                                                        </td>
+                                    <>
+                                        {/* Desktop Table */}
+                                        <div className="hidden md:block overflow-x-auto">
+                                            <table className="w-full text-left border-collapse">
+                                                <thead>
+                                                    <tr className="bg-surface-muted/50 border-b border-border">
+                                                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-text-muted">Date</th>
+                                                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-text-muted">Reference</th>
+                                                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-text-muted">Amount</th>
+                                                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-text-muted">Status</th>
+                                                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-text-muted">Actions</th>
                                                     </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
+                                                </thead>
+                                                <tbody className="divide-y divide-border">
+                                                    {payments.map((payment) => (
+                                                        <tr key={payment.id} className="hover:bg-surface-muted/30 transition-colors">
+                                                            <td className="px-6 py-4">
+                                                                <p className="text-sm font-bold text-text-main">
+                                                                    {new Date(payment.created_at).toLocaleDateString(undefined, {
+                                                                        year: 'numeric',
+                                                                        month: 'short',
+                                                                        day: 'numeric'
+                                                                    })}
+                                                                </p>
+                                                                <p className="text-[10px] text-text-muted uppercase">
+                                                                    {new Date(payment.created_at).toLocaleTimeString(undefined, {
+                                                                        hour: '2-digit',
+                                                                        minute: '2-digit'
+                                                                    })}
+                                                                </p>
+                                                            </td>
+                                                            <td className="px-6 py-4">
+                                                                <code className="text-[11px] font-mono bg-surface-muted px-2 py-1 rounded text-text-muted border border-border">
+                                                                    {payment.reference}
+                                                                </code>
+                                                            </td>
+                                                            <td className="px-6 py-4">
+                                                                <span className="text-sm font-black text-text-main">
+                                                                    {formatPrice(payment.amount, 'NGN')}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-6 py-4">
+                                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${payment.status === 'success' || payment.status === 'active'
+                                                                    ? 'bg-green-500/10 text-green-500 border-green-500/20'
+                                                                    : payment.status === 'pending'
+                                                                        ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
+                                                                        : 'bg-red-500/10 text-red-500 border-red-500/20'
+                                                                    }`}>
+                                                                    <div className={`w-1.5 h-1.5 rounded-full ${payment.status === 'success' || payment.status === 'active' ? 'bg-green-500' : payment.status === 'pending' ? 'bg-yellow-500' : 'bg-red-500'
+                                                                        }`} />
+                                                                    {payment.status}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-6 py-4">
+                                                                <button className="p-2 hover:bg-accent/10 hover:text-accent rounded-lg transition-colors text-text-muted flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
+                                                                    <ExternalLink size={14} /> Receipt
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        {/* Mobile Cards */}
+                                        <div className="md:hidden space-y-3">
+                                            {payments.map((payment) => (
+                                                <div key={payment.id} className="bg-surface-muted/30 border border-border rounded-2xl p-4">
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <span className="text-sm font-black text-text-main">
+                                                            {formatPrice(payment.amount, 'NGN')}
+                                                        </span>
+                                                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${payment.status === 'success' || payment.status === 'active'
+                                                            ? 'bg-green-500/10 text-green-500 border-green-500/20'
+                                                            : payment.status === 'pending'
+                                                                ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
+                                                                : 'bg-red-500/10 text-red-500 border-red-500/20'
+                                                            }`}>
+                                                            <div className={`w-1.5 h-1.5 rounded-full ${payment.status === 'success' || payment.status === 'active' ? 'bg-green-500' : payment.status === 'pending' ? 'bg-yellow-500' : 'bg-red-500'}`} />
+                                                            {payment.status}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-center justify-between mb-3">
+                                                        <span className="text-xs font-bold text-text-muted">
+                                                            {new Date(payment.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                                                        </span>
+                                                        <code className="text-[10px] font-mono bg-surface px-2 py-0.5 rounded text-text-muted border border-border truncate max-w-[140px]">
+                                                            {payment.reference}
+                                                        </code>
+                                                    </div>
+                                                    <div className="flex justify-end pt-2 border-t border-border/30">
+                                                        <button className="p-2 hover:bg-accent/10 hover:text-accent rounded-lg transition-colors text-text-muted flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
+                                                            <ExternalLink size={14} /> Receipt
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </>
                                 )}
                             </div>
                             <p className="mt-4 text-center text-[10px] text-text-muted uppercase tracking-widest font-bold">

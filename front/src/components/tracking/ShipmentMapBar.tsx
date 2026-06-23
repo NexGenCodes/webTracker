@@ -19,7 +19,7 @@ interface ShipmentMapBarProps {
 export function ShipmentMapBar({ shippingData, originCoords, destCoords, liveProgress, dict }: ShipmentMapBarProps) {
   return (
     <>
-      <div className="grid grid-cols-3 gap-1.5 md:gap-4 mb-4 md:mb-6 w-full max-w-6xl mx-auto animate-fade-in md:px-0">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 md:gap-4 mb-4 md:mb-6 w-full max-w-6xl mx-auto animate-fade-in md:px-0">
         <div className="glass-panel p-1.5 md:p-4 flex flex-col md:flex-row items-center md:items-center gap-1 md:gap-4 bg-surface/50 text-center md:text-left">
           <div className="w-6 h-6 md:w-10 md:h-10 rounded-md md:rounded-xl bg-text-muted/10 flex items-center justify-center shrink-0">
             <MapPin size={12} className="text-text-muted md:w-5 md:h-5" />

@@ -199,7 +199,9 @@ func (h *EditHandler) Execute(ctx context.Context, shipUC models.ShipmentUsecase
 
 		newStatus := s.ResolveStatus(time.Now().UTC())
 		if newStatus != dbShip.Status.String {
-			_ = shipUC.UpdateField(ctx, companyID, trackingID, "status", newStatus)
+			if err := shipUC.UpdateField(ctx, companyID, trackingID, "status", newStatus); err != nil {
+				logger.Error().Err(err).Str("tracking_id", trackingID).Msg("Auto-sync: failed to update status")
+			}
 			updatedFields = append(updatedFields, "STATUS (AUTO-SYNC)")
 
 			// Trigger status alert if it changed

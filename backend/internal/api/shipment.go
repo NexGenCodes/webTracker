@@ -31,6 +31,7 @@ type ShipmentHandler struct {
 	validate   *validator.Validate
 	cfg        *config.Config
 	bots       models.BotProvider
+	shutdownCtx context.Context
 }
 
 // NewShipmentHandler injects the Usecase
@@ -41,6 +42,14 @@ func NewShipmentHandler(shipmentUC *shipment.Usecase, configUC *config.Usecase, 
 		validate:   validator.New(),
 		cfg:        cfg,
 		bots:       bots,
+	}
+}
+
+// SetShutdownContext replaces the default Background context with the app's lifecycle context.
+// Background goroutines will be cancelled when the app shuts down.
+func (h *ShipmentHandler) SetShutdownContext(ctx context.Context) {
+	if ctx != nil {
+		h.shutdownCtx = ctx
 	}
 }
 
@@ -555,10 +564,17 @@ func (h *ShipmentHandler) BulkUpdateStatus(c *fiber.Ctx) error {
 			status := req.Status
 			cfg := h.cfg
 			shipUC := h.shipmentUC
+			gctx := h.shutdownCtx
+			if gctx == nil {
+				gctx = context.Background()
+			}
 			go func() {
-				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+				ctx, cancel := context.WithTimeout(gctx, 2*time.Minute)
 				defer cancel()
 				for _, id := range ids {
+					if ctx.Err() != nil {
+						return
+					}
 					if ship, err := shipUC.Track(ctx, companyID, id); err == nil {
 						notif.SendStatusAlert(ctx, bot.GetSender(), cfg, bot.GetCompanyName(), ship.UserJid, ship.TrackingID, status, ship.RecipientEmail.String, ship.Destination.String)
 					}

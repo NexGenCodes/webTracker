@@ -427,24 +427,19 @@ func (s *Service) generateJWT(companyID uuid.UUID, companyName, email, planType,
 		return "", errors.New("JWT private key is not loaded — check JWT_PRIVATE_KEY_PATH")
 	}
 
-	role := "authenticated"
-	if s.cfg != nil && s.cfg.SuperAdminCompanyEmail != "" && email == s.cfg.SuperAdminCompanyEmail {
-		role = "super_admin"
-	}
-
 	claims := JWTClaims{
 		CompanyID:   companyID,
 		CompanyName: companyName,
 		Email:       email,
 		PlanType:    planType,
 		AuthStatus:  authStatus,
-		Role:        role,
+		Role:        "authenticated",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(7 * 24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Issuer:    "webtracker-auth",
 			Subject:   companyID.String(),
-			Audience:  jwt.ClaimStrings{role},
+			Audience:  jwt.ClaimStrings{"authenticated"},
 		},
 	}
 

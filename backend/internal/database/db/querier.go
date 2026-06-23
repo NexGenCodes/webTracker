@@ -29,6 +29,7 @@ type Querier interface {
 	GetActivePlans(ctx context.Context) ([]GetActivePlansRow, error)
 	GetAllActiveCompanies(ctx context.Context) ([]Company, error)
 	GetAllCompanies(ctx context.Context) ([]uuid.UUID, error)
+	GetAllCompanyDetails(ctx context.Context) ([]Company, error)
 	GetAuditLogs(ctx context.Context, arg GetAuditLogsParams) ([]AuditLog, error)
 	GetAuthorizedGroups(ctx context.Context, companyID uuid.UUID) ([]string, error)
 	GetCompanyByEmail(ctx context.Context, adminEmail string) (Company, error)

@@ -72,7 +72,7 @@ export function LayoutHeader() {
                                     <span className="hidden lg:inline">Admin</span>
                                 </Link>
                             )}
-                            {!isSuperAdmin && dashboardNavLinks.map((link) => {
+                            {dashboardNavLinks.map((link) => {
                                 const isActive = pathname === link.href || (link.href !== '/dashboard' && pathname?.startsWith(link.href));
                                 const isExactDashboard = link.href === '/dashboard' && pathname === '/dashboard';
                                 const active = isExactDashboard || (link.href !== '/dashboard' && isActive);
@@ -149,33 +149,33 @@ export function LayoutHeader() {
                                 </Link>
                             </motion.div>
                         )}
-                        {!isSuperAdmin && dashboardNavLinks.map((link, i) => {
-                            const isActive = pathname === link.href || (link.href !== '/dashboard' && pathname?.startsWith(link.href));
-                            const isExactDashboard = link.href === '/dashboard' && pathname === '/dashboard';
-                            const active = isExactDashboard || (link.href !== '/dashboard' && isActive);
-                            return (
-                                <motion.div
-                                    key={link.href}
-                                    initial={{ opacity: 0, x: -20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    transition={{ delay: 0.05 + i * 0.05, ease: "easeOut" }}
-                                >
-                                    <Link
-                                        href={link.href}
-                                        onClick={() => setMobileMenuOpen(false)}
-                                        className={cn(
-                                            "flex items-center gap-4 px-6 py-5 rounded-2xl text-lg font-black uppercase tracking-tight transition-all active:scale-[0.98]",
-                                            active
-                                                ? "bg-accent/10 text-accent border border-accent/20"
-                                                : "text-text-main hover:bg-surface-muted border border-transparent"
-                                        )}
+                            {dashboardNavLinks.map((link, i) => {
+                                const isActive = pathname === link.href || (link.href !== '/dashboard' && pathname?.startsWith(link.href));
+                                const isExactDashboard = link.href === '/dashboard' && pathname === '/dashboard';
+                                const active = isExactDashboard || (link.href !== '/dashboard' && isActive);
+                                return (
+                                    <motion.div
+                                        key={link.href}
+                                        initial={{ opacity: 0, x: -20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        transition={{ delay: 0.05 + i * 0.05, ease: "easeOut" }}
                                     >
-                                        <link.icon size={22} />
-                                        {link.label}
-                                    </Link>
-                                </motion.div>
-                            );
-                        })}
+                                        <Link
+                                            href={link.href}
+                                            onClick={() => setMobileMenuOpen(false)}
+                                            className={cn(
+                                                "flex items-center gap-4 px-6 py-5 rounded-2xl text-lg font-black uppercase tracking-tight transition-all active:scale-[0.98]",
+                                                active
+                                                    ? "bg-accent/10 text-accent border border-accent/20"
+                                                    : "text-text-main hover:bg-surface-muted border border-transparent"
+                                            )}
+                                        >
+                                            <link.icon size={22} />
+                                            {link.label}
+                                        </Link>
+                                    </motion.div>
+                                );
+                            })}
                     </nav>
 
                     {/* Mobile Go Home / Sign Out */}

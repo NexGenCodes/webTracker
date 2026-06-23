@@ -30,7 +30,7 @@ export function ShipmentStatusHeader({ shippingData, dict }: ShipmentStatusHeade
 
       <div className="flex flex-col items-end md:items-end w-auto">
         <span className="text-text-muted text-[7px] md:text-[11px] font-black uppercase tracking-[0.2em] md:tracking-[0.4em] mb-0.5 md:mb-3">{dict.shipment.trackingId}</span>
-        <div className="flex items-center gap-1 md:gap-4 bg-surface-muted px-1.5 md:px-6 py-1 md:py-4 rounded-lg md:rounded-3xl border border-border group/copy transition-all hover:border-accent/30 shadow-inner w-auto max-w-[120px] md:max-w-none">
+        <div className="flex items-center gap-1 md:gap-4 bg-surface-muted px-1.5 md:px-6 py-1 md:py-4 rounded-lg md:rounded-3xl border border-border group/copy transition-all hover:border-accent/30 shadow-inner w-auto max-w-[180px] md:max-w-none">
           <span className="font-mono text-[9px] md:text-lg lg:text-2xl font-black tracking-tighter md:tracking-widest text-text-main group-hover:text-accent transition-colors truncate">{shippingData.trackingNumber}</span>
           <div className="flex items-center gap-1 ml-auto">
             <button

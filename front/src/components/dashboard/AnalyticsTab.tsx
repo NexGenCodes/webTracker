@@ -186,7 +186,7 @@ export function AnalyticsTab({ shipmentStats }: AnalyticsTabProps) {
                                 </PieChart>
                             </ResponsiveContainer>
                         </div>
-                        <div className="flex flex-col gap-4 min-w-[140px] px-6 py-4 bg-surface/30 rounded-2xl border border-border/30">
+                        <div className="flex flex-col gap-4 min-w-[140px] px-6 py-4 bg-surface/30 rounded-2xl border border-border/30 flex-wrap">
                             {displayData.map((item, i) => (
                                 <div key={item.name} className="flex items-center justify-between gap-3">
                                     <div className="flex items-center gap-2">

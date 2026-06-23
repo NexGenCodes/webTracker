@@ -1,6 +1,10 @@
 -- name: GetAllCompanies :many
 SELECT id FROM companies;
 
+-- name: GetAllCompanyDetails :many
+SELECT id, name, admin_email, whatsapp_phone, logo_url, brand_color, auth_status, subscription_status, subscription_expiry, plan_type, setup_token, tracking_prefix, created_at, updated_at FROM companies
+ORDER BY created_at DESC;
+
 -- name: GetAllActiveCompanies :many
 SELECT * FROM companies 
 WHERE auth_status = 'active' 

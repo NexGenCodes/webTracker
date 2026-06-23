@@ -119,7 +119,11 @@ func (w *Worker) process(workerCtx context.Context, job models.Job) {
 
 	// A. User Language
 	g.Go(func() error {
-		langStr, _ = w.ConfigUC.GetUserLanguage(gctx, job.CompanyID, job.SenderJID.String())
+		var langErr error
+		langStr, langErr = w.ConfigUC.GetUserLanguage(gctx, job.CompanyID, job.SenderJID.String())
+		if langErr != nil {
+			langStr = "en"
+		}
 		return nil
 	})
 
@@ -139,7 +143,7 @@ func (w *Worker) process(workerCtx context.Context, job models.Job) {
 
 	// Subscription Guard: Block expired or inactive tenants from using the bot
 	// The super admin is always free to access anything and bypasses all billing checks.
-	isSuperAdmin := billing.IsSuperAdminByEmail(w.Cfg, company.AdminEmail)
+	isSuperAdmin, _ := billing.IsSuperAdminByEmail(gctx, w.ConfigUC, company.AdminEmail)
 	
 	if !isSuperAdmin {
 		if company.SubscriptionStatus.String != "active" && company.SubscriptionStatus.String != "trialing" {

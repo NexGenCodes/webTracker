@@ -68,10 +68,15 @@ func (a *App) Init() error {
 		return fmt.Errorf("database migration failed: %w", err)
 	}
 
+	// Seed super admin from env vars (idempotent)
+	if err := database.SeedSuperAdmin(a.Context, a.SqlPool, a.Cfg.SuperAdminCompanyEmail, a.Cfg.SuperAdminPassword); err != nil {
+		return fmt.Errorf("super admin seed failed: %w", err)
+	}
+
 	querier := db.New(a.SqlPool)
 	shipService := &shipment.Calculator{}
 	a.ShipmentUC = shipment.NewUsecase(querier, shipService)
-	a.ConfigUC = config.NewUsecase(querier, a.SqlPool)
+	a.ConfigUC = config.NewUsecase(querier, a.SqlPool, a.Cfg)
 
 	dbUrl := a.Cfg.DirectURL
 	if dbUrl == "" {
@@ -82,6 +87,8 @@ func (a *App) Init() error {
 		return fmt.Errorf("whatsapp store init: %w", err)
 	}
 	a.WAStore = store
+
+	receipt.InitProcessor()
 
 	a.BotManager = whatsapp.NewManager(a.Context, a.Cfg, a.ShipmentUC, a.ConfigUC, a.WAStore, &a.WG, cache.AsynqClient)
 

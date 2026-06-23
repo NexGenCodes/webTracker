@@ -208,8 +208,8 @@ export function ShipmentsTab({ companyId, jwt }: ShipmentsTabProps) {
                 )}
             </AnimatePresence>
 
-            {/* Table Container */}
-            <div className="glass-panel overflow-hidden border-border/50">
+            {/* Table Container - Desktop */}
+            <div className="hidden md:block glass-panel overflow-hidden border-border/50">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                         <thead>
@@ -329,7 +329,7 @@ export function ShipmentsTab({ companyId, jwt }: ShipmentsTabProps) {
                     </table>
                 </div>
 
-                {/* Pagination */}
+                {/* Pagination - Desktop */}
                 {totalPages > 1 && (
                     <div className="px-6 py-4 border-t border-border/50 bg-surface/30 flex items-center justify-between">
                         <p className="text-xs font-bold text-text-muted">
@@ -363,6 +363,109 @@ export function ShipmentsTab({ companyId, jwt }: ShipmentsTabProps) {
                             </button>
                         </div>
                     </div>
+                )}
+            </div>
+
+            {/* Mobile Card View */}
+            <div className="md:hidden space-y-3">
+                {isLoading ? (
+                    <div className="glass-panel p-8 text-center">
+                        <Loader2 className="animate-spin mx-auto text-accent mb-2" size={32} />
+                        <p className="text-xs font-bold text-text-muted uppercase tracking-widest">Loading Shipments...</p>
+                    </div>
+                ) : data?.shipments?.length === 0 ? (
+                    <div className="glass-panel p-8 text-center">
+                        <Package className="mx-auto text-text-muted/20 mb-4" size={48} />
+                        <p className="text-sm font-bold text-text-muted">No shipments found</p>
+                    </div>
+                ) : (
+                    <>
+                        {data?.shipments?.map((shipment: Record<string, unknown>) => {
+                            const status = (shipment.status as string).toUpperCase();
+                            const config = STATUS_CONFIG[status] || STATUS_CONFIG['PENDING'];
+                            const StatusIcon = config.icon;
+
+                            return (
+                                <motion.div
+                                    key={shipment.id as string}
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className={`glass-panel p-4 border-border/50 ${selectedIds.includes(shipment.tracking_id as string) ? 'ring-2 ring-accent/50' : ''}`}
+                                >
+                                    <div className="flex items-start justify-between gap-3 mb-3">
+                                        <div className="flex items-start gap-3 flex-1 min-w-0">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedIds.includes(shipment.tracking_id as string)}
+                                                onChange={() => toggleSelect(shipment.tracking_id as string)}
+                                                className="w-4 h-4 mt-1 rounded border-border/50 bg-surface accent-accent cursor-pointer shrink-0"
+                                            />
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-black text-text-main truncate">{shipment.tracking_id as string}</p>
+                                                <p className="text-xs font-bold text-text-muted truncate">{shipment.recipient_name as string}</p>
+                                                <p className="text-[10px] font-medium text-text-muted truncate">{shipment.recipient_phone as string}</p>
+                                            </div>
+                                        </div>
+                                        <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[9px] font-black uppercase tracking-widest shrink-0 ${config.color}`}>
+                                            <StatusIcon size={8} />
+                                            {config.label}
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center justify-between text-xs text-text-muted mb-3">
+                                        <span className="font-bold uppercase tracking-widest">{(shipment.destination as string) || 'N/A'}</span>
+                                        <span className="font-medium">{new Date(shipment.created_at as string).toLocaleDateString()}</span>
+                                    </div>
+                                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/30">
+                                        <button
+                                            onClick={() => window.open(`/track/${shipment.tracking_id as string}`, '_blank')}
+                                            className="p-2 hover:bg-surface rounded-lg text-text-muted hover:text-accent transition-all"
+                                            title="View Public Tracking"
+                                        >
+                                            <Eye size={16} />
+                                        </button>
+                                        <button
+                                            onClick={() => handleEdit(shipment)}
+                                            className="p-2 hover:bg-surface rounded-lg text-text-muted hover:text-primary transition-all"
+                                            title="Edit Shipment"
+                                        >
+                                            <Edit size={16} />
+                                        </button>
+                                        <button
+                                            onClick={() => handleDelete(shipment.tracking_id as string)}
+                                            className="p-2 hover:bg-error/10 rounded-lg text-text-muted hover:text-error transition-all"
+                                            title="Delete"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </div>
+                                </motion.div>
+                            );
+                        })}
+                        {/* Pagination - Mobile */}
+                        {totalPages > 1 && (
+                            <div className="flex items-center justify-between pt-2">
+                                <p className="text-[10px] font-bold text-text-muted">
+                                    Page {page} of {totalPages}
+                                </p>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => setPage(p => Math.max(1, p - 1))}
+                                        disabled={page === 1}
+                                        className="p-2 border border-border rounded-lg disabled:opacity-30 hover:bg-surface transition-colors"
+                                    >
+                                        <ChevronLeft size={16} />
+                                    </button>
+                                    <button
+                                        onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                        disabled={page === totalPages}
+                                        className="p-2 border border-border rounded-lg disabled:opacity-30 hover:bg-surface transition-colors"
+                                    >
+                                        <ChevronRight size={16} />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
 

@@ -178,7 +178,9 @@ func HandleEvent(bot *BotInstance, evt interface{}, cfg *config.Config, configUC
 					bot.IdentityCache.Lock()
 					bot.IdentityCache.BotLID = botLID
 					bot.IdentityCache.Unlock()
-					_ = configUC.SetSystemConfig(context.Background(), companyID, "bot_lid", botLID)
+					if err := configUC.SetSystemConfig(context.Background(), companyID, "bot_lid", botLID); err != nil {
+						logger.Warn().Err(err).Str("company_id", companyID.String()).Msg("Failed to persist bot LID mapping")
+					}
 				}
 			}
 
@@ -188,7 +190,12 @@ func HandleEvent(bot *BotInstance, evt interface{}, cfg *config.Config, configUC
 			if isGroup {
 				// FAST CHECK: Use in-memory Go Map (sync.Map)
 				if val, ok := bot.AuthCache.Load(chatJID.String()); ok {
-					isAuthorized, _ = val.(bool)
+					var castOk bool
+					isAuthorized, castOk = val.(bool)
+					if !castOk {
+						logger.Warn().Str("group", chatJID.String()).Msg("AuthCache had non-bool value, re-verifying")
+						isAuthorized = VerifyGroupAuthority(bot, configUC, chatJID)
+					}
 				} else {
 					// Not in memory? Re-verify and populate cache
 					isAuthorized = VerifyGroupAuthority(bot, configUC, chatJID)

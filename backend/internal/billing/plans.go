@@ -2,8 +2,6 @@ package billing
 
 import (
 	"fmt"
-
-	"webtracker-bot/internal/config"
 )
 
 // Plan is the single source of truth for all pricing and quota data.
@@ -90,12 +88,4 @@ func GetPlanByID(id string) (Plan, error) {
 	}
 }
 
-// Deprecated: IsSuperAdminEmail checks the email against the env var only.
-// Use IsSuperAdminRole (API handlers) or IsSuperAdminByEmail (workers/cron) instead.
-// Kept for backward compatibility within IsSuperAdminByEmail fallback path.
-func IsSuperAdminEmail(cfg *config.Config, email string) bool {
-	if cfg == nil || cfg.SuperAdminCompanyEmail == "" {
-		return false
-	}
-	return email == cfg.SuperAdminCompanyEmail
-}
+

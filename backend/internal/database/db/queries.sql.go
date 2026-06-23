@@ -436,6 +436,49 @@ func (q *Queries) GetAllCompanies(ctx context.Context) ([]uuid.UUID, error) {
 	return items, nil
 }
 
+const getAllCompanyDetails = `-- name: GetAllCompanyDetails :many
+SELECT id, name, admin_email, whatsapp_phone, logo_url, brand_color, auth_status, subscription_status, subscription_expiry, plan_type, setup_token, tracking_prefix, created_at, updated_at FROM companies
+ORDER BY created_at DESC
+`
+
+func (q *Queries) GetAllCompanyDetails(ctx context.Context) ([]Company, error) {
+	rows, err := q.db.QueryContext(ctx, getAllCompanyDetails)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Company
+	for rows.Next() {
+		var i Company
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.AdminEmail,
+			&i.WhatsappPhone,
+			&i.LogoUrl,
+			&i.BrandColor,
+			&i.AuthStatus,
+			&i.SubscriptionStatus,
+			&i.SubscriptionExpiry,
+			&i.PlanType,
+			&i.SetupToken,
+			&i.TrackingPrefix,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getAuditLogs = `-- name: GetAuditLogs :many
 SELECT id, actor_email, action, target_company_id, details, created_at FROM audit_log
 ORDER BY created_at DESC

@@ -133,8 +133,10 @@ func (h *CompanyHandler) deleteCompany(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing or invalid company_id"})
 	}
 
-	// Purge the bot and its paired device from the store
-	_ = h.bots.PurgeBot(companyID)
+	// Purge the bot and its paired device from the store (best-effort)
+	if err := h.bots.PurgeBot(companyID); err != nil {
+		logger.Warn().Err(err).Str("company_id", companyID.String()).Msg("Company: purge bot before delete had non-critical error")
+	}
 
 	// Delete all company data
 	if err := h.configUC.DeleteCompany(c.Context(), companyID); err != nil {
@@ -240,11 +242,13 @@ func (h *CompanyHandler) updateSettings(c *fiber.Ctx) error {
 	if user, ok := c.Locals("user").(*auth.JWTClaims); ok && user != nil {
 		actorEmail = user.Email
 	}
-	_ = h.configUC.LogAudit(c.Context(), actorEmail, "update_settings", companyID, map[string]interface{}{
+	if err := h.configUC.LogAudit(c.Context(), actorEmail, "update_settings", companyID, map[string]interface{}{
 		"name":            req.Name,
 		"admin_email":     req.AdminEmail,
 		"tracking_prefix": req.TrackingPrefix,
-	})
+	}); err != nil {
+		logger.Error().Err(err).Str("company_id", companyID.String()).Msg("Failed to log audit for update_settings")
+	}
 
 	return c.JSON(fiber.Map{"success": true})
 }

@@ -51,7 +51,9 @@ func (h *BillingHandler) getPlans(c *fiber.Ctx) error {
 	var plans []billing.Plan
 	for _, p := range dbPlans {
 		var features []string
-		_ = json.Unmarshal(p.Features, &features)
+		if err := json.Unmarshal(p.Features, &features); err != nil {
+			logger.Warn().Err(err).Str("plan_id", p.ID).Msg("Failed to unmarshal plan features")
+		}
 
 		plans = append(plans, billing.Plan{
 			ID:          p.ID,
@@ -230,12 +232,20 @@ func (h *BillingHandler) paystackWebhook(c *fiber.Ctx) error {
 
 	// Prevent payment reassignment attacks by verifying customer email matches company admin email
 	company, err := h.configUC.GetCompanyByID(c.Context(), companyID)
-	if err != nil || company.AdminEmail != event.Data.Customer.Email {
+	if err != nil {
+		logger.Error().
+			Err(err).
+			Str("reference", event.Data.Reference).
+			Str("company_id", companyIDStr).
+			Msg("Webhook: company not found")
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
+	if company.AdminEmail != event.Data.Customer.Email {
 		logger.Error().
 			Str("reference", event.Data.Reference).
 			Str("webhook_email", event.Data.Customer.Email).
 			Str("company_email", company.AdminEmail).
-			Msg("Webhook email mismatch or company not found")
+			Msg("Webhook email mismatch")
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 

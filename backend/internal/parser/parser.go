@@ -340,12 +340,14 @@ func CleanText(text string) string {
 	sb.Grow(len(text))
 
 	start := 0
+	lastCharNewline := false
 	for i := 0; i < len(text); i++ {
 		if text[i] == '\n' || text[i] == '\r' {
 			line := strings.TrimSpace(text[start:i])
-			if line != "" || (sb.Len() > 0 && sb.String()[sb.Len()-1] != '\n') {
+			if line != "" || !lastCharNewline {
 				sb.WriteString(line)
 				sb.WriteByte('\n')
+				lastCharNewline = true
 			}
 			if text[i] == '\r' && i+1 < len(text) && text[i+1] == '\n' {
 				i++
@@ -353,7 +355,7 @@ func CleanText(text string) string {
 			start = i + 1
 		}
 	}
-	
+
 	if start < len(text) {
 		sb.WriteString(strings.TrimSpace(text[start:]))
 	}

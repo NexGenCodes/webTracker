@@ -78,10 +78,7 @@ func Enqueue(job Job) {
 		return
 	}
 	// Auto-expire the dedup key after TTL so edits can regenerate later
-	go func() {
-		time.Sleep(inflightTTL)
-		inflight.Delete(key)
-	}()
+	time.AfterFunc(inflightTTL, func() { inflight.Delete(key) })
 
 	select {
 	case queue <- job:

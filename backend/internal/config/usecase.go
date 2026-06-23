@@ -18,10 +18,11 @@ import (
 type Usecase struct {
 	repo db.Querier
 	pool *sql.DB
+	cfg  *Config
 }
 
-func NewUsecase(repo db.Querier, pool *sql.DB) *Usecase {
-	return &Usecase{repo: repo, pool: pool}
+func NewUsecase(repo db.Querier, pool *sql.DB, cfg *Config) *Usecase {
+	return &Usecase{repo: repo, pool: pool, cfg: cfg}
 }
 
 func (u *Usecase) Ping(ctx context.Context) error {
@@ -33,6 +34,10 @@ func (u *Usecase) Ping(ctx context.Context) error {
 
 func (u *Usecase) GetAllCompanies(ctx context.Context) ([]uuid.UUID, error) {
 	return u.repo.GetAllCompanies(ctx)
+}
+
+func (u *Usecase) GetAllCompanyDetails(ctx context.Context) ([]db.Company, error) {
+	return u.repo.GetAllCompanyDetails(ctx)
 }
 
 func (u *Usecase) GetAllActiveCompanies(ctx context.Context) ([]db.Company, error) {
@@ -264,5 +269,17 @@ func (u *Usecase) GetCompanyPayments(ctx context.Context, companyID uuid.UUID, l
 		Limit:     limit,
 		Offset:    offset,
 	})
+}
+
+// IsSuperAdmin checks the super_admins DB table for the given email.
+func (u *Usecase) IsSuperAdmin(ctx context.Context, email string) (bool, error) {
+	_, err := u.repo.GetSuperAdminByEmail(ctx, email)
+	if err == nil {
+		return true, nil
+	}
+	if err != sql.ErrNoRows {
+		return false, err
+	}
+	return false, nil
 }
 

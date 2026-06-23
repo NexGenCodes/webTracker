@@ -2,14 +2,12 @@ package billing
 
 import (
 	"context"
-
-	"webtracker-bot/internal/config"
 )
 
 // SuperAdminChecker is a minimal interface for looking up super admin records.
 // This avoids importing the full db package and prevents circular dependencies.
 type SuperAdminChecker interface {
-	GetSuperAdminByEmail(ctx context.Context, email string) (struct{ Email string }, error)
+	IsSuperAdmin(ctx context.Context, email string) (bool, error)
 }
 
 // RoleSuperAdmin is the canonical role string for super admin users.
@@ -22,11 +20,11 @@ func IsSuperAdminRole(role string) bool {
 }
 
 // IsSuperAdminByEmail checks whether the given email belongs to a super admin
-// using the env var as the single source of truth.
-// Use this in background workers and cron jobs where there is no JWT context.
-func IsSuperAdminByEmail(cfg *config.Config, email string) bool {
-	if cfg != nil && cfg.SuperAdminCompanyEmail != "" && email == cfg.SuperAdminCompanyEmail {
-		return true
+// using the provided checker interface (backed by DB or env).
+// Workers and cron jobs should use this with a DB-backed checker.
+func IsSuperAdminByEmail(ctx context.Context, checker SuperAdminChecker, email string) (bool, error) {
+	if checker == nil {
+		return false, nil
 	}
-	return false
+	return checker.IsSuperAdmin(ctx, email)
 }

@@ -89,7 +89,7 @@ export default function MapComponent({ origin, destination, progress = 0 }: MapP
     };
   }, [origin, destination, progress]);
   return (
-    <div className="w-full h-[600px] md:h-[750px] rounded-[2rem] overflow-hidden glass-panel border border-border/50 relative z-10 shadow-2xl">
+    <div className="w-full h-[300px] sm:h-[400px] md:h-[600px] lg:h-[750px] rounded-[2rem] overflow-hidden glass-panel border border-border/50 relative z-10 shadow-2xl">
       <MapContainer
         center={origin}
         zoom={4}
