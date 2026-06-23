@@ -56,6 +56,7 @@ const PLAN_DETAILS: Record<string, { name: string; price: string }> = {
     starter: { name: 'Starter Plan', price: '₦12,000' },
     pro: { name: 'Professional Plan', price: '₦30,000' },
     enterprise: { name: 'Enterprise Plan', price: '₦85,000' },
+    unlimited: { name: 'Unlimited Access', price: '—' },
 };
 
 const StatusBadge = ({ status }: { status: string }) => {
@@ -187,9 +188,10 @@ export default function DashboardClient({ initialCompanyData, initialStats, user
 
 
     // --- DERIVED STATE ---
+    const isSuperAdmin = user?.role === 'super_admin';
     const companyName = companyData?.name || user?.company_name || 'CARGOHIVE';
-    const whatsappConnected = companyData?.auth_status === 'active' || user?.role === 'super_admin';
-    const planType = (companyData?.plan_type || 'trial').toLowerCase();
+    const whatsappConnected = companyData?.auth_status === 'active' || isSuperAdmin;
+    const planType = isSuperAdmin ? 'unlimited' : (companyData?.plan_type || 'trial').toLowerCase();
     const currentPlan = PLAN_DETAILS[planType] || PLAN_DETAILS['trial'];
 
     const expiryDateString = companyData?.subscription_expiry;

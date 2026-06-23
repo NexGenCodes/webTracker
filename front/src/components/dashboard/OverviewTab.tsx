@@ -85,7 +85,7 @@ export function OverviewTab({
                     </div>
                     <p className="text-2xl font-black text-text-main drop-shadow-sm">{currentPlan.name}</p>
                     <p className="text-xs font-bold text-text-muted mt-2">
-                        {planType === 'trial' ? 'Free Trial Period' : `${currentPlan.price} / month`}
+                        {planType === 'trial' ? 'Free Trial Period' : planType === 'unlimited' ? 'No billing required' : `${currentPlan.price} / month`}
                     </p>
                 </div>
 
@@ -108,17 +108,17 @@ export function OverviewTab({
                 <div className="glass-panel p-6 border-border/40 hover:border-border hover:shadow-xl hover:shadow-black/5 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group">
                     <div className="flex items-center justify-between mb-4">
                         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-text-muted">
-                            {planType === 'trial' ? 'Trial Time Left' : 'Next Billing'}
+                            {planType === 'unlimited' ? 'Access' : planType === 'trial' ? 'Trial Time Left' : 'Next Billing'}
                         </p>
                         <div className="w-8 h-8 rounded-full bg-surface border border-border flex items-center justify-center text-text-main">
                             <Package size={14} />
                         </div>
                     </div>
                     <p className={`text-2xl font-black drop-shadow-sm ${isExpired ? 'text-error' : 'text-text-main'}`}>
-                        {isExpired ? 'Expired' : (planType === 'trial' ? `${daysRemaining} Days` : expiryDate)}
+                        {planType === 'unlimited' ? 'Unlimited' : isExpired ? 'Expired' : (planType === 'trial' ? `${daysRemaining} Days` : expiryDate)}
                     </p>
-                    <p className={`text-xs font-bold mt-2 ${planType === 'trial' || isExpired ? (isExpired ? 'text-error' : 'text-warning') : 'text-success'}`}>
-                        {isExpired ? 'Renew immediately' : (planType === 'trial' ? 'Upgrade to keep access' : 'Auto-renewal active')}
+                    <p className={`text-xs font-bold mt-2 ${planType === 'unlimited' ? 'text-accent' : planType === 'trial' || isExpired ? (isExpired ? 'text-error' : 'text-warning') : 'text-success'}`}>
+                        {planType === 'unlimited' ? 'Full platform access' : isExpired ? 'Renew immediately' : (planType === 'trial' ? 'Upgrade to keep access' : 'Auto-renewal active')}
                     </p>
                 </div>
             </div>

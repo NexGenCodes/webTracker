@@ -260,6 +260,20 @@ SET subscription_status = $2,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1;
 
+-- name: GetPulseCandidateIDs :many
+SELECT c.id FROM companies c
+WHERE c.auth_status = 'active'
+  AND EXISTS (
+    SELECT 1 FROM Shipment s
+    WHERE s.company_id = c.id
+      AND s.status NOT IN ('delivered', 'canceled')
+  );
+
+-- name: FindStaleCompanyIDs :many
+SELECT c.id FROM companies c
+WHERE c.auth_status = 'pending_linking'
+  AND c.created_at < NOW() - INTERVAL '30 days';
+
 -- name: GetSuperAdminByEmail :one
 SELECT * FROM super_admins WHERE email = $1 LIMIT 1;
 

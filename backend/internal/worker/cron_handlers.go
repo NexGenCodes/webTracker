@@ -17,10 +17,11 @@ import (
 )
 
 // HandleCronPulse acts as a dispatcher, enqueuing a per-company pulse task to parallelize status processing.
+// Only companies with active (non-terminal) shipments get pulsed — stale companies are skipped.
 func (w *Worker) HandleCronPulse(ctx context.Context, t *asynq.Task) error {
-	companies, err := w.ConfigUC.GetAllCompanies(ctx)
+	companies, err := w.ConfigUC.GetPulseCandidateIDs(ctx)
 	if err != nil {
-		logger.Error().Err(err).Msg("Pulse Dispatcher: Failed to get companies")
+		logger.Error().Err(err).Msg("Pulse Dispatcher: Failed to get pulse candidate companies")
 		return err
 	}
 
@@ -206,6 +207,27 @@ func (w *Worker) HandleCronPruning(ctx context.Context, t *asynq.Task) error {
 		}
 		logger.Info().Int64("deleted_count", deleted).Msg("Pruning: Aged cleanup completed successfully")
 	}
+	return nil
+}
+
+// HandleCronStaleCleanup deletes companies that never completed setup.
+// Cleans up pending_linking companies older than 30 days.
+func (w *Worker) HandleCronStaleCleanup(ctx context.Context, t *asynq.Task) error {
+	staleIDs, err := w.ConfigUC.FindStaleCompanyIDs(ctx)
+	if err != nil {
+		logger.Error().Err(err).Msg("StaleCleanup: Failed to find stale companies")
+		return err
+	}
+
+	for _, id := range staleIDs {
+		if err := w.ConfigUC.DeleteCompany(ctx, id); err != nil {
+			logger.Error().Err(err).Str("company", id.String()).Msg("StaleCleanup: Failed to delete stale company")
+			continue
+		}
+		logger.Info().Str("company", id.String()).Msg("StaleCleanup: Deleted stale company (pending_linking > 30 days)")
+	}
+
+	logger.Info().Int("count", len(staleIDs)).Msg("StaleCleanup: Completed")
 	return nil
 }
 

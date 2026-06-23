@@ -26,6 +26,7 @@ type Querier interface {
 	DeleteDeliveredShipments(ctx context.Context, companyID uuid.NullUUID) error
 	DeleteShipment(ctx context.Context, arg DeleteShipmentParams) error
 	FindSimilarShipment(ctx context.Context, arg FindSimilarShipmentParams) (string, error)
+	FindStaleCompanyIDs(ctx context.Context) ([]uuid.UUID, error)
 	GetActivePlans(ctx context.Context) ([]GetActivePlansRow, error)
 	GetAllActiveCompanies(ctx context.Context) ([]Company, error)
 	GetAllCompanies(ctx context.Context) ([]uuid.UUID, error)
@@ -39,6 +40,7 @@ type Querier interface {
 	GetLastShipmentIDForUser(ctx context.Context, arg GetLastShipmentIDForUserParams) (string, error)
 	GetPlanByID(ctx context.Context, id string) (GetPlanByIDRow, error)
 	GetPlatformAnalytics(ctx context.Context) (GetPlatformAnalyticsRow, error)
+	GetPulseCandidateIDs(ctx context.Context) ([]uuid.UUID, error)
 	GetRecentEvents(ctx context.Context, arg GetRecentEventsParams) ([]Telemetry, error)
 	GetShipment(ctx context.Context, arg GetShipmentParams) (Shipment, error)
 	GetSuperAdminByEmail(ctx context.Context, email string) (SuperAdmin, error)

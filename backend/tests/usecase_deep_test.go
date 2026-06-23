@@ -81,6 +81,9 @@ func (m *MockQuerier) FindSimilarShipment(ctx context.Context, arg db.FindSimila
 	return "", nil
 }
 func (m *MockQuerier) GetAllCompanies(ctx context.Context) ([]uuid.UUID, error) { return nil, nil }
+func (m *MockQuerier) GetAllCompanyDetails(ctx context.Context) ([]db.Company, error) { return nil, nil }
+func (m *MockQuerier) GetPulseCandidateIDs(ctx context.Context) ([]uuid.UUID, error) { return nil, nil }
+func (m *MockQuerier) FindStaleCompanyIDs(ctx context.Context) ([]uuid.UUID, error) { return nil, nil }
 func (m *MockQuerier) GetAuthorizedGroups(ctx context.Context, companyID uuid.UUID) ([]string, error) {
 	return nil, nil
 }

@@ -44,6 +44,14 @@ func (u *Usecase) GetAllActiveCompanies(ctx context.Context) ([]db.Company, erro
 	return u.repo.GetAllActiveCompanies(ctx)
 }
 
+func (u *Usecase) GetPulseCandidateIDs(ctx context.Context) ([]uuid.UUID, error) {
+	return u.repo.GetPulseCandidateIDs(ctx)
+}
+
+func (u *Usecase) FindStaleCompanyIDs(ctx context.Context) ([]uuid.UUID, error) {
+	return u.repo.FindStaleCompanyIDs(ctx)
+}
+
 func (u *Usecase) GetSystemConfig(ctx context.Context, companyID uuid.UUID, key string) (string, error) {
 	val, err := u.repo.GetSystemConfig(ctx, db.GetSystemConfigParams{CompanyID: companyID, Key: key})
 	if err == sql.ErrNoRows {

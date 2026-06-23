@@ -81,6 +81,8 @@ type ConfigUsecase interface {
 	GetAllCompanies(ctx context.Context) ([]uuid.UUID, error)
 	GetAllCompanyDetails(ctx context.Context) ([]db.Company, error)
 	GetAllActiveCompanies(ctx context.Context) ([]db.Company, error)
+	GetPulseCandidateIDs(ctx context.Context) ([]uuid.UUID, error)
+	FindStaleCompanyIDs(ctx context.Context) ([]uuid.UUID, error)
 	UpdateCompanyAuthStatus(ctx context.Context, id uuid.UUID, status string) error
 	UpdateCompanyWhatsAppPhone(ctx context.Context, id uuid.UUID, phone string) error
 	GetUserLanguage(ctx context.Context, companyID uuid.UUID, jid string) (string, error)

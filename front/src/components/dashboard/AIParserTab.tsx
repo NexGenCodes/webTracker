@@ -5,6 +5,7 @@ import { Sparkles, Loader2, Clipboard, CheckCircle2, Package, MapPin, AlertCircl
 import { motion, AnimatePresence } from 'framer-motion';
 import { parseManifestAction } from '@/actions/shipment';
 import { createShipmentAction } from '@/actions/shipment';
+import { useInvalidateCompany } from '@/hooks/useInvalidateCompany';
 import toast from 'react-hot-toast';
 
 interface AIParserTabProps {
@@ -25,6 +26,8 @@ interface ParsedData {
 }
 
 export function AIParserTab({ companyId }: AIParserTabProps) {
+    const invalidateCompany = useInvalidateCompany(companyId);
+
     const [text, setText] = useState('');
     const [isParsing, setIsParsing] = useState(false);
     const [parsedData, setParsedData] = useState<ParsedData | null>(null);
@@ -75,6 +78,7 @@ export function AIParserTab({ companyId }: AIParserTabProps) {
                 toast.success('Shipment created successfully!');
                 setParsedData(null);
                 setText('');
+                invalidateCompany();
             } else {
                 toast.error(result.error || 'Failed to create shipment');
             }

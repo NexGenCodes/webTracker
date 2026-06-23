@@ -436,6 +436,68 @@ func (q *Queries) GetAllCompanies(ctx context.Context) ([]uuid.UUID, error) {
 	return items, nil
 }
 
+const getPulseCandidateIDs = `-- name: GetPulseCandidateIDs :many
+SELECT c.id FROM companies c
+WHERE c.auth_status = 'active'
+  AND EXISTS (
+    SELECT 1 FROM Shipment s
+    WHERE s.company_id = c.id
+      AND s.status NOT IN ('delivered', 'canceled')
+  )
+`
+
+func (q *Queries) GetPulseCandidateIDs(ctx context.Context) ([]uuid.UUID, error) {
+	rows, err := q.db.QueryContext(ctx, getPulseCandidateIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const findStaleCompanyIDs = `-- name: FindStaleCompanyIDs :many
+SELECT c.id FROM companies c
+WHERE c.auth_status = 'pending_linking'
+  AND c.created_at < NOW() - INTERVAL '30 days'
+`
+
+func (q *Queries) FindStaleCompanyIDs(ctx context.Context) ([]uuid.UUID, error) {
+	rows, err := q.db.QueryContext(ctx, findStaleCompanyIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getAllCompanyDetails = `-- name: GetAllCompanyDetails :many
 SELECT id, name, admin_email, whatsapp_phone, logo_url, brand_color, auth_status, subscription_status, subscription_expiry, plan_type, setup_token, tracking_prefix, created_at, updated_at FROM companies
 ORDER BY created_at DESC

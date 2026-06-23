@@ -18,7 +18,9 @@ func main() {
 		}
 	}()
 
+	mode := flag.String("mode", "both", "Run mode: api (HTTP only), bot (worker only), or both")
 	flag.Parse()
+
 	memLimitMB := int64(700)
 	if envMem := os.Getenv("MAX_MEMORY_MB"); envMem != "" {
 		if parsed, err := strconv.ParseInt(envMem, 10, 64); err == nil {
@@ -53,9 +55,9 @@ func main() {
 		logger.Fatal().Err(err).Msg("Failed to initialize app")
 	}
 
-	// 5. Run App
-	logger.Info().Msg("Bot starting...")
-	if err := application.Run(); err != nil {
+	// 5. Run App in requested mode
+	logger.Info().Str("mode", *mode).Msg("Bot starting...")
+	if err := application.Run(*mode); err != nil {
 		logger.Fatal().Err(err).Msg("App crashed")
 	}
 }

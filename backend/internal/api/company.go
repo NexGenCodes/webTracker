@@ -128,6 +128,11 @@ func (h *CompanyHandler) logoutBot(c *fiber.Ctx) error {
 }
 
 func (h *CompanyHandler) deleteCompany(c *fiber.Ctx) error {
+	// Super admin cannot delete their own company from this endpoint
+	if user, ok := c.Locals("user").(*auth.JWTClaims); ok && user.Role == "super_admin" {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot delete your company from here"})
+	}
+
 	companyID := getCompanyID(c)
 	if companyID == uuid.Nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing or invalid company_id"})

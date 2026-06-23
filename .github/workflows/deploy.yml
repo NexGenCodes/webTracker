@@ -1,91 +1,107 @@
-name: Deploy to AWS EC2 (Bare Metal)
+name: Deploy to EC2
 
 on:
   push:
-    branches: [ "main" ]
-  workflow_dispatch:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy.yml'
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
-          cache-dependency-path: backend/go.sum
+          go-version: '1.23'
 
-      - name: Build Binary
+      - name: Build Linux binary
+        working-directory: backend
         run: |
-          cd backend
-          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o bot ./cmd/server/main.go
+          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o bot ./cmd/server/
+          ls -lh bot
 
-      - name: Upload Binary and Service File
+      - name: Upload to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          port: 22
-          source: "backend/bot,backend/webtracker-bot.service,backend/assets/**"
-          target: "/tmp"
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: backend/bot
+          target: /tmp
           strip_components: 1
 
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Deploy to EC2 via SSH
-        uses: appleboy/ssh-action@v1.2.0
+      - name: Deploy and restart services
+        uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          port: 22
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            # 1. Setup Directories & Caddy
-            sudo mkdir -p /opt/webtracker/assets
-            
-            if ! command -v caddy &> /dev/null; then
-              echo "Installing Caddy..."
-              sudo apt update
-              sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https
-              curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-              curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
-              sudo apt update
-              sudo apt install -y caddy
-              
-              # Set up nip.io mapping for Caddy automatically
-              VPS_IP=$(curl -s ifconfig.me)
-              echo "${VPS_IP//./-}.nip.io { reverse_proxy localhost:8080 }" | sudo tee /etc/caddy/Caddyfile
-              sudo systemctl restart caddy
-            fi
+            set -e
 
-            if ! command -v redis-server &> /dev/null; then
-              echo "Installing Redis..."
-              sudo apt update
-              sudo apt install -y redis-server
-              sudo systemctl enable redis-server
-              sudo systemctl start redis-server
-            fi
-
-            # 2. Stop existing service if running
-            sudo systemctl stop webtracker-bot || true
-            
-            # 3. Move & Sync Files
-            sudo cp -r /tmp/assets/* /opt/webtracker/assets/
+            echo "=== Installing binary ==="
+            sudo cp /opt/webtracker/bot /opt/webtracker/bot.bak
             sudo mv /tmp/bot /opt/webtracker/bot
             sudo chmod +x /opt/webtracker/bot
-            sudo mv /tmp/webtracker-bot.service /etc/systemd/system/webtracker-bot.service
-            
-            # 4. Systemd Reload & Start
+
+            echo "=== Creating API service ==="
+            sudo tee /etc/systemd/system/webtracker-api.service > /dev/null <<'EOF'
+            [Unit]
+            Description=WebTracker HTTP API
+            After=network.target redis-server.service
+            Wants=redis-server.service
+            [Service]
+            Type=simple
+            User=root
+            WorkingDirectory=/opt/webtracker
+            ExecStart=/opt/webtracker/bot --mode=api
+            Restart=always
+            RestartSec=10
+            StartLimitIntervalSec=300
+            StartLimitBurst=5
+            EnvironmentFile=/opt/webtracker/.env
+            [Install]
+            WantedBy=multi-user.target
+            EOF
+
+            echo "=== Updating bot service ==="
+            sudo tee /etc/systemd/system/webtracker-bot.service > /dev/null <<'EOF'
+            [Unit]
+            Description=WebTracker WhatsApp Bot
+            After=network.target redis-server.service
+            Wants=redis-server.service
+            [Service]
+            Type=simple
+            User=root
+            WorkingDirectory=/opt/webtracker
+            ExecStart=/opt/webtracker/bot --mode=bot
+            Restart=always
+            RestartSec=10
+            StartLimitIntervalSec=300
+            StartLimitBurst=5
+            EnvironmentFile=/opt/webtracker/.env
+            [Install]
+            WantedBy=multi-user.target
+            EOF
+
+            echo "=== Reloading systemd ==="
             sudo systemctl daemon-reload
-            sudo systemctl enable webtracker-bot
-            sudo systemctl restart webtracker-bot
-            
-            # 5. Verify
-            systemctl is-active webtracker-bot
-            sudo tail -n 20 /opt/webtracker/logs/bot.log
+            sudo systemctl enable webtracker-api.service
+            sudo systemctl enable webtracker-bot.service
+
+            echo "=== Restarting API ==="
+            sudo systemctl restart webtracker-api.service
+            sleep 2
+
+            echo "=== Restarting bot ==="
+            sudo systemctl restart webtracker-bot.service
+            sleep 2
+
+            echo "=== Status ==="
+            echo "--- API ---"
+            sudo systemctl status webtracker-api.service --no-pager | head -5
+            echo "--- Bot ---"
+            sudo systemctl status webtracker-bot.service --no-pager | head -5

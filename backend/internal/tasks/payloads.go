@@ -22,6 +22,7 @@ const (
 	TypeCronBotLiveness = "cron:bot_liveness"
 	TypeOutboundAlert   = "whatsapp:outbound_alert"
 	TypeCronCompanyPulse = "cron:company_pulse"
+	TypeCronStaleCleanup = "cron:stale_cleanup"
 )
 
 // CronCompanyPulsePayload defines the payload for processing a single company's status pulse.

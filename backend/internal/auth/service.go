@@ -176,7 +176,7 @@ func (s *Service) VerifyOTP(ctx context.Context, email, otp string) (*AuthRespon
 	cache.RedisClient.Del(ctx, redisKey)
 
 	// Generate Session JWT
-	sessionToken, err := s.generateJWT(company.ID, company.Name.String, company.AdminEmail, company.PlanType.String, "pending_verification")
+	sessionToken, err := s.generateJWT(company.ID, company.Name.String, company.AdminEmail, company.PlanType.String, "pending_verification", "authenticated")
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to generate JWT: %w", err)
 	}
@@ -213,7 +213,7 @@ func (s *Service) SetupCompany(ctx context.Context, companyID uuid.UUID, req Set
 	}
 
 	// Generate updated JWT with active status
-	sessionToken, err := s.generateJWT(company.ID, company.Name.String, company.AdminEmail, company.PlanType.String, company.AuthStatus.String)
+	sessionToken, err := s.generateJWT(company.ID, company.Name.String, company.AdminEmail, company.PlanType.String, company.AuthStatus.String, "authenticated")
 
 	return &AuthResponse{
 		CompanyID:   company.ID,
@@ -239,12 +239,36 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (*AuthResponse, s
 		return nil, "", errors.New("invalid email or password")
 	}
 
+	// Check if this email belongs to a super admin
+	admin, saErr := s.queries.GetSuperAdminByEmail(ctx, email)
+	if saErr == nil {
+		// Super admin — verify password against super_admins table
+		if err := bcrypt.CompareHashAndPassword([]byte(admin.PasswordHash), []byte(req.Password)); err != nil {
+			s.loginLimiter.Increment(ctx, email) //nolint:errcheck
+			return nil, "", errors.New("invalid email or password")
+		}
+		s.loginLimiter.Reset(ctx, email)
+
+		token, err := s.generateJWT(company.ID, company.Name.String, company.AdminEmail, "unlimited", company.AuthStatus.String, "super_admin")
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to generate JWT: %w", err)
+		}
+
+		return &AuthResponse{
+			CompanyID:   company.ID,
+			CompanyName: company.Name.String,
+			Email:       company.AdminEmail,
+			PlanType:    "unlimited",
+			AuthStatus:  company.AuthStatus.String,
+		}, token, nil
+	}
+
+	// Regular company admin — verify against company password
 	if !company.AdminPasswordHash.Valid {
 		return nil, "", errors.New("account not fully set up")
 	}
 
-	err = bcrypt.CompareHashAndPassword([]byte(company.AdminPasswordHash.String), []byte(req.Password))
-	if err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(company.AdminPasswordHash.String), []byte(req.Password)); err != nil {
 		s.loginLimiter.Increment(ctx, email) //nolint:errcheck
 		return nil, "", errors.New("invalid email or password")
 	}
@@ -252,7 +276,7 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (*AuthResponse, s
 	// Successful login — clear the failure counter
 	s.loginLimiter.Reset(ctx, email)
 
-	token, err := s.generateJWT(company.ID, company.Name.String, company.AdminEmail, company.PlanType.String, company.AuthStatus.String)
+	token, err := s.generateJWT(company.ID, company.Name.String, company.AdminEmail, company.PlanType.String, company.AuthStatus.String, "authenticated")
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to generate JWT: %w", err)
 	}
@@ -290,14 +314,19 @@ func (s *Service) AdminLogin(ctx context.Context, req AdminLoginRequest) (string
 	// Successful login — clear the failure counter
 	s.loginLimiter.Reset(ctx, email)
 
-	// Generate super admin token (using a dummy UUID for CompanyID since they aren't a company)
+	// Resolve the super admin's company from the companies table
+	company, err := s.queries.GetCompanyByEmail(ctx, admin.Email)
+	if err != nil {
+		return "", errors.New("no company account found for this admin email")
+	}
+
 	if s.privateKey == nil {
 		return "", errors.New("JWT private key is not loaded")
 	}
 
 	claims := JWTClaims{
-		CompanyID:   uuid.Nil, // Super Admins don't belong to a specific company
-		CompanyName: "Super Admin",
+		CompanyID:   company.ID,
+		CompanyName: company.Name.String,
 		Email:       admin.Email,
 		PlanType:    "unlimited",
 		AuthStatus:  "active",
@@ -306,7 +335,7 @@ func (s *Service) AdminLogin(ctx context.Context, req AdminLoginRequest) (string
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)), // Shorter expiry for admin
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Issuer:    "webtracker-auth",
-			Subject:   admin.ID.String(),
+			Subject:   company.ID.String(),
 			Audience:  jwt.ClaimStrings{"super_admin"},
 		},
 	}
@@ -422,7 +451,7 @@ func (s *Service) CompletePasswordReset(ctx context.Context, req ResetPasswordRe
 	return nil
 }
 
-func (s *Service) generateJWT(companyID uuid.UUID, companyName, email, planType, authStatus string) (string, error) {
+func (s *Service) generateJWT(companyID uuid.UUID, companyName, email, planType, authStatus, role string) (string, error) {
 	if s.privateKey == nil {
 		return "", errors.New("JWT private key is not loaded — check JWT_PRIVATE_KEY_PATH")
 	}
@@ -433,7 +462,7 @@ func (s *Service) generateJWT(companyID uuid.UUID, companyName, email, planType,
 		Email:       email,
 		PlanType:    planType,
 		AuthStatus:  authStatus,
-		Role:        "authenticated",
+		Role:        role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(7 * 24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

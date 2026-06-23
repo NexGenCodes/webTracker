@@ -12,6 +12,7 @@ import { useQuery } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import { bulkDeleteAction, bulkStatusAction, deleteShipmentAction } from '@/actions/shipment';
 import { ShipmentModal, ShipmentFormValues } from './ShipmentModal';
+import { useInvalidateCompany } from '@/hooks/useInvalidateCompany';
 import toast from 'react-hot-toast';
 
 interface ShipmentsTabProps {
@@ -37,6 +38,8 @@ export function ShipmentsTab({ companyId, jwt }: ShipmentsTabProps) {
     const pageSize = 10;
 
     const supabase = createClient(jwt);
+
+    const invalidateCompany = useInvalidateCompany(companyId);
 
     const { data, isLoading, refetch } = useQuery({
         queryKey: ['shipments-list', companyId, page, statusFilter, search],
@@ -72,6 +75,7 @@ export function ShipmentsTab({ companyId, jwt }: ShipmentsTabProps) {
         if (result.success) {
             toast.success('Shipment deleted.');
             refetch();
+            invalidateCompany();
         } else {
             toast.error(result.error || 'Failed to delete.');
         }
@@ -115,6 +119,7 @@ export function ShipmentsTab({ companyId, jwt }: ShipmentsTabProps) {
         }
         setSelectedIds([]);
         refetch();
+        invalidateCompany();
     };
 
     const handleBulkStatusUpdate = async (status: string) => {
@@ -128,6 +133,7 @@ export function ShipmentsTab({ companyId, jwt }: ShipmentsTabProps) {
         }
         setSelectedIds([]);
         refetch();
+        invalidateCompany();
     };
 
     return (
@@ -474,7 +480,7 @@ export function ShipmentsTab({ companyId, jwt }: ShipmentsTabProps) {
                 onClose={() => setIsModalOpen(false)}
                 companyId={companyId}
                 shipment={editingShipment as unknown as (ShipmentFormValues & { id: string; tracking_id?: string }) | null}
-                onSuccess={refetch}
+                onSuccess={() => { refetch(); invalidateCompany(); }}
             />
         </div>
     );

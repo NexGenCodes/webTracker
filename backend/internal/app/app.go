@@ -162,20 +162,19 @@ func (a *App) Init() error {
 	return nil
 }
 
-func (a *App) Run() error {
+func (a *App) Run(mode string) error {
 	// Register cron tasks
 	a.AsynqScheduler.Register("*/5 * * * *", asynq.NewTask(tasks.TypeCronPulse, nil))
 	a.AsynqScheduler.Register("0 8 * * *", asynq.NewTask(tasks.TypeCronDailyStats, nil))
 	a.AsynqScheduler.Register("0 0 * * *", asynq.NewTask(tasks.TypeCronPruning, nil))
 	a.AsynqScheduler.Register("*/10 * * * *", asynq.NewTask(tasks.TypeCronHealthCheck, nil))
 	a.AsynqScheduler.Register("*/3 * * * *", asynq.NewTask(tasks.TypeCronBotLiveness, nil))
+	a.AsynqScheduler.Register("0 0 * * 0", asynq.NewTask(tasks.TypeCronStaleCleanup, nil))
 
-	go func() {
-		if err := a.AsynqScheduler.Start(); err != nil {
-			logger.Error().Err(err).Msg("Asynq Scheduler failed to start")
-		}
-	}()
+	runAPI := mode == "api" || mode == "both"
+	runBot := mode == "bot" || mode == "both"
 
+	// Start limit cleanup loop (always — lightweight)
 	go func() {
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
@@ -189,58 +188,70 @@ func (a *App) Run() error {
 		}
 	}()
 
-	// Fix Thundering Herd: Connect bots concurrently in batches to drastically improve server startup time for thousands of tenants.
-	go func() {
-		bots := a.BotManager.GetAllBots()
-		batchSize := 50
-		for i := 0; i < len(bots); i += batchSize {
-			end := i + batchSize
-			if end > len(bots) {
-				end = len(bots)
+	if runBot {
+		// Start Asynq scheduler (cron task enqueuer)
+		go func() {
+			if err := a.AsynqScheduler.Start(); err != nil {
+				logger.Error().Err(err).Msg("Asynq Scheduler failed to start")
 			}
-			batch := bots[i:end]
-			var batchWg sync.WaitGroup
+		}()
 
-			for _, bot := range batch {
-				batchWg.Add(1)
-				go func(b models.BotInstance) {
-					defer batchWg.Done()
-					wc := b.GetWAClient()
-					if wc != nil && wc.Store != nil && wc.Store.ID != nil {
-						if err := wc.Connect(); err != nil {
-							logger.Error().Err(err).Str("company", b.GetCompanyName()).Msg("Failed to connect bot on startup")
+		// Connect bots in batches to prevent thundering herd
+		go func() {
+			bots := a.BotManager.GetAllBots()
+			batchSize := 50
+			for i := 0; i < len(bots); i += batchSize {
+				end := i + batchSize
+				if end > len(bots) {
+					end = len(bots)
+				}
+				batch := bots[i:end]
+				var batchWg sync.WaitGroup
+
+				for _, bot := range batch {
+					batchWg.Add(1)
+					go func(b models.BotInstance) {
+						defer batchWg.Done()
+						wc := b.GetWAClient()
+						if wc != nil && wc.Store != nil && wc.Store.ID != nil {
+							if err := wc.Connect(); err != nil {
+								logger.Error().Err(err).Str("company", b.GetCompanyName()).Msg("Failed to connect bot on startup")
+							}
 						}
-					}
-				}(bot)
+					}(bot)
+				}
+				batchWg.Wait()
+				time.Sleep(500 * time.Millisecond)
 			}
-			// Wait for current batch to finish connecting before starting next batch
-			batchWg.Wait()
-			// Tiny jitter between batches to prevent overwhelming WhatsApp edge servers
-			time.Sleep(500 * time.Millisecond)
-		}
-	}()
+		}()
 
-	go func() {
-		if err := a.HttpServer.Start(a.Cfg.APIPort); err != nil {
-			logger.Error().Err(err).Msg("HTTP Server startup failed")
-		}
-	}()
+		// Start Asynq worker (task processor)
+		go func() {
+			mux := asynq.NewServeMux()
+			mux.HandleFunc(tasks.TypeWhatsAppMessage, a.Worker.HandleWhatsAppMessage)
+			mux.HandleFunc(tasks.TypeCronPulse, a.Worker.HandleCronPulse)
+			mux.HandleFunc(tasks.TypeCronDailyStats, a.Worker.HandleCronDailyStats)
+			mux.HandleFunc(tasks.TypeCronPruning, a.Worker.HandleCronPruning)
+			mux.HandleFunc(tasks.TypeCronHealthCheck, a.Worker.HandleCronHealthCheck)
+			mux.HandleFunc(tasks.TypeCronBotLiveness, a.Worker.HandleCronBotLiveness)
+			mux.HandleFunc(tasks.TypeOutboundAlert, a.Worker.HandleOutboundAlert)
+			mux.HandleFunc(tasks.TypeCronCompanyPulse, a.Worker.HandleCronCompanyPulse)
+			mux.HandleFunc(tasks.TypeCronStaleCleanup, a.Worker.HandleCronStaleCleanup)
 
-	go func() {
-		mux := asynq.NewServeMux()
-		mux.HandleFunc(tasks.TypeWhatsAppMessage, a.Worker.HandleWhatsAppMessage)
-		mux.HandleFunc(tasks.TypeCronPulse, a.Worker.HandleCronPulse)
-		mux.HandleFunc(tasks.TypeCronDailyStats, a.Worker.HandleCronDailyStats)
-		mux.HandleFunc(tasks.TypeCronPruning, a.Worker.HandleCronPruning)
-		mux.HandleFunc(tasks.TypeCronHealthCheck, a.Worker.HandleCronHealthCheck)
-		mux.HandleFunc(tasks.TypeCronBotLiveness, a.Worker.HandleCronBotLiveness)
-		mux.HandleFunc(tasks.TypeOutboundAlert, a.Worker.HandleOutboundAlert)
-		mux.HandleFunc(tasks.TypeCronCompanyPulse, a.Worker.HandleCronCompanyPulse)
+			if err := a.AsynqServer.Run(mux); err != nil {
+				logger.Error().Err(err).Msg("Asynq Server failed")
+			}
+		}()
+	}
 
-		if err := a.AsynqServer.Run(mux); err != nil {
-			logger.Error().Err(err).Msg("Asynq Server failed")
-		}
-	}()
+	if runAPI {
+		// Start HTTP API server
+		go func() {
+			if err := a.HttpServer.Start(a.Cfg.APIPort); err != nil {
+				logger.Error().Err(err).Msg("HTTP Server startup failed")
+			}
+		}()
+	}
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
