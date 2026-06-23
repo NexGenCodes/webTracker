@@ -23,15 +23,20 @@ jobs:
           GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o bot ./cmd/server/
           ls -lh bot
 
-      - name: Upload to EC2
+      - name: Upload binary to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
           source: backend/bot
-          target: /tmp
+          target: /tmp/
           strip_components: 1
+          timeout: 60s
+          command_timeout: 30s
+          rm: false
+          debug: false
 
       - name: Deploy and restart services
         uses: appleboy/ssh-action@v1.0.3
@@ -39,6 +44,10 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          timeout: 60s
+          command_timeout: 60s
+          script_stop: true
           script: |
             set -e
 
@@ -48,7 +57,7 @@ jobs:
             sudo chmod +x /opt/webtracker/bot
 
             echo "=== Creating API service ==="
-            sudo tee /etc/systemd/system/webtracker-api.service > /dev/null <<'EOF'
+            sudo tee /etc/systemd/system/webtracker-api.service > /dev/null <<'SERVICEEOF'
             [Unit]
             Description=WebTracker HTTP API
             After=network.target redis-server.service
@@ -65,10 +74,10 @@ jobs:
             EnvironmentFile=/opt/webtracker/.env
             [Install]
             WantedBy=multi-user.target
-            EOF
+            SERVICEEOF
 
             echo "=== Updating bot service ==="
-            sudo tee /etc/systemd/system/webtracker-bot.service > /dev/null <<'EOF'
+            sudo tee /etc/systemd/system/webtracker-bot.service > /dev/null <<'SERVICEEOF'
             [Unit]
             Description=WebTracker WhatsApp Bot
             After=network.target redis-server.service
@@ -85,23 +94,29 @@ jobs:
             EnvironmentFile=/opt/webtracker/.env
             [Install]
             WantedBy=multi-user.target
-            EOF
+            SERVICEEOF
 
             echo "=== Reloading systemd ==="
             sudo systemctl daemon-reload
             sudo systemctl enable webtracker-api.service
             sudo systemctl enable webtracker-bot.service
 
-            echo "=== Restarting API ==="
-            sudo systemctl restart webtracker-api.service
-            sleep 2
+            echo "=== Killing any process on port 8080 ==="
+            sudo fuser -k 8080/tcp 2>/dev/null || true
+            sleep 1
 
-            echo "=== Restarting bot ==="
+            echo "=== Starting bot (mode=bot) ==="
             sudo systemctl restart webtracker-bot.service
+            sleep 3
+
+            echo "=== Starting API (mode=api) ==="
+            sudo systemctl restart webtracker-api.service
             sleep 2
 
             echo "=== Status ==="
             echo "--- API ---"
-            sudo systemctl status webtracker-api.service --no-pager | head -5
+            sudo systemctl status webtracker-api.service --no-pager 2>&1 | head -5
             echo "--- Bot ---"
-            sudo systemctl status webtracker-bot.service --no-pager | head -5
+            sudo systemctl status webtracker-bot.service --no-pager 2>&1 | head -5
+            echo "--- Port 8080 ---"
+            sudo ss -tlnp | grep 8080 || echo "NOT LISTENING"
