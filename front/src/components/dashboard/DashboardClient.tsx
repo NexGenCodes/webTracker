@@ -190,7 +190,7 @@ export default function DashboardClient({ initialCompanyData, initialStats, user
     // --- DERIVED STATE ---
     const isSuperAdmin = user?.role === 'super_admin';
     const companyName = companyData?.name || user?.company_name || 'CARGOHIVE';
-    const whatsappConnected = companyData?.auth_status === 'active' || isSuperAdmin;
+    const whatsappConnected = companyData?.auth_status === 'active';
     const planType = isSuperAdmin ? 'unlimited' : (companyData?.plan_type || 'trial').toLowerCase();
     const currentPlan = PLAN_DETAILS[planType] || PLAN_DETAILS['trial'];
 
