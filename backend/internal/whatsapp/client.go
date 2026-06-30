@@ -18,7 +18,6 @@ import (
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 	waLog "go.mau.fi/whatsmeow/util/log"
-	"google.golang.org/protobuf/proto"
 
 	// Import standard pgx driver.
 	_ "github.com/jackc/pgx/v5/stdlib"
