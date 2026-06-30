@@ -145,10 +145,10 @@ func (m *Manager) DeactivateBot(companyID uuid.UUID) error {
 
 // LogoutBot unpairs the bot device and marks it as pending.
 func (m *Manager) LogoutBot(companyID uuid.UUID) error {
-	// 1. Update Database immediately to "pending" to provide fast UI feedback
-	err := m.ConfigUC.UpdateCompanyAuthStatus(m.Context, companyID, "pending")
+	// 1. Update Database immediately to "disconnected" to provide fast UI feedback
+	err := m.ConfigUC.UpdateCompanyAuthStatus(m.Context, companyID, "disconnected")
 	if err != nil {
-		logger.Error().Err(err).Str("company_id", companyID.String()).Msg("Failed to update auth status to pending")
+		logger.Error().Err(err).Str("company_id", companyID.String()).Msg("Failed to update auth status to disconnected")
 		return fmt.Errorf("failed to update auth status: %w", err)
 	}
 
@@ -387,8 +387,8 @@ func (m *Manager) HandleWAEvent(bot *BotInstance, evt interface{}) {
 
 	case *events.LoggedOut:
 		// 1. Reset auth status
-		if err := m.ConfigUC.UpdateCompanyAuthStatus(m.Context, bot.CompanyID, "pending"); err != nil {
-			logger.Error().Err(err).Str("company_id", bot.CompanyID.String()).Msg("Failed to update auth status to pending on logout")
+		if err := m.ConfigUC.UpdateCompanyAuthStatus(m.Context, bot.CompanyID, "disconnected"); err != nil {
+			logger.Error().Err(err).Str("company_id", bot.CompanyID.String()).Msg("Failed to update auth status to disconnected on logout")
 		}
 		// 2. Clear the WhatsApp phone in the database
 		if err := m.ConfigUC.UpdateCompanyWhatsAppPhone(m.Context, bot.CompanyID, ""); err != nil {
@@ -489,6 +489,8 @@ func (m *Manager) GeneratePairingCode(ctx context.Context, companyID uuid.UUID, 
 				return "", fmt.Errorf("failed to connect for pairing: %w", err)
 			}
 		}
+		// Wait for connection to fully establish to prevent 400 Bad Request
+		time.Sleep(1500 * time.Millisecond)
 	}
 
 	// 3. Generate the code

@@ -260,7 +260,7 @@ export default function WhatsAppConnectModal({ isOpen, onClose, companyId, compa
                                     pairStatus={pairStatus}
                                     handleCopyCode={handleCopyCode}
                                     codeCopied={codeCopied}
-                                    onRegenerate={() => setPairStatus('idle')}
+                                    onRegenerate={() => { setPairStatus('idle'); setPairingCode(''); }}
                                     companyId={companyId}
                                     handleConnected={handleConnected}
                                 />
