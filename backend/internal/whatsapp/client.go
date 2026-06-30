@@ -65,12 +65,6 @@ func NewClientForDevice(device *store.Device, name string) *whatsmeow.Client {
 		name = "AIRWAYBILL"
 	}
 
-	// Set the linked device display name (shown in WhatsApp > Linked Devices menu on phone)
-	// PlatformType is intentionally omitted — using the default avoids
-	// a browser prefix like "Google Chrome" being prepended to the name.
-	store.DeviceProps.Os = proto.String(name)
-	store.DeviceProps.RequireFullSync = proto.Bool(false)
-
 	device.BusinessName = name
 
 	client := whatsmeow.NewClient(device, waLog.Stdout("whatsapp", "INFO", true))
