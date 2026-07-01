@@ -167,7 +167,7 @@ func (m *Manager) LogoutBot(companyID uuid.UUID) error {
 	client := bot.GetWAClient()
 	if !client.IsConnected() {
 		// Attempt a quick reconnection to send the logout signal to unpair on the phone side
-		if err := client.Connect(); err != nil {
+		if err := ConnectWithCustomName(client, bot.GetCompanyName()); err != nil {
 			logger.Warn().Err(err).Str("company_id", companyID.String()).Msg("Failed to reconnect for logout")
 		}
 		// Wait for connection (up to 3 seconds)
@@ -328,7 +328,7 @@ func (m *Manager) InitBotForCompany(c db.Company) error {
 	if waClient.Store.ID != nil {
 		logger.Info().Str("company", c.ID.String()).Str("phone", phone).Msg("Stored session found, connecting to WhatsApp")
 		if !waClient.IsConnected() {
-			if err := waClient.Connect(); err != nil {
+			if err := ConnectWithCustomName(waClient, c.Name.String); err != nil {
 				logger.Error().Err(err).Str("company", c.ID.String()).Msg("Failed to connect with stored session")
 				return fmt.Errorf("failed to connect: %w", err)
 			}
@@ -484,7 +484,7 @@ func (m *Manager) GeneratePairingCode(ctx context.Context, companyID uuid.UUID, 
 	// 2. Ensure connection is active.
 	if !waClient.IsConnected() {
 		// If it's already connecting, whatsmeow might return an error we can ignore or handle
-		if err := waClient.Connect(); err != nil {
+		if err := ConnectWithCustomName(waClient, bot.GetCompanyName()); err != nil {
 			if !strings.Contains(err.Error(), "already connected") {
 				return "", fmt.Errorf("failed to connect for pairing: %w", err)
 			}
@@ -531,7 +531,7 @@ func (m *Manager) GetQR(ctx context.Context, companyID uuid.UUID) (string, error
 
 	// 2. Ensure connection is active to receive QR events
 	if !waClient.IsConnected() {
-		if err := waClient.Connect(); err != nil {
+		if err := ConnectWithCustomName(waClient, bot.GetCompanyName()); err != nil {
 			if !strings.Contains(err.Error(), "already connected") {
 				return "", fmt.Errorf("failed to connect for QR: %w", err)
 			}
@@ -550,7 +550,7 @@ func (m *Manager) GetQR(ctx context.Context, companyID uuid.UUID) (string, error
 			logger.Info().Str("company", companyID.String()).Msg("Triggering QR refresh via reconnect...")
 			waClient.Disconnect()
 			time.Sleep(500 * time.Millisecond)
-			if err := waClient.Connect(); err != nil {
+			if err := ConnectWithCustomName(waClient, bot.GetCompanyName()); err != nil {
 				logger.Warn().Err(err).Str("company", companyID.String()).Msg("QR refresh reconnect failed")
 			}
 		}
@@ -618,7 +618,7 @@ func (m *Manager) LivenessCheck() {
 
 					logger.Warn().Str("company_id", e.ID.String()).Msg("[LivenessCheck] Bot disconnected — attempting reconnect")
 					e.Bot.SetReconnectCountZero()
-					if err := client.Connect(); err != nil {
+					if err := ConnectWithCustomName(client, e.Bot.GetCompanyName()); err != nil {
 						logger.Error().Err(err).Str("company_id", e.ID.String()).Msg("[LivenessCheck] Reconnect failed")
 						if dbErr := m.ConfigUC.UpdateCompanyAuthStatus(m.Context, e.ID, "disconnected"); dbErr != nil {
 							logger.Error().Err(dbErr).Str("company_id", e.ID.String()).Msg("[LivenessCheck] Failed to update auth status after reconnect failure")
