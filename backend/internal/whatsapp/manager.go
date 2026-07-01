@@ -336,7 +336,10 @@ func (m *Manager) InitBotForCompany(c db.Company) error {
 	m.Bots[c.ID] = bot
 	m.BotsMu.Unlock()
 
-	if waClient.Store.ID != nil {
+	if waClient.Store.ID != nil && c.AuthStatus.Valid && c.AuthStatus.String == "active" {
+		// Only connect on startup if DB confirms this bot is active.
+		// If auth_status is 'disconnected' or 'pending', the API process may still own
+		// the session (QR pairing in progress). We wait for the activation signal instead.
 		logger.Info().Str("company", c.ID.String()).Str("phone", phone).Msg("Stored session found, connecting to WhatsApp")
 		if !waClient.IsConnected() {
 			if err := ConnectWithCustomName(waClient, c.Name.String); err != nil {
@@ -344,6 +347,9 @@ func (m *Manager) InitBotForCompany(c db.Company) error {
 				return fmt.Errorf("failed to connect: %w", err)
 			}
 		}
+	} else if waClient.Store.ID != nil && (!c.AuthStatus.Valid || c.AuthStatus.String != "active") {
+		// Has a session key but DB says not active — wait for activation signal
+		logger.Info().Str("company", c.ID.String()).Str("auth_status", c.AuthStatus.String).Msg("Session exists but auth_status is not active — skipping startup connect, waiting for activation signal")
 	} else if c.AuthStatus.Valid && c.AuthStatus.String == "active" {
 		// Session was lost but DB still says active — correct the dashboard state
 		logger.Warn().
