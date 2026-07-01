@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
@@ -241,6 +242,61 @@ func (a *App) Run(mode string) error {
 				if err := a.BotManager.InitBotForCompany(company); err != nil {
 					logger.Error().Err(err).Str("company_id", companyID.String()).Msg("Failed to init bot from activation signal")
 				}
+			})
+
+			// RPC Listener for QR Code
+			go pubsub.Subscribe(a.Context, a.BotManager.RedisClient, pubsub.ChannelRPCGetQR, func(payload string) {
+				var req pubsub.RPCRequestPayload
+				if err := json.Unmarshal([]byte(payload), &req); err != nil {
+					logger.Error().Err(err).Msg("Failed to unmarshal RPC QR request")
+					return
+				}
+				dataMap, ok := req.Data.(map[string]interface{})
+				if !ok {
+					_ = pubsub.RPCRespond(a.Context, a.BotManager.RedisClient, req.ReplyChannel, nil, "invalid data payload")
+					return
+				}
+				companyIDStr, _ := dataMap["company_id"].(string)
+				companyID, err := uuid.Parse(companyIDStr)
+				if err != nil {
+					_ = pubsub.RPCRespond(a.Context, a.BotManager.RedisClient, req.ReplyChannel, nil, "invalid company_id")
+					return
+				}
+
+				code, err := a.BotManager.GetQR(a.Context, companyID)
+				errStr := ""
+				if err != nil {
+					errStr = err.Error()
+				}
+				_ = pubsub.RPCRespond(a.Context, a.BotManager.RedisClient, req.ReplyChannel, code, errStr)
+			})
+
+			// RPC Listener for Pairing Code
+			go pubsub.Subscribe(a.Context, a.BotManager.RedisClient, pubsub.ChannelRPCPairBot, func(payload string) {
+				var req pubsub.RPCRequestPayload
+				if err := json.Unmarshal([]byte(payload), &req); err != nil {
+					logger.Error().Err(err).Msg("Failed to unmarshal RPC Pair request")
+					return
+				}
+				dataMap, ok := req.Data.(map[string]interface{})
+				if !ok {
+					_ = pubsub.RPCRespond(a.Context, a.BotManager.RedisClient, req.ReplyChannel, nil, "invalid data payload")
+					return
+				}
+				companyIDStr, _ := dataMap["company_id"].(string)
+				phone, _ := dataMap["phone"].(string)
+				companyID, err := uuid.Parse(companyIDStr)
+				if err != nil {
+					_ = pubsub.RPCRespond(a.Context, a.BotManager.RedisClient, req.ReplyChannel, nil, "invalid company_id")
+					return
+				}
+
+				code, err := a.BotManager.GeneratePairingCode(a.Context, companyID, phone)
+				errStr := ""
+				if err != nil {
+					errStr = err.Error()
+				}
+				_ = pubsub.RPCRespond(a.Context, a.BotManager.RedisClient, req.ReplyChannel, code, errStr)
 			})
 		}
 

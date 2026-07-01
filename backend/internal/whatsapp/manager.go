@@ -383,22 +383,8 @@ func (m *Manager) HandleWAEvent(bot *BotInstance, evt interface{}) {
 		}
 		bot.ResetReconnectState()
 
-		if m.IsAPIOnly && bot.GetWAClient().Store != nil && bot.GetWAClient().Store.ID != nil {
-			// API-only mode: wait for initial sync then hand off the session to the Bot process.
-			// The activation signal is published AFTER we disconnect so the Bot doesn't race us.
-			logger.Info().Str("company_id", bot.CompanyID.String()).Msg("API process handing off to Bot process; disconnecting WebSocket...")
-			go func() {
-				time.Sleep(3 * time.Second)
-				bot.GetWAClient().Disconnect()
-				// Only NOW signal the Bot process to connect — the socket is free.
-				if m.RedisClient != nil {
-					if err := pubsub.PublishCompanyActivated(m.Context, m.RedisClient, bot.CompanyID); err != nil {
-						logger.Warn().Err(err).Str("company_id", bot.CompanyID.String()).Msg("Failed to publish activation signal on handoff")
-					}
-				}
-			}()
-		} else if m.RedisClient != nil {
-			// Bot-mode or both-mode: signal immediately (no handoff needed)
+		if m.RedisClient != nil {
+			// Signal immediately (no handoff needed anymore since API doesn't connect)
 			if err := pubsub.PublishCompanyActivated(m.Context, m.RedisClient, bot.CompanyID); err != nil {
 				logger.Warn().Err(err).Str("company_id", bot.CompanyID.String()).Msg("Failed to publish activation signal on connect")
 			}
@@ -416,25 +402,15 @@ func (m *Manager) HandleWAEvent(bot *BotInstance, evt interface{}) {
 				}
 			}
 
-			if !m.IsAPIOnly {
-				// Only send welcome message from the Bot process (it owns the persistent connection)
-				ownJID := bot.GetWAClient().Store.ID.ToNonAD()
-				welcomeMsg := "✅ *CargoHive Bot Activated*\n\nYour WhatsApp tracking bot is now securely linked and fully operational.\n\nAll tracking requests sent to this number will now be automatically processed. 🚀"
-				bot.Sender.Send(ownJID, welcomeMsg)
-			}
+			// Only send welcome message from the Bot process
+			ownJID := bot.GetWAClient().Store.ID.ToNonAD()
+			welcomeMsg := "✅ *CargoHive Bot Activated*\n\nYour WhatsApp tracking bot is now securely linked and fully operational.\n\nAll tracking requests sent to this number will now be automatically processed. 🚀"
+			bot.Sender.Send(ownJID, welcomeMsg)
 		}
 		bot.ResetReconnectState()
 		// Note: activation signal is published via events.Connected (fires after PairSuccess + reconnect)
 
 	case *events.LoggedOut:
-		if m.IsAPIOnly {
-			// In API-only mode this LoggedOut is the expected result of our clean handoff disconnect.
-			// The session keys are still valid — the Bot process will connect using them.
-			// Do NOT wipe the session, phone, or auth_status here.
-			logger.Info().Str("company_id", bot.CompanyID.String()).Msg("[Handoff] API process received expected LoggedOut after disconnect — ignoring, session is safe")
-			return
-		}
-
 		// Real logout (e.g. user removed device from WhatsApp app)
 		// 1. Reset auth status
 		if err := m.ConfigUC.UpdateCompanyAuthStatus(m.Context, bot.CompanyID, "disconnected"); err != nil {
@@ -507,6 +483,28 @@ func (m *Manager) getOrInitBot(companyID uuid.UUID) (models.BotInstance, error) 
 
 // GeneratePairingCode generates a pairing code for a companion device.
 func (m *Manager) GeneratePairingCode(ctx context.Context, companyID uuid.UUID, phone string) (string, error) {
+	if m.IsAPIOnly && m.RedisClient != nil {
+		reqData := map[string]string{
+			"company_id": companyID.String(),
+			"phone":      phone,
+		}
+		logger.Info().Str("company", companyID.String()).Msg("API mode: requesting pairing code via RPC")
+		resp, err := pubsub.RPCRequest(ctx, m.RedisClient, pubsub.ChannelRPCPairBot, reqData, 55*time.Second)
+		if err != nil {
+			return "", err
+		}
+		if resp.Error != "" {
+			if resp.Error == ErrAlreadyPaired.Error() {
+				return "", ErrAlreadyPaired
+			}
+			return "", fmt.Errorf(resp.Error)
+		}
+		if code, ok := resp.Data.(string); ok {
+			return code, nil
+		}
+		return "", fmt.Errorf("invalid response data type")
+	}
+
 	mu := m.getPairLock(companyID)
 	mu.Lock()
 	defer mu.Unlock()
@@ -550,6 +548,27 @@ func (m *Manager) GeneratePairingCode(ctx context.Context, companyID uuid.UUID, 
 
 // GetQR retrieves the current pairing QR code for the bot.
 func (m *Manager) GetQR(ctx context.Context, companyID uuid.UUID) (string, error) {
+	if m.IsAPIOnly && m.RedisClient != nil {
+		reqData := map[string]string{
+			"company_id": companyID.String(),
+		}
+		logger.Info().Str("company", companyID.String()).Msg("API mode: requesting QR via RPC")
+		resp, err := pubsub.RPCRequest(ctx, m.RedisClient, pubsub.ChannelRPCGetQR, reqData, 30*time.Second)
+		if err != nil {
+			return "", err
+		}
+		if resp.Error != "" {
+			if resp.Error == ErrAlreadyPaired.Error() {
+				return "", ErrAlreadyPaired
+			}
+			return "", fmt.Errorf(resp.Error)
+		}
+		if code, ok := resp.Data.(string); ok {
+			return code, nil
+		}
+		return "", fmt.Errorf("invalid response data type")
+	}
+
 	mu := m.getPairLock(companyID)
 	mu.Lock()
 	defer mu.Unlock()

@@ -9,7 +9,11 @@ import (
 	"webtracker-bot/internal/logger"
 )
 
-const ChannelCompanyActivated = "wt:company:activated"
+const (
+	ChannelCompanyActivated = "wt:company:activated"
+	ChannelRPCGetQR         = "wt:rpc:qr:req"
+	ChannelRPCPairBot       = "wt:rpc:pair:req"
+)
 
 // PublishCompanyActivated sends a signal to the Redis channel to activate a bot instance
 func PublishCompanyActivated(ctx context.Context, rdb *redis.Client, companyID uuid.UUID) error {
