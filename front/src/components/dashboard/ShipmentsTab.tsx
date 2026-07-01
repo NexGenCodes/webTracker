@@ -478,7 +478,6 @@ export function ShipmentsTab({ companyId, jwt }: ShipmentsTabProps) {
             <ShipmentModal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
-                companyId={companyId}
                 shipment={editingShipment as unknown as (ShipmentFormValues & { id: string; tracking_id?: string }) | null}
                 onSuccess={() => { refetch(); invalidateCompany(); }}
             />

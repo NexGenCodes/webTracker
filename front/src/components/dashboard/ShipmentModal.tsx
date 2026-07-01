@@ -28,12 +28,11 @@ export type ShipmentFormValues = z.infer<typeof shipmentSchema>;
 interface ShipmentModalProps {
     isOpen: boolean;
     onClose: () => void;
-    companyId: string;
     shipment?: (ShipmentFormValues & { id: string; tracking_id?: string }) | null; // If present, we are in EDIT mode
     onSuccess: () => void;
 }
 
-export function ShipmentModal({ isOpen, onClose, companyId, shipment, onSuccess }: ShipmentModalProps) {
+export function ShipmentModal({ isOpen, onClose, shipment, onSuccess }: ShipmentModalProps) {
     const isEdit = !!shipment;
 
     const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<ShipmentFormValues>({
