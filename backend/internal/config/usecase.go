@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"webtracker-bot/internal/cache"
@@ -281,6 +282,10 @@ func (u *Usecase) GetCompanyPayments(ctx context.Context, companyID uuid.UUID, l
 
 // IsSuperAdmin checks the super_admins DB table for the given email.
 func (u *Usecase) IsSuperAdmin(ctx context.Context, email string) (bool, error) {
+	if u.cfg != nil && u.cfg.SuperAdminCompanyEmail != "" && strings.EqualFold(strings.TrimSpace(email), u.cfg.SuperAdminCompanyEmail) {
+		return true, nil
+	}
+
 	_, err := u.repo.GetSuperAdminByEmail(ctx, email)
 	if err == nil {
 		return true, nil
@@ -290,4 +295,3 @@ func (u *Usecase) IsSuperAdmin(ctx context.Context, email string) (bool, error) 
 	}
 	return false, nil
 }
-

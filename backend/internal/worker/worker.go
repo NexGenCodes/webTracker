@@ -142,9 +142,10 @@ func (w *Worker) process(workerCtx context.Context, job models.Job) {
 	lang := i18n.Language(langStr)
 
 	// Subscription Guard: Block expired or inactive tenants from using the bot
-	// The super admin is always free to access anything and bypasses all billing checks.
+	// If the company itself is the super admin company, everyone using this bot
+	// has no restrictions — no quota, no subscription checks.
 	isSuperAdmin, _ := billing.IsSuperAdminByEmail(gctx, w.ConfigUC, company.AdminEmail)
-	
+
 	if !isSuperAdmin {
 		if company.SubscriptionStatus.String != "active" && company.SubscriptionStatus.String != "trialing" {
 			logger.Info().Str("company_id", job.CompanyID.String()).Str("status", company.SubscriptionStatus.String).Msg("Ignoring message from inactive subscription")
@@ -164,6 +165,20 @@ func (w *Worker) process(workerCtx context.Context, job models.Job) {
 	// If it's not a command, not a manifest, and doesn't have a document, ignore it immediately.
 	// This prevents the bot from reacting to normal admin conversations.
 	if !isCommand && !isManifest && !isPartial && !hasDocument {
+		return
+	}
+
+	remaining, err = w.ShipmentUC.CheckShipmentCap(gctx, job.CompanyID, isSuperAdmin, company.PlanType.String, company.SubscriptionExpiry)
+	if err != nil {
+		logger.Error().Err(err).Str("company", job.CompanyID.String()).Msg("Failed to check shipment cap")
+		return
+	}
+
+	if remaining == 0 {
+		logger.Info().Str("company_id", job.CompanyID.String()).Msg("Bot locked: billing limit reached")
+		sender := bot.GetSender()
+		sender.Reply(job.ChatJID, job.SenderJID, "⚠️ *ACTION BLOCKED*\n\nYour monthly shipment quota has been exhausted or your subscription has ended.\n\nPlease contact your administrator to upgrade your plan via the dashboard.", job.MessageID, job.Text)
+		sender.React(job.ChatJID, job.SenderJID, job.MessageID, "⛔")
 		return
 	}
 
@@ -311,18 +326,12 @@ func (w *Worker) process(workerCtx context.Context, job models.Job) {
 		newShipment.Weight = 15.0
 	}
 
-	//  Deduplication & Billing Check in Parallel
+	//  Deduplication Check
 	g, gctx = errgroup.WithContext(processCtx)
 
 	g.Go(func() error {
 		var err error
 		existingID, err = w.ShipmentUC.FindSimilar(gctx, job.CompanyID, job.SenderJID.String(), newShipment.RecipientPhone)
-		return err
-	})
-
-	g.Go(func() error {
-		var err error
-		remaining, err = w.ShipmentUC.CheckShipmentCap(gctx, job.CompanyID, isSuperAdmin, company.PlanType.String, company.SubscriptionExpiry)
 		return err
 	})
 
@@ -335,13 +344,6 @@ func (w *Worker) process(workerCtx context.Context, job models.Job) {
 		dupMsg := fmt.Sprintf("⚠️ *SHIPMENT ALREADY EXISTS*\n\nA shipment for this recipient phone is already in the system.\n\n🆔 *%s*\n\n🔹 Use `!edit %s ...` to update.\n🔹 Use `!delete %s` to remove.", existingID, existingID, existingID)
 		sender.Reply(job.ChatJID, job.SenderJID, dupMsg, job.MessageID, job.Text)
 		sender.React(job.ChatJID, job.SenderJID, job.MessageID, "⚠️")
-		return
-	}
-
-	if remaining == 0 {
-		logger.Info().Str("company_id", job.CompanyID.String()).Msg("Shipment blocked: billing limit reached")
-		sender.Reply(job.ChatJID, job.SenderJID, "⚠️ *SHIPMENT BLOCKED*\n\nYour monthly shipment limit has been reached or your subscription has expired.\n\nPlease contact your administrator to upgrade your plan via the dashboard.", job.MessageID, job.Text)
-		sender.React(job.ChatJID, job.SenderJID, job.MessageID, "⛔")
 		return
 	}
 
