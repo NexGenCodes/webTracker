@@ -44,6 +44,7 @@ type Manager struct {
 	RedisClient *redis.Client
 	livenessWG      sync.WaitGroup
 	livenessRunning sync.Mutex
+	IsAPIOnly       bool
 }
 
 // NewManager creates a new multi-tenant WhatsApp manager.
@@ -60,6 +61,12 @@ func NewManager(ctx context.Context, cfg *config.Config, shipUC models.ShipmentU
 		AsynqClient: asynqClient,
 		RedisClient: redisClient,
 	}
+}
+
+// SetAPIOnlyMode configures whether this manager is running in an API-only process.
+// If true, the manager will gracefully hand off WhatsApp connections to the bot process after pairing.
+func (m *Manager) SetAPIOnlyMode(isAPIOnly bool) {
+	m.IsAPIOnly = isAPIOnly
 }
 
 func (m *Manager) getPairLock(companyID uuid.UUID) *sync.Mutex {
@@ -373,6 +380,16 @@ func (m *Manager) HandleWAEvent(bot *BotInstance, evt interface{}) {
 			if err := pubsub.PublishCompanyActivated(m.Context, m.RedisClient, bot.CompanyID); err != nil {
 				logger.Warn().Err(err).Str("company_id", bot.CompanyID.String()).Msg("Failed to publish activation signal on connect")
 			}
+		}
+
+		if m.IsAPIOnly && bot.GetWAClient().Store != nil && bot.GetWAClient().Store.ID != nil {
+			logger.Info().Str("company_id", bot.CompanyID.String()).Msg("API process handing off to Bot process; disconnecting WebSocket...")
+			go func() {
+				// Give whatsmeow a short moment to finish initial post-connect sync (e.g. prekeys)
+				// The bot process will safely reconnect and take over the session.
+				time.Sleep(3 * time.Second)
+				bot.GetWAClient().Disconnect()
+			}()
 		}
 
 	case *events.PairSuccess:

@@ -187,6 +187,10 @@ func (a *App) Run(mode string) error {
 	runAPI := mode == "api" || mode == "both"
 	runBot := mode == "bot" || mode == "both"
 
+	if runAPI && !runBot {
+		a.BotManager.SetAPIOnlyMode(true)
+	}
+
 	// Start limit cleanup loop (always — lightweight)
 	go func() {
 		ticker := time.NewTicker(5 * time.Minute)
