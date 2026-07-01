@@ -41,29 +41,7 @@ func (u *Usecase) GetAllCompanyDetails(ctx context.Context) ([]db.Company, error
 }
 
 func (u *Usecase) GetAllActiveCompanies(ctx context.Context) ([]db.Company, error) {
-	companies, err := u.repo.GetAllActiveCompanies(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	superAdminEmail := u.cfg.SuperAdminCompanyEmail
-	if superAdminEmail != "" {
-		superAdmin, err := u.repo.GetCompanyByEmail(ctx, superAdminEmail)
-		if err == nil && superAdmin.AuthStatus.String == "active" {
-			found := false
-			for _, c := range companies {
-				if c.ID == superAdmin.ID {
-					found = true
-					break
-				}
-			}
-			if !found {
-				companies = append(companies, superAdmin)
-			}
-		}
-	}
-
-	return companies, nil
+	return u.repo.GetAllActiveCompanies(ctx)
 }
 
 func (u *Usecase) GetPulseCandidateIDs(ctx context.Context) ([]uuid.UUID, error) {

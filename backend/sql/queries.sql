@@ -9,7 +9,7 @@ ORDER BY created_at DESC;
 SELECT * FROM companies 
 WHERE auth_status = 'active' 
   AND subscription_status IN ('active', 'trialing')
-  AND (subscription_expiry IS NULL OR subscription_expiry > CURRENT_TIMESTAMP);
+  AND (subscription_expiry IS NULL OR subscription_expiry > CURRENT_TIMESTAMP OR plan_type = 'unlimited');
 
 -- name: GetCompanyByID :one
 SELECT * FROM companies WHERE id = $1;

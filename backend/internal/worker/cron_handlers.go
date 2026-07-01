@@ -56,7 +56,7 @@ func (w *Worker) HandleCronCompanyPulse(ctx context.Context, t *asynq.Task) erro
 	if err == nil {
 		isSuperAdmin, _ := billing.IsSuperAdminByEmail(ctx, w.ConfigUC, company.AdminEmail)
 		if !isSuperAdmin {
-			expired := company.SubscriptionExpiry.Valid && company.SubscriptionExpiry.Time.Before(now)
+			expired := company.SubscriptionExpiry.Valid && company.SubscriptionExpiry.Time.Before(now) && company.PlanType.String != "unlimited"
 			inactive := company.SubscriptionStatus.String != "active" && company.SubscriptionStatus.String != "trialing"
 
 			if expired || inactive {
@@ -298,7 +298,7 @@ func (w *Worker) HandleCronExpiryNotifs(ctx context.Context, t *asynq.Task) erro
 	now := time.Now().UTC()
 
 	for _, c := range companies {
-		if !c.SubscriptionExpiry.Valid {
+		if !c.SubscriptionExpiry.Valid || c.PlanType.String == "unlimited" {
 			continue
 		}
 

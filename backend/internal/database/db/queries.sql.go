@@ -396,7 +396,7 @@ const getAllActiveCompanies = `-- name: GetAllActiveCompanies :many
 SELECT id, name, admin_email, admin_password_hash, whatsapp_phone, logo_url, brand_color, auth_status, subscription_status, subscription_expiry, plan_type, setup_token, tracking_prefix, created_at, updated_at FROM companies 
 WHERE auth_status = 'active' 
   AND subscription_status IN ('active', 'trialing')
-  AND (subscription_expiry IS NULL OR subscription_expiry > CURRENT_TIMESTAMP)
+  AND (subscription_expiry IS NULL OR subscription_expiry > CURRENT_TIMESTAMP OR plan_type = 'unlimited')
 `
 
 func (q *Queries) GetAllActiveCompanies(ctx context.Context) ([]Company, error) {

@@ -150,7 +150,7 @@ func (w *Worker) process(workerCtx context.Context, job models.Job) {
 			logger.Info().Str("company_id", job.CompanyID.String()).Str("status", company.SubscriptionStatus.String).Msg("Ignoring message from inactive subscription")
 			return
 		}
-		if company.SubscriptionExpiry.Valid && company.SubscriptionExpiry.Time.Before(time.Now()) {
+		if company.SubscriptionExpiry.Valid && company.SubscriptionExpiry.Time.Before(time.Now()) && company.PlanType.String != "unlimited" {
 			logger.Info().Str("company_id", job.CompanyID.String()).Msg("Ignoring message from expired subscription")
 			return
 		}
