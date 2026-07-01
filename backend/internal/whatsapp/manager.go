@@ -376,20 +376,26 @@ func (m *Manager) HandleWAEvent(bot *BotInstance, evt interface{}) {
 			}
 		}
 		bot.ResetReconnectState()
-		if m.RedisClient != nil {
+
+		if m.IsAPIOnly && bot.GetWAClient().Store != nil && bot.GetWAClient().Store.ID != nil {
+			// API-only mode: wait for initial sync then hand off the session to the Bot process.
+			// The activation signal is published AFTER we disconnect so the Bot doesn't race us.
+			logger.Info().Str("company_id", bot.CompanyID.String()).Msg("API process handing off to Bot process; disconnecting WebSocket...")
+			go func() {
+				time.Sleep(3 * time.Second)
+				bot.GetWAClient().Disconnect()
+				// Only NOW signal the Bot process to connect — the socket is free.
+				if m.RedisClient != nil {
+					if err := pubsub.PublishCompanyActivated(m.Context, m.RedisClient, bot.CompanyID); err != nil {
+						logger.Warn().Err(err).Str("company_id", bot.CompanyID.String()).Msg("Failed to publish activation signal on handoff")
+					}
+				}
+			}()
+		} else if m.RedisClient != nil {
+			// Bot-mode or both-mode: signal immediately (no handoff needed)
 			if err := pubsub.PublishCompanyActivated(m.Context, m.RedisClient, bot.CompanyID); err != nil {
 				logger.Warn().Err(err).Str("company_id", bot.CompanyID.String()).Msg("Failed to publish activation signal on connect")
 			}
-		}
-
-		if m.IsAPIOnly && bot.GetWAClient().Store != nil && bot.GetWAClient().Store.ID != nil {
-			logger.Info().Str("company_id", bot.CompanyID.String()).Msg("API process handing off to Bot process; disconnecting WebSocket...")
-			go func() {
-				// Give whatsmeow a short moment to finish initial post-connect sync (e.g. prekeys)
-				// The bot process will safely reconnect and take over the session.
-				time.Sleep(3 * time.Second)
-				bot.GetWAClient().Disconnect()
-			}()
 		}
 
 	case *events.PairSuccess:
@@ -404,19 +410,26 @@ func (m *Manager) HandleWAEvent(bot *BotInstance, evt interface{}) {
 				}
 			}
 
-			// Priority 1: Send a Welcome Validation Message directly to the paired device
-			ownJID := bot.GetWAClient().Store.ID.ToNonAD()
-			welcomeMsg := "✅ *CargoHive Bot Activated*\n\nYour WhatsApp tracking bot is now securely linked and fully operational.\n\nAll tracking requests sent to this number will now be automatically processed. 🚀"
-			bot.Sender.Send(ownJID, welcomeMsg)
-		}
-		bot.ResetReconnectState()
-		if m.RedisClient != nil {
-			if err := pubsub.PublishCompanyActivated(m.Context, m.RedisClient, bot.CompanyID); err != nil {
-				logger.Warn().Err(err).Str("company_id", bot.CompanyID.String()).Msg("Failed to publish activation signal on pair")
+			if !m.IsAPIOnly {
+				// Only send welcome message from the Bot process (it owns the persistent connection)
+				ownJID := bot.GetWAClient().Store.ID.ToNonAD()
+				welcomeMsg := "✅ *CargoHive Bot Activated*\n\nYour WhatsApp tracking bot is now securely linked and fully operational.\n\nAll tracking requests sent to this number will now be automatically processed. 🚀"
+				bot.Sender.Send(ownJID, welcomeMsg)
 			}
 		}
+		bot.ResetReconnectState()
+		// Note: activation signal is published via events.Connected (fires after PairSuccess + reconnect)
 
 	case *events.LoggedOut:
+		if m.IsAPIOnly {
+			// In API-only mode this LoggedOut is the expected result of our clean handoff disconnect.
+			// The session keys are still valid — the Bot process will connect using them.
+			// Do NOT wipe the session, phone, or auth_status here.
+			logger.Info().Str("company_id", bot.CompanyID.String()).Msg("[Handoff] API process received expected LoggedOut after disconnect — ignoring, session is safe")
+			return
+		}
+
+		// Real logout (e.g. user removed device from WhatsApp app)
 		// 1. Reset auth status
 		if err := m.ConfigUC.UpdateCompanyAuthStatus(m.Context, bot.CompanyID, "disconnected"); err != nil {
 			logger.Error().Err(err).Str("company_id", bot.CompanyID.String()).Msg("Failed to update auth status to disconnected on logout")
@@ -425,14 +438,12 @@ func (m *Manager) HandleWAEvent(bot *BotInstance, evt interface{}) {
 		if err := m.ConfigUC.UpdateCompanyWhatsAppPhone(m.Context, bot.CompanyID, ""); err != nil {
 			logger.Error().Err(err).Str("company_id", bot.CompanyID.String()).Msg("Failed to clear WhatsApp phone on logout")
 		}
-
-		// 3. Forcefully delete local store session cryptographic keys
+		// 3. Delete local store session cryptographic keys
 		if bot.GetWAClient().Store != nil {
 			if err := bot.GetWAClient().Store.Delete(m.Context); err != nil {
 				logger.Error().Err(err).Str("company_id", bot.CompanyID.String()).Msg("Failed to delete store session on logout")
 			}
 		}
-
 		// 4. Deactivate the bot from memory
 		if err := m.DeactivateBot(bot.CompanyID); err != nil {
 			logger.Error().Err(err).Str("company_id", bot.CompanyID.String()).Msg("Failed to deactivate bot on logout event")
