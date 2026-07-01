@@ -28,8 +28,9 @@
 - 🔐 **Secure Admin Portal** - NextAuth-powered authentication with comprehensive shipment management
 - 🌓 **Dark Mode** - Beautiful cosmic-themed UI with light/dark mode support
 - 🌐 **Internationalization** - Full support for English and Portuguese
-- ⚡ **Real-time Updates** - Automated status transitions an## 🏗️ Architecture (Edge-Core Hybrid)
+- ⚡ **Real-time Updates** - Automated status transitions and realtime UI synchronization
 
+## 🏗️ Architecture (Edge-Core Hybrid)
 ```mermaid
 graph TB
     subgraph "Edge Layer (Vercel)"
@@ -87,7 +88,7 @@ graph TB
 - **Interactive Map** - Visual representation of shipment journey.
 - **Status Timeline** - Detailed event history with timestamps.
 - **Redacted Privacy** - PII (Names/Addresses) are automatically redacted in public views.
--language** - English and Portuguese support
+- **Multi-language** - English and Portuguese support
 
 ### 🔐 Admin Portal
 
@@ -410,11 +411,11 @@ webTracker/
 ### Backend
 
 - **Language**: Go 1.25
+- **Database Access**: sqlc (Type-safe SQL) + pgx/v5
 - **WhatsApp**: whatsmeow
-- **Database**: pgx/v5 (PostgreSQL driver)
 - **Logging**: zerolog + lumberjack
 - **Scheduling**: robfig/cron
-- **UUID**: google/uuid
+- **Transactions**: Atomic `db.DBTX` for safe bulk operations and dynamic single-roundtrip updates
 
 ### Infrastructure
 
