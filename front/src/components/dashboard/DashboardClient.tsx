@@ -206,7 +206,7 @@ export default function DashboardClient({ initialCompanyData, initialStats, user
         if (!expiryDateString) return;
 
         const updateRemaining = () => {
-            if (companyData?.admin_email === 'emmanuelztrd@gmail.com' || companyData?.plan_type === 'unlimited') {
+            if (companyData?.plan_type === 'unlimited') {
                 setIsExpired(false);
                 setDaysRemaining(9999);
                 return;
