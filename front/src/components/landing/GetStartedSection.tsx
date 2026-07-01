@@ -23,7 +23,13 @@ export function GetStartedSection() {
               {dict.marketing?.getStarted?.badge || 'Start Tracking Today'}
             </div>
 
-            <h2 className="text-3xl md:text-5xl lg:text-6xl font-black mb-6 tracking-tighter uppercase text-gradient leading-[0.95]" dangerouslySetInnerHTML={{ __html: dict.marketing?.getStarted?.title || 'Ready to Upgrade<br />Your Logistics?' }}>
+            <h2 className="text-3xl md:text-5xl lg:text-6xl font-black mb-6 tracking-tighter uppercase text-gradient leading-[0.95]">
+              {(dict.marketing?.getStarted?.title || 'Ready to Upgrade<br />Your Logistics?').split(/<br\s*\/?>/i).map((part: string, i: number, arr: string[]) => (
+                <span key={i}>
+                  {part}
+                  {i < arr.length - 1 && <br />}
+                </span>
+              ))}
             </h2>
 
             <p className="text-text-muted text-base md:text-lg max-w-xl mx-auto mb-12 font-bold">

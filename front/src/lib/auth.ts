@@ -49,7 +49,7 @@ export async function getServerSession(): Promise<{ authenticated: boolean; user
                 email: payload.email as string,
                 plan_type: payload.plan_type as string,
                 auth_status: payload.auth_status as string,
-                role: payload.role as string,
+                role: payload.app_role as string,
             }
         };
     } catch {

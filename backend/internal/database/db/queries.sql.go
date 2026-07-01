@@ -305,6 +305,35 @@ func (q *Queries) FindSimilarShipment(ctx context.Context, arg FindSimilarShipme
 	return tracking_id, err
 }
 
+const findStaleCompanyIDs = `-- name: FindStaleCompanyIDs :many
+SELECT c.id FROM companies c
+WHERE c.auth_status = 'pending_linking'
+  AND c.created_at < NOW() - INTERVAL '30 days'
+`
+
+func (q *Queries) FindStaleCompanyIDs(ctx context.Context) ([]uuid.UUID, error) {
+	rows, err := q.db.QueryContext(ctx, findStaleCompanyIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getActivePlans = `-- name: GetActivePlans :many
 SELECT id, name, name_key, desc_key, base_price, currency, interval_key, popular, trial_key, btn_key, features, sort_order
 FROM plans
@@ -436,70 +465,8 @@ func (q *Queries) GetAllCompanies(ctx context.Context) ([]uuid.UUID, error) {
 	return items, nil
 }
 
-const getPulseCandidateIDs = `-- name: GetPulseCandidateIDs :many
-SELECT c.id FROM companies c
-WHERE c.auth_status = 'active'
-  AND EXISTS (
-    SELECT 1 FROM Shipment s
-    WHERE s.company_id = c.id
-      AND s.status NOT IN ('delivered', 'canceled')
-  )
-`
-
-func (q *Queries) GetPulseCandidateIDs(ctx context.Context) ([]uuid.UUID, error) {
-	rows, err := q.db.QueryContext(ctx, getPulseCandidateIDs)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []uuid.UUID
-	for rows.Next() {
-		var id uuid.UUID
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		items = append(items, id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const findStaleCompanyIDs = `-- name: FindStaleCompanyIDs :many
-SELECT c.id FROM companies c
-WHERE c.auth_status = 'pending_linking'
-  AND c.created_at < NOW() - INTERVAL '30 days'
-`
-
-func (q *Queries) FindStaleCompanyIDs(ctx context.Context) ([]uuid.UUID, error) {
-	rows, err := q.db.QueryContext(ctx, findStaleCompanyIDs)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []uuid.UUID
-	for rows.Next() {
-		var id uuid.UUID
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		items = append(items, id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getAllCompanyDetails = `-- name: GetAllCompanyDetails :many
-SELECT id, name, admin_email, whatsapp_phone, logo_url, brand_color, auth_status, subscription_status, subscription_expiry, plan_type, setup_token, tracking_prefix, created_at, updated_at FROM companies
+SELECT id, name, admin_email, admin_password_hash, whatsapp_phone, logo_url, brand_color, auth_status, subscription_status, subscription_expiry, plan_type, setup_token, tracking_prefix, created_at, updated_at FROM companies
 ORDER BY created_at DESC
 `
 
@@ -516,6 +483,7 @@ func (q *Queries) GetAllCompanyDetails(ctx context.Context) ([]Company, error) {
 			&i.ID,
 			&i.Name,
 			&i.AdminEmail,
+			&i.AdminPasswordHash,
 			&i.WhatsappPhone,
 			&i.LogoUrl,
 			&i.BrandColor,
@@ -812,6 +780,39 @@ func (q *Queries) GetPlatformAnalytics(ctx context.Context) (GetPlatformAnalytic
 	return i, err
 }
 
+const getPulseCandidateIDs = `-- name: GetPulseCandidateIDs :many
+SELECT c.id FROM companies c
+WHERE c.auth_status = 'active'
+  AND EXISTS (
+    SELECT 1 FROM Shipment s
+    WHERE s.company_id = c.id
+      AND s.status NOT IN ('delivered', 'canceled')
+  )
+`
+
+func (q *Queries) GetPulseCandidateIDs(ctx context.Context) ([]uuid.UUID, error) {
+	rows, err := q.db.QueryContext(ctx, getPulseCandidateIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getRecentEvents = `-- name: GetRecentEvents :many
 SELECT id, company_id, event_type, metadata, created_at FROM Telemetry
 WHERE company_id = $1
@@ -991,57 +992,6 @@ func (q *Queries) HasAuthorizedGroups(ctx context.Context, companyID uuid.UUID) 
 	var count int64
 	err := row.Scan(&count)
 	return count, err
-}
-
-const listAllShipments = `-- name: ListAllShipments :many
-SELECT tracking_id, company_id, user_jid, status, created_at, scheduled_transit_time, outfordelivery_time, expected_delivery_time, sender_timezone, recipient_timezone, sender_name, sender_phone, origin, recipient_name, recipient_phone, recipient_email, recipient_id, recipient_address, destination, cargo_type, weight, cost, updated_at FROM Shipment WHERE company_id = $1 ORDER BY created_at DESC
-`
-
-func (q *Queries) ListAllShipments(ctx context.Context, companyID uuid.NullUUID) ([]Shipment, error) {
-	rows, err := q.db.QueryContext(ctx, listAllShipments, companyID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Shipment
-	for rows.Next() {
-		var i Shipment
-		if err := rows.Scan(
-			&i.TrackingID,
-			&i.CompanyID,
-			&i.UserJid,
-			&i.Status,
-			&i.CreatedAt,
-			&i.ScheduledTransitTime,
-			&i.OutfordeliveryTime,
-			&i.ExpectedDeliveryTime,
-			&i.SenderTimezone,
-			&i.RecipientTimezone,
-			&i.SenderName,
-			&i.SenderPhone,
-			&i.Origin,
-			&i.RecipientName,
-			&i.RecipientPhone,
-			&i.RecipientEmail,
-			&i.RecipientID,
-			&i.RecipientAddress,
-			&i.Destination,
-			&i.CargoType,
-			&i.Weight,
-			&i.Cost,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const listShipments = `-- name: ListShipments :many
@@ -1552,6 +1502,7 @@ SET
   expected_delivery_time = COALESCE(NULLIF($14::timestamp, '0001-01-01 00:00:00'::timestamp), expected_delivery_time),
   outfordelivery_time = COALESCE(NULLIF($15::timestamp, '0001-01-01 00:00:00'::timestamp), outfordelivery_time),
   status = COALESCE(NULLIF($16::text, ''), status),
+  weight = COALESCE(NULLIF($17::numeric, 0), weight),
   updated_at = CURRENT_TIMESTAMP
 WHERE company_id = $1 AND tracking_id = $2
 `
@@ -1573,6 +1524,7 @@ type UpdateShipmentDynamicParams struct {
 	Column14   time.Time     `json:"column_14"`
 	Column15   time.Time     `json:"column_15"`
 	Column16   string        `json:"column_16"`
+	Column17   string        `json:"column_17"`
 }
 
 func (q *Queries) UpdateShipmentDynamic(ctx context.Context, arg UpdateShipmentDynamicParams) error {
@@ -1593,6 +1545,7 @@ func (q *Queries) UpdateShipmentDynamic(ctx context.Context, arg UpdateShipmentD
 		arg.Column14,
 		arg.Column15,
 		arg.Column16,
+		arg.Column17,
 	)
 	return err
 }

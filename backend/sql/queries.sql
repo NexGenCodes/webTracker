@@ -2,7 +2,7 @@
 SELECT id FROM companies;
 
 -- name: GetAllCompanyDetails :many
-SELECT id, name, admin_email, whatsapp_phone, logo_url, brand_color, auth_status, subscription_status, subscription_expiry, plan_type, setup_token, tracking_prefix, created_at, updated_at FROM companies
+SELECT * FROM companies
 ORDER BY created_at DESC;
 
 -- name: GetAllActiveCompanies :many
@@ -130,8 +130,6 @@ SELECT COUNT(*) FROM Shipment WHERE company_id = $1 AND created_at >= $2;
 -- name: CountDeliveredSince :one
 SELECT COUNT(*) FROM Shipment WHERE company_id = $1 AND status = 'delivered' AND updated_at >= $2;
 
--- name: ListAllShipments :many
-SELECT * FROM Shipment WHERE company_id = $1 ORDER BY created_at DESC;
 
 -- name: CountShipments :one
 SELECT COUNT(*) FROM Shipment WHERE company_id = $1;
@@ -165,6 +163,7 @@ SET
   expected_delivery_time = COALESCE(NULLIF($14::timestamp, '0001-01-01 00:00:00'::timestamp), expected_delivery_time),
   outfordelivery_time = COALESCE(NULLIF($15::timestamp, '0001-01-01 00:00:00'::timestamp), outfordelivery_time),
   status = COALESCE(NULLIF($16::text, ''), status),
+  weight = COALESCE(NULLIF($17::numeric, 0), weight),
   updated_at = CURRENT_TIMESTAMP
 WHERE company_id = $1 AND tracking_id = $2;
 

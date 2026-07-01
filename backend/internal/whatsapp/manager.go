@@ -497,12 +497,7 @@ func (m *Manager) GeneratePairingCode(ctx context.Context, companyID uuid.UUID, 
 	pairCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 
-	displayName := strings.ToUpper(bot.GetCompanyName())
-	if displayName == "" {
-		displayName = "AIRWAYBILL"
-	}
-
-	return waClient.PairPhone(pairCtx, phone, true, whatsmeow.PairClientChrome, fmt.Sprintf("Chrome (%s)", displayName))
+	return waClient.PairPhone(pairCtx, phone, true, whatsmeow.PairClientChrome, "Chrome (Windows)")
 }
 
 // GetQR retrieves the current pairing QR code for the bot.

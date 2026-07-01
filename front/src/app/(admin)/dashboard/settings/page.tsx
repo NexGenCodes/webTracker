@@ -369,65 +369,67 @@ export default function SettingsPage() {
                         </div>
 
                         {/* Delete Account */}
-                        <div className="space-y-4">
-                            <div className="flex items-start justify-between flex-col sm:flex-row gap-4">
-                                <div>
-                                    <h4 className="text-xs font-black text-error uppercase tracking-widest mb-1 flex items-center gap-2">
-                                        <Trash2 size={14} /> Delete Account
-                                    </h4>
-                                    <p className="text-sm font-medium text-text-muted leading-relaxed max-w-sm">
-                                        Permanently delete your company, all shipments, and data. This action is <strong className="text-error">irreversible</strong>.
-                                    </p>
+                        {user?.role !== 'super_admin' && (
+                            <div className="space-y-4">
+                                <div className="flex items-start justify-between flex-col sm:flex-row gap-4">
+                                    <div>
+                                        <h4 className="text-xs font-black text-error uppercase tracking-widest mb-1 flex items-center gap-2">
+                                            <Trash2 size={14} /> Delete Account
+                                        </h4>
+                                        <p className="text-sm font-medium text-text-muted leading-relaxed max-w-sm">
+                                            Permanently delete your company, all shipments, and data. This action is <strong className="text-error">irreversible</strong>.
+                                        </p>
+                                    </div>
+                                    {!showDeleteConfirm && (
+                                        <button
+                                            id="settings-delete-account-trigger"
+                                            onClick={() => setShowDeleteConfirm(true)}
+                                            className="px-6 py-3 bg-error/10 hover:bg-error text-error hover:text-white border border-error/20 rounded-xl font-black text-xs uppercase tracking-widest whitespace-nowrap shadow-sm transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 shrink-0 w-full sm:w-auto"
+                                        >
+                                            <Trash2 size={14} /> Delete Account
+                                        </button>
+                                    )}
                                 </div>
-                                {!showDeleteConfirm && (
-                                    <button
-                                        id="settings-delete-account-trigger"
-                                        onClick={() => setShowDeleteConfirm(true)}
-                                        className="px-6 py-3 bg-error/10 hover:bg-error text-error hover:text-white border border-error/20 rounded-xl font-black text-xs uppercase tracking-widest whitespace-nowrap shadow-sm transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 shrink-0 w-full sm:w-auto"
-                                    >
-                                        <Trash2 size={14} /> Delete Account
-                                    </button>
+
+                                {showDeleteConfirm && (
+                                    <div className="p-6 bg-error/10 border border-error/20 rounded-2xl space-y-4">
+                                        <p className="text-sm font-bold text-text-main">
+                                            Type <span className="text-error font-black">{settingsForm.name || 'your company name'}</span> to confirm:
+                                        </p>
+                                        <input
+                                            id="delete-account-confirm-input"
+                                            type="text"
+                                            value={deleteConfirmText}
+                                            onChange={(e) => setDeleteConfirmText(e.target.value)}
+                                            placeholder="Type company name here..."
+                                            className="input-premium w-full !bg-surface/50 focus:!bg-surface !border-error/30 focus:!border-error"
+                                        />
+                                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                                            <button
+                                                id="delete-account-confirm"
+                                                onClick={handleDeleteAccount}
+                                                disabled={isDeleting || deleteConfirmText !== settingsForm.name}
+                                                className="px-6 py-3 bg-error hover:bg-error/90 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-error/20 transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed w-full sm:w-auto"
+                                            >
+                                                {isDeleting ? (
+                                                    <><Loader2 size={14} className="animate-spin" /> Deleting…</>
+                                                ) : (
+                                                    <><Trash2 size={14} /> Permanently Delete</>
+                                                )}
+                                            </button>
+                                            <button
+                                                id="delete-account-cancel"
+                                                onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); }}
+                                                disabled={isDeleting}
+                                                className="px-6 py-3 bg-surface hover:bg-surface-muted text-text-main border border-border rounded-xl font-black text-xs uppercase tracking-widest transition-all duration-200 active:scale-95 flex items-center justify-center w-full sm:w-auto"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </div>
                                 )}
                             </div>
-
-                            {showDeleteConfirm && (
-                                <div className="p-6 bg-error/10 border border-error/20 rounded-2xl space-y-4">
-                                    <p className="text-sm font-bold text-text-main">
-                                        Type <span className="text-error font-black">{settingsForm.name || 'your company name'}</span> to confirm:
-                                    </p>
-                                    <input
-                                        id="delete-account-confirm-input"
-                                        type="text"
-                                        value={deleteConfirmText}
-                                        onChange={(e) => setDeleteConfirmText(e.target.value)}
-                                        placeholder="Type company name here..."
-                                        className="input-premium w-full !bg-surface/50 focus:!bg-surface !border-error/30 focus:!border-error"
-                                    />
-                                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                                        <button
-                                            id="delete-account-confirm"
-                                            onClick={handleDeleteAccount}
-                                            disabled={isDeleting || deleteConfirmText !== settingsForm.name}
-                                            className="px-6 py-3 bg-error hover:bg-error/90 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-error/20 transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed w-full sm:w-auto"
-                                        >
-                                            {isDeleting ? (
-                                                <><Loader2 size={14} className="animate-spin" /> Deleting…</>
-                                            ) : (
-                                                <><Trash2 size={14} /> Permanently Delete</>
-                                            )}
-                                        </button>
-                                        <button
-                                            id="delete-account-cancel"
-                                            onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); }}
-                                            disabled={isDeleting}
-                                            className="px-6 py-3 bg-surface hover:bg-surface-muted text-text-main border border-border rounded-xl font-black text-xs uppercase tracking-widest transition-all duration-200 active:scale-95 flex items-center justify-center w-full sm:w-auto"
-                                        >
-                                            Cancel
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
+                        )}
                     </div>
                 </motion.div>
             </div>

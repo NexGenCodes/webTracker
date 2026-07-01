@@ -112,6 +112,7 @@ func (h *Handler) me(c *fiber.Ctx) error {
 		"plan_type":    user.PlanType,
 		"auth_status":  user.AuthStatus,
 		"role":         user.Role,
+		"app_role":     user.AppRole,
 	})
 }
 

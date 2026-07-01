@@ -330,7 +330,8 @@ func (s *Service) AdminLogin(ctx context.Context, req AdminLoginRequest) (string
 		Email:       admin.Email,
 		PlanType:    "unlimited",
 		AuthStatus:  "active",
-		Role:        "super_admin",
+		AppRole:     "super_admin",
+		Role:        "authenticated",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)), // Shorter expiry for admin
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -451,7 +452,7 @@ func (s *Service) CompletePasswordReset(ctx context.Context, req ResetPasswordRe
 	return nil
 }
 
-func (s *Service) generateJWT(companyID uuid.UUID, companyName, email, planType, authStatus, role string) (string, error) {
+func (s *Service) generateJWT(companyID uuid.UUID, companyName, email, planType, authStatus, appRole string) (string, error) {
 	if s.privateKey == nil {
 		return "", errors.New("JWT private key is not loaded — check JWT_PRIVATE_KEY_PATH")
 	}
@@ -462,7 +463,8 @@ func (s *Service) generateJWT(companyID uuid.UUID, companyName, email, planType,
 		Email:       email,
 		PlanType:    planType,
 		AuthStatus:  authStatus,
-		Role:        role,
+		AppRole:     appRole,
+		Role:        "authenticated",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(7 * 24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

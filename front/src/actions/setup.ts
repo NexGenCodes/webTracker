@@ -3,6 +3,7 @@
 import { getApiUrl } from '@/lib/utils';
 import { getServerSession } from '@/lib/auth';
 import { ActionResult } from './auth';
+import { createClient } from '@/lib/supabase/server';
 
 export async function pairWhatsApp(companyId: string, phone: string): Promise<ActionResult<{ code?: string }>> {
     try {
@@ -142,9 +143,12 @@ export interface CompanySettings {
 
 export async function getCompanySettings(companyId: string): Promise<ActionResult<CompanySettings>> {
     try {
-        const { createClient } = await import('@/lib/supabase/server');
-        const supabase = await createClient();
+        const session = await getServerSession();
+        if (!session.user?.company_id || session.user.company_id !== companyId) {
+            return { success: false, error: 'Unauthorized.' };
+        }
 
+        const supabase = await createClient();
         const { data, error } = await supabase
             .from('companies')
             .select('name, admin_email, logo_url, brand_color, tracking_prefix')
@@ -152,7 +156,7 @@ export async function getCompanySettings(companyId: string): Promise<ActionResul
             .single();
 
         if (error || !data) {
-            return { success: false, error: error?.message || 'Failed to fetch settings.' };
+            return { success: false, error: 'Failed to fetch settings.' };
         }
 
         return {

@@ -14,13 +14,11 @@ import (
 	"webtracker-bot/internal/utils"
 
 	"go.mau.fi/whatsmeow"
-	"go.mau.fi/whatsmeow/proto/waCompanionReg"
 	"go.mau.fi/whatsmeow/store"
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 	waLog "go.mau.fi/whatsmeow/util/log"
-	"google.golang.org/protobuf/proto"
 
 	// Import standard pgx driver.
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -82,25 +80,10 @@ var DevicePropsMu sync.Mutex
 // ConnectWithCustomName temporarily overrides the global device OS string during connection
 // so WhatsApp reads the company name for the "Linked Devices" screen.
 func ConnectWithCustomName(client *whatsmeow.Client, name string) error {
-	DevicePropsMu.Lock()
-	defer DevicePropsMu.Unlock()
-
-	origOs := store.DeviceProps.Os
-	origPlatform := store.DeviceProps.PlatformType
-
-	name = strings.ToUpper(strings.TrimSpace(name))
-	if name == "" {
-		name = "AIRWAYBILL"
-	}
-	store.DeviceProps.Os = proto.String(name)
-	store.DeviceProps.PlatformType = waCompanionReg.DeviceProps_CHROME.Enum()
-
-	err := client.Connect()
-
-	store.DeviceProps.Os = origOs
-	store.DeviceProps.PlatformType = origPlatform
-
-	return err
+	// Custom OS naming for the Linked Devices screen now causes "Client outdated (405)" errors 
+	// because WhatsApp servers strictly validate the OS/Platform strings. 
+	// We now just connect normally to prevent disconnects upon refresh.
+	return client.Connect()
 }
 
 // Global caches removed to support multi-tenancy. State is now held per bot in BotInstance.

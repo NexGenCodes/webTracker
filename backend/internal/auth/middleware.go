@@ -111,7 +111,7 @@ func JWTAuth(publicKeyPath string) fiber.Handler {
 func SuperAdminMiddleware() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		user, ok := c.Locals("user").(*JWTClaims)
-		if !ok || user.Role != "super_admin" {
+		if !ok || user.AppRole != "super_admin" {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 				"error": "access denied: super admin privileges required",
 			})

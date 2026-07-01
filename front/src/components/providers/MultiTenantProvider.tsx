@@ -8,6 +8,7 @@ type AppUser = {
     email: string;
     company_name: string;
     plan_type: string;
+    role: string;
 };
 
 type MultiTenantContextType = {
@@ -49,7 +50,8 @@ export default function MultiTenantProvider({
                 setUser({
                     email: user.email,
                     company_name: user.company_name,
-                    plan_type: user.plan_type
+                    plan_type: user.plan_type,
+                    role: user.role
                 });
                 setCompanyId(user.company_id || null);
             } else {

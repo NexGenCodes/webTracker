@@ -113,7 +113,7 @@ func (h *ShipmentHandler) Create(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to look up company"})
 	}
 	isSuperAdmin := false
-	if claims, ok := c.Locals("user").(*auth.JWTClaims); ok && billing.IsSuperAdminRole(claims.Role) {
+	if claims, ok := c.Locals("user").(*auth.JWTClaims); ok && billing.IsSuperAdminRole(claims.AppRole) {
 		isSuperAdmin = true
 	}
 	remaining, err := h.shipmentUC.CheckShipmentCap(c.Context(), companyID, isSuperAdmin, company.PlanType.String, company.SubscriptionExpiry)
@@ -264,23 +264,9 @@ func (h *ShipmentHandler) UpdateStatus(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"success": true})
 }
 
-// EditShipmentRequest for full field edit (PUT)
-type EditShipmentRequest struct {
-	SenderName      string  `json:"sender_name"`
-	SenderPhone     string  `json:"sender_phone"`
-	Origin          string  `json:"origin"`
-	RecipientName   string  `json:"recipient_name"`
-	RecipientPhone  string  `json:"recipient_phone"`
-	RecipientEmail  string  `json:"recipient_email"`
-	RecipientAddress string  `json:"recipient_address"`
-	Destination     string  `json:"destination"`
-	CargoType       string  `json:"cargo_type"`
-	Weight          float64 `json:"weight"`
-	Status          string  `json:"status"`
-}
 
 // Edit - PUT /api/admin/shipments/:id
-// Performs a full metadata edit of a shipment in a single DB round-trip via UpdateShipmentDynamic.
+// Performs a full metadata edit of a shipment in a single atomic DB round-trip.
 func (h *ShipmentHandler) Edit(c *fiber.Ctx) error {
 	companyID := getCompanyID(c)
 	if companyID == uuid.Nil {
@@ -288,41 +274,15 @@ func (h *ShipmentHandler) Edit(c *fiber.Ctx) error {
 	}
 
 	id := c.Params("id")
-	var req EditShipmentRequest
+	var req shipment.EditParams
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid payload"})
 	}
 
-	// Build a field map and apply each non-empty update
-	fields := map[string]string{
-		"sender_name":      req.SenderName,
-		"sender_phone":     req.SenderPhone,
-		"origin":           req.Origin,
-		"recipient_name":   req.RecipientName,
-		"recipient_phone":  req.RecipientPhone,
-		"recipient_email":  req.RecipientEmail,
-		"recipient_address": req.RecipientAddress,
-		"destination":      req.Destination,
-		"cargo_type":       req.CargoType,
-		"status":           req.Status,
-	}
-
-	for field, value := range fields {
-		if value == "" {
-			continue
-		}
-		if err := h.shipmentUC.UpdateField(c.Context(), companyID, id, field, value); err != nil {
-			logger.Error().Err(err).Str("field", field).Str("id", id).Msg("Edit shipment error")
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update shipment"})
-		}
-	}
-
-	// Handle weight separately (numeric, zero is valid skip)
-	if req.Weight > 0 {
-		if err := h.shipmentUC.UpdateField(c.Context(), companyID, id, "weight", fmt.Sprintf("%g", req.Weight)); err != nil {
-			logger.Error().Err(err).Str("id", id).Msg("Edit shipment weight error")
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update shipment weight"})
-		}
+	// Single atomic UPDATE via UpdateShipmentDynamic — no partial-update risk
+	if err := h.shipmentUC.EditAtomic(c.Context(), companyID, id, req); err != nil {
+		logger.Error().Err(err).Str("id", id).Msg("Edit shipment error")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update shipment"})
 	}
 
 	h.shipmentUC.RecordEvent(c.Context(), companyID, "admin_edit_success", []byte(fmt.Sprintf(`{"id": "%s"}`, id)))
@@ -418,7 +378,7 @@ func (h *ShipmentHandler) BulkCreateCSV(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to look up company"})
 	}
 	isSuperAdmin := false
-	if claims, ok := c.Locals("user").(*auth.JWTClaims); ok && billing.IsSuperAdminRole(claims.Role) {
+	if claims, ok := c.Locals("user").(*auth.JWTClaims); ok && billing.IsSuperAdminRole(claims.AppRole) {
 		isSuperAdmin = true
 	}
 	remaining, err := h.shipmentUC.CheckShipmentCap(c.Context(), companyID, isSuperAdmin, company.PlanType.String, company.SubscriptionExpiry)
@@ -441,80 +401,23 @@ func (h *ShipmentHandler) BulkCreateCSV(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
-
 	if len(manifests) == 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "No shipments found in CSV"})
 	}
 
-	createdIds := []string{}
-	failed := 0
-
-	for _, m := range manifests {
-		var trackingID string
-		var insertErr error
-
-		for attempts := 0; attempts < 5; attempts++ {
-			prefix := "AWB"
-			if company.TrackingPrefix.Valid && company.TrackingPrefix.String != "" {
-				prefix = company.TrackingPrefix.String
-			}
-			trackingID, err = utils.GenerateTrackingID(prefix)
-			if err != nil {
-				logger.Error().Err(err).Msg("Failed to generate random ID in bulk")
-				insertErr = err
-				break
-			}
-			now := time.Now()
-
-			departure := h.shipmentUC.Service.CalculateDeparture(now, m.SenderCountry)
-			arrival, outForDelivery := h.shipmentUC.Service.CalculateArrival(departure, m.ReceiverCountry)
-
-			insertErr = h.shipmentUC.Create(c.Context(), companyID, db.CreateShipmentParams{
-				TrackingID:           trackingID,
-				UserJid:              "admin_portal",
-				Status:               dbutil.ToNullString("pending"),
-				CreatedAt:            dbutil.ToNullTime(now),
-				ScheduledTransitTime: dbutil.ToNullTime(departure),
-				OutfordeliveryTime:   dbutil.ToNullTime(outForDelivery),
-				ExpectedDeliveryTime: dbutil.ToNullTime(arrival),
-				SenderTimezone:       dbutil.ToNullString(h.shipmentUC.Service.ResolveTimezone(m.SenderCountry)),
-				RecipientTimezone:    dbutil.ToNullString(h.shipmentUC.Service.ResolveTimezone(m.ReceiverCountry)),
-				SenderName:           dbutil.ToNullString(m.SenderName),
-				Origin:               dbutil.ToNullString(m.SenderCountry),
-				RecipientName:        dbutil.ToNullString(m.ReceiverName),
-				RecipientPhone:       dbutil.ToNullString(m.ReceiverPhone),
-				RecipientEmail:       dbutil.ToNullString(m.ReceiverEmail),
-				RecipientAddress:     dbutil.ToNullString(m.ReceiverAddress),
-				Destination:          dbutil.ToNullString(m.ReceiverCountry),
-				CargoType:            dbutil.ToNullString(m.CargoType),
-				Weight:               dbutil.FloatToNullNumeric(m.Weight),
-				UpdatedAt:            dbutil.ToNullTime(now),
-			})
-
-			if insertErr == nil {
-				break // Success
-			}
-
-			if !strings.Contains(insertErr.Error(), "duplicate key value violates unique constraint") && !strings.Contains(insertErr.Error(), "23505") {
-				break // Not a collision error, abort
-			}
-		}
-
-		if insertErr != nil {
-			logger.Error().Err(insertErr).Msg("Bulk create error")
-			failed++
-		} else {
-			createdIds = append(createdIds, trackingID)
-		}
+	result, err := h.shipmentUC.BulkCreate(c.Context(), companyID, company, manifests)
+	if err != nil {
+		logger.Error().Err(err).Str("company_id", companyID.String()).Msg("Bulk CSV create transaction failed")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create shipments — all changes rolled back"})
 	}
 
-	h.shipmentUC.RecordEvent(c.Context(), companyID, "admin_bulk_csv", []byte(fmt.Sprintf(`{"created": %d, "failed": %d}`, len(createdIds), failed)))
+	h.shipmentUC.RecordEvent(c.Context(), companyID, "admin_bulk_csv", []byte(fmt.Sprintf(`{"created": %d, "failed": %d}`, result.Created, result.Failed)))
 
 	return c.JSON(fiber.Map{
 		"success": true,
-		"created": len(createdIds),
-		"failed":  failed,
-		"ids":     createdIds,
+		"created": result.Created,
+		"failed":  result.Failed,
+		"ids":     result.IDs,
 	})
 }
 

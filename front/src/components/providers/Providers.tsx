@@ -14,7 +14,7 @@ export default function Providers({
   initialCompanyId = null,
 }: { 
   children: React.ReactNode;
-  initialUser?: { email: string; company_name: string; plan_type: string } | null;
+  initialUser?: { email: string; company_name: string; plan_type: string; role: string } | null;
   initialCompanyId?: string | null;
 }) {
   const [queryClient] = useState(

@@ -52,6 +52,7 @@ type JWTClaims struct {
 	CompanyName string    `json:"company_name"`
 	PlanType    string    `json:"plan_type"`
 	AuthStatus  string    `json:"auth_status"`
+	AppRole     string    `json:"app_role"`
 	Role        string    `json:"role"`
 	jwt.RegisteredClaims
 }

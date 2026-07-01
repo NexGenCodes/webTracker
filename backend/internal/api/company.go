@@ -129,7 +129,7 @@ func (h *CompanyHandler) logoutBot(c *fiber.Ctx) error {
 
 func (h *CompanyHandler) deleteCompany(c *fiber.Ctx) error {
 	// Super admin cannot delete their own company from this endpoint
-	if user, ok := c.Locals("user").(*auth.JWTClaims); ok && user.Role == "super_admin" {
+	if user, ok := c.Locals("user").(*auth.JWTClaims); ok && user.AppRole == "super_admin" {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot delete your company from here"})
 	}
 

@@ -48,7 +48,6 @@ type Querier interface {
 	GetTelemetryStats(ctx context.Context, arg GetTelemetryStatsParams) ([]GetTelemetryStatsRow, error)
 	GetUserLanguage(ctx context.Context, arg GetUserLanguageParams) (string, error)
 	HasAuthorizedGroups(ctx context.Context, companyID uuid.UUID) (int64, error)
-	ListAllShipments(ctx context.Context, companyID uuid.NullUUID) ([]Shipment, error)
 	ListShipments(ctx context.Context, arg ListShipmentsParams) ([]Shipment, error)
 	LogAudit(ctx context.Context, arg LogAuditParams) error
 	RecordEvent(ctx context.Context, arg RecordEventParams) error

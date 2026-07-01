@@ -26,13 +26,15 @@ func toNullUUID(id uuid.UUID) uuid.NullUUID {
 // ShipmentUsecase exposes business logic operations for shipments.
 type Usecase struct {
 	repo    db.Querier
+	dbPool  *sql.DB
 	Service Service
 }
 
 // NewUsecase creates a new usecase layer with the given repository and service.
-func NewUsecase(repo db.Querier, service Service) *Usecase {
+func NewUsecase(repo db.Querier, dbPool *sql.DB, service Service) *Usecase {
 	return &Usecase{
 		repo:    repo,
+		dbPool:  dbPool,
 		Service: service,
 	}
 }
@@ -355,9 +357,7 @@ func (u *Usecase) CountDailyStats(ctx context.Context, companyID uuid.UUID, sinc
 	return created, delivered, nil
 }
 
-func (u *Usecase) ListAll(ctx context.Context, companyID uuid.UUID) ([]db.Shipment, error) {
-	return u.repo.ListAllShipments(ctx, toNullUUID(companyID))
-}
+
 
 func (u *Usecase) ProcessTransitions(ctx context.Context, companyID uuid.UUID, now time.Time) ([]models.TransitionResult, error) {
 	var results []models.TransitionResult
@@ -425,4 +425,133 @@ func (u *Usecase) BulkUpdateStatus(ctx context.Context, companyID uuid.UUID, ids
 		Column2:   ids, // BulkUpdateStatusParams expects Column2
 		Status:    dbutil.ToNullString(status),
 	})
+}
+
+type EditParams struct {
+	SenderName      string  `json:"sender_name"`
+	SenderPhone     string  `json:"sender_phone"`
+	Origin          string  `json:"origin"`
+	RecipientName   string  `json:"recipient_name"`
+	RecipientPhone  string  `json:"recipient_phone"`
+	RecipientEmail  string  `json:"recipient_email"`
+	RecipientAddress string  `json:"recipient_address"`
+	Destination     string  `json:"destination"`
+	CargoType       string  `json:"cargo_type"`
+	Weight          float64 `json:"weight"`
+	Status          string  `json:"status"`
+}
+
+type BulkCreateResult struct {
+	Created int
+	Failed  int
+	IDs     []string
+}
+
+func (u *Usecase) EditAtomic(ctx context.Context, companyID uuid.UUID, trackingID string, p EditParams) error {
+	params := db.UpdateShipmentDynamicParams{
+		CompanyID: toNullUUID(companyID),
+		TrackingID: trackingID,
+		Column3: p.SenderName,
+		Column4: p.SenderPhone,
+		Column5: p.Origin,
+		Column6: p.RecipientName,
+		Column7: p.RecipientPhone,
+		Column8: p.RecipientEmail,
+		Column9: "", // recipient_id
+		Column10: p.RecipientAddress,
+		Column11: p.Destination,
+		Column12: p.CargoType,
+		// Column13, 14, 15 are timestamps, left as zero time.Time to skip
+		Column16: p.Status,
+		Column17: fmt.Sprintf("%g", p.Weight),
+	}
+	
+	err := u.repo.UpdateShipmentDynamic(ctx, params)
+	if err != nil {
+		return fmt.Errorf("failed to atomically edit shipment: %w", err)
+	}
+	cache.Del(ctx, cache.ShipmentKey(companyID.String(), trackingID))
+	return nil
+}
+
+func (u *Usecase) BulkCreate(ctx context.Context, companyID uuid.UUID, company db.Company, manifests []models.Manifest) (*BulkCreateResult, error) {
+	tx, err := u.dbPool.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	qtx := u.repo.(*db.Queries).WithTx(tx)
+	
+	createdIds := []string{}
+	failed := 0
+
+	for _, m := range manifests {
+		var trackingID string
+		var insertErr error
+
+		for attempts := 0; attempts < 5; attempts++ {
+			prefix := "AWB"
+			if company.TrackingPrefix.Valid && company.TrackingPrefix.String != "" {
+				prefix = company.TrackingPrefix.String
+			}
+			trackingID, insertErr = utils.GenerateTrackingID(prefix)
+			if insertErr != nil {
+				break
+			}
+			now := time.Now()
+			departure := u.Service.CalculateDeparture(now, m.SenderCountry)
+			arrival, outForDelivery := u.Service.CalculateArrival(departure, m.ReceiverCountry)
+
+			insertErr = qtx.CreateShipment(ctx, db.CreateShipmentParams{
+				TrackingID:           trackingID,
+				CompanyID:            toNullUUID(companyID),
+				UserJid:              "admin_portal",
+				Status:               dbutil.ToNullString("pending"),
+				CreatedAt:            dbutil.ToNullTime(now),
+				ScheduledTransitTime: dbutil.ToNullTime(departure),
+				OutfordeliveryTime:   dbutil.ToNullTime(outForDelivery),
+				ExpectedDeliveryTime: dbutil.ToNullTime(arrival),
+				SenderTimezone:       dbutil.ToNullString(u.Service.ResolveTimezone(m.SenderCountry)),
+				RecipientTimezone:    dbutil.ToNullString(u.Service.ResolveTimezone(m.ReceiverCountry)),
+				SenderName:           dbutil.ToNullString(m.SenderName),
+				Origin:               dbutil.ToNullString(m.SenderCountry),
+				RecipientName:        dbutil.ToNullString(m.ReceiverName),
+				RecipientPhone:       dbutil.ToNullString(m.ReceiverPhone),
+				RecipientEmail:       dbutil.ToNullString(m.ReceiverEmail),
+				RecipientAddress:     dbutil.ToNullString(m.ReceiverAddress),
+				Destination:          dbutil.ToNullString(m.ReceiverCountry),
+				CargoType:            dbutil.ToNullString(m.CargoType),
+				Weight:               dbutil.FloatToNullNumeric(m.Weight),
+				UpdatedAt:            dbutil.ToNullTime(now),
+			})
+
+			if insertErr == nil {
+				break
+			}
+            
+            // Check for unique violation safely (23505)
+			if strings.Contains(insertErr.Error(), "23505") {
+				continue
+			}
+			break
+		}
+
+		if insertErr != nil {
+			logger.Error().Err(insertErr).Msg("Bulk create error")
+			failed++
+		} else {
+			createdIds = append(createdIds, trackingID)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return &BulkCreateResult{
+		Created: len(createdIds),
+		Failed:  failed,
+		IDs:     createdIds,
+	}, nil
 }

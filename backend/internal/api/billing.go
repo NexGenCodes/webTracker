@@ -85,7 +85,7 @@ func (h *BillingHandler) subscribe(c *fiber.Ctx) error {
 	}
 
 	// Super admin bypasses billing (RBAC: check JWT role, not email)
-	if claims, ok := c.Locals("user").(*auth.JWTClaims); ok && billing.IsSuperAdminRole(claims.Role) {
+	if claims, ok := c.Locals("user").(*auth.JWTClaims); ok && billing.IsSuperAdminRole(claims.AppRole) {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Super admin accounts do not require subscriptions"})
 	}
 
@@ -150,7 +150,7 @@ func (h *BillingHandler) getSubscriptionStatus(c *fiber.Ctx) error {
 	}
 
 	// Super admin bypasses all billing checks (RBAC: check JWT role, not email)
-	if claims, ok := c.Locals("user").(*auth.JWTClaims); ok && billing.IsSuperAdminRole(claims.Role) {
+	if claims, ok := c.Locals("user").(*auth.JWTClaims); ok && billing.IsSuperAdminRole(claims.AppRole) {
 		return c.JSON(fiber.Map{
 			"status": "active",
 			"expiry": time.Now().AddDate(100, 0, 0), // Far in the future

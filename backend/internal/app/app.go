@@ -75,7 +75,7 @@ func (a *App) Init() error {
 
 	querier := db.New(a.SqlPool)
 	shipService := &shipment.Calculator{}
-	a.ShipmentUC = shipment.NewUsecase(querier, shipService)
+	a.ShipmentUC = shipment.NewUsecase(querier, a.SqlPool, shipService)
 	a.ConfigUC = config.NewUsecase(querier, a.SqlPool, a.Cfg)
 
 	dbUrl := a.Cfg.DirectURL
