@@ -63,7 +63,7 @@ func (h *CompanyHandler) checkSubscription(ctx *fiber.Ctx, companyID uuid.UUID) 
 	}
 
 	// Super admin bypasses all billing checks (RBAC: check JWT role, not email)
-	if claims, ok := ctx.Locals("user").(*auth.JWTClaims); ok && billing.IsSuperAdminRole(claims.Role) {
+	if claims, ok := ctx.Locals("user").(*auth.JWTClaims); ok && billing.IsSuperAdminRole(claims.AppRole) {
 		return nil
 	}
 
