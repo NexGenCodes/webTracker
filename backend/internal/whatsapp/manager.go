@@ -104,6 +104,13 @@ func (m *Manager) GetAllBots() []models.BotInstance {
 
 // ActivateBot initializes and starts a bot for a company.
 func (m *Manager) ActivateBot(ctx context.Context, companyID uuid.UUID) error {
+	if m.IsAPIOnly && m.RedisClient != nil {
+		logger.Info().Str("company_id", companyID.String()).Msg("API mode: requesting ActivateBot via RPC")
+		reqData := map[string]interface{}{"company_id": companyID.String()}
+		_, err := pubsub.RPCRequest(ctx, m.RedisClient, pubsub.ChannelRPCActivateBot, reqData, 10*time.Second)
+		return err
+	}
+
 	company, err := m.ConfigUC.GetCompanyByID(ctx, companyID)
 	if err != nil {
 		return fmt.Errorf("failed to get company: %w", err)
@@ -129,6 +136,13 @@ func (m *Manager) ActivateBot(ctx context.Context, companyID uuid.UUID) error {
 
 // DeactivateBot stops and removes a bot from memory.
 func (m *Manager) DeactivateBot(companyID uuid.UUID) error {
+	if m.IsAPIOnly && m.RedisClient != nil {
+		logger.Info().Str("company_id", companyID.String()).Msg("API mode: requesting DeactivateBot via RPC")
+		reqData := map[string]interface{}{"company_id": companyID.String()}
+		_, err := pubsub.RPCRequest(m.Context, m.RedisClient, pubsub.ChannelRPCDeactivateBot, reqData, 10*time.Second)
+		return err
+	}
+
 	m.BotsMu.Lock()
 	bot, exists := m.Bots[companyID]
 	if !exists {
@@ -156,6 +170,13 @@ func (m *Manager) DeactivateBot(companyID uuid.UUID) error {
 
 // LogoutBot unpairs the bot device and marks it as pending.
 func (m *Manager) LogoutBot(companyID uuid.UUID) error {
+	if m.IsAPIOnly && m.RedisClient != nil {
+		logger.Info().Str("company_id", companyID.String()).Msg("API mode: requesting LogoutBot via RPC")
+		reqData := map[string]interface{}{"company_id": companyID.String()}
+		_, err := pubsub.RPCRequest(m.Context, m.RedisClient, pubsub.ChannelRPCLogoutBot, reqData, 15*time.Second)
+		return err
+	}
+
 	// 1. Update Database immediately to "disconnected" to provide fast UI feedback
 	err := m.ConfigUC.UpdateCompanyAuthStatus(m.Context, companyID, "disconnected")
 	if err != nil {
@@ -210,6 +231,13 @@ func (m *Manager) LogoutBot(companyID uuid.UUID) error {
 
 // PurgeBot forcefully deletes a bot's session from the database.
 func (m *Manager) PurgeBot(companyID uuid.UUID) error {
+	if m.IsAPIOnly && m.RedisClient != nil {
+		logger.Info().Str("company_id", companyID.String()).Msg("API mode: requesting PurgeBot via RPC")
+		reqData := map[string]interface{}{"company_id": companyID.String()}
+		_, err := pubsub.RPCRequest(m.Context, m.RedisClient, pubsub.ChannelRPCPurgeBot, reqData, 15*time.Second)
+		return err
+	}
+
 	// 1. Try a clean logout if the bot is active
 	_ = m.LogoutBot(companyID)
 

@@ -114,17 +114,6 @@ func (a *App) Init() error {
 	// Initialize the multi-tenant Bot Manager
 	a.BotManager = whatsapp.NewManager(a.Context, a.Cfg, a.ShipmentUC, a.ConfigUC, a.WAStore, &a.WG, cache.AsynqClient, redisClient)
 
-	companies, err := a.ConfigUC.GetAllActiveCompanies(context.Background())
-	if err != nil {
-		logger.Warn().Err(err).Msg("Failed to load active companies")
-	}
-
-	logger.Info().Int("count", len(companies)).Msg("Initializing active WhatsApp bots")
-	for _, company := range companies {
-		if err := a.BotManager.InitBotForCompany(company); err != nil {
-			logger.Error().Err(err).Str("company", company.Name.String).Msg("Failed to init bot")
-		}
-	}
 
 	if err := receipt.InitReceiptRenderer(a.Cfg.UseOptimizedReceipt); err != nil {
 		logger.Error().Err(err).Msg("Failed to init receipt renderer")
@@ -207,7 +196,20 @@ func (a *App) Run(mode string) error {
 	}()
 
 	if runBot {
-		// Cross-process activation listener
+		// Initialize the active WhatsApp bots for this process
+		companies, err := a.ConfigUC.GetAllActiveCompanies(context.Background())
+		if err != nil {
+			logger.Warn().Err(err).Msg("Failed to load active companies")
+		}
+
+		logger.Info().Int("count", len(companies)).Msg("Initializing active WhatsApp bots")
+		for _, company := range companies {
+			if err := a.BotManager.InitBotForCompany(company); err != nil {
+				logger.Error().Err(err).Str("company", company.Name.String).Msg("Failed to init bot")
+			}
+		}
+
+		// Cross-process activation listener (Legacy one-way signal)
 		if a.BotManager.RedisClient != nil {
 			go pubsub.Subscribe(a.Context, a.BotManager.RedisClient, pubsub.ChannelCompanyActivated, func(payload string) {
 				companyID, err := uuid.Parse(payload)
@@ -242,6 +244,110 @@ func (a *App) Run(mode string) error {
 				if err := a.BotManager.InitBotForCompany(company); err != nil {
 					logger.Error().Err(err).Str("company_id", companyID.String()).Msg("Failed to init bot from activation signal")
 				}
+			})
+
+			// RPC Listener for Activate Bot
+			go pubsub.Subscribe(a.Context, a.BotManager.RedisClient, pubsub.ChannelRPCActivateBot, func(payload string) {
+				var req pubsub.RPCRequestPayload
+				if err := json.Unmarshal([]byte(payload), &req); err != nil {
+					return
+				}
+				dataMap, ok := req.Data.(map[string]interface{})
+				if !ok {
+					_ = pubsub.RPCRespond(a.Context, a.BotManager.RedisClient, req.ReplyChannel, nil, "invalid data payload")
+					return
+				}
+				companyIDStr, _ := dataMap["company_id"].(string)
+				companyID, err := uuid.Parse(companyIDStr)
+				if err != nil {
+					_ = pubsub.RPCRespond(a.Context, a.BotManager.RedisClient, req.ReplyChannel, nil, "invalid company_id")
+					return
+				}
+
+				err = a.BotManager.ActivateBot(a.Context, companyID)
+				errStr := ""
+				if err != nil {
+					errStr = err.Error()
+				}
+				_ = pubsub.RPCRespond(a.Context, a.BotManager.RedisClient, req.ReplyChannel, nil, errStr)
+			})
+
+			// RPC Listener for Deactivate Bot
+			go pubsub.Subscribe(a.Context, a.BotManager.RedisClient, pubsub.ChannelRPCDeactivateBot, func(payload string) {
+				var req pubsub.RPCRequestPayload
+				if err := json.Unmarshal([]byte(payload), &req); err != nil {
+					return
+				}
+				dataMap, ok := req.Data.(map[string]interface{})
+				if !ok {
+					_ = pubsub.RPCRespond(a.Context, a.BotManager.RedisClient, req.ReplyChannel, nil, "invalid data payload")
+					return
+				}
+				companyIDStr, _ := dataMap["company_id"].(string)
+				companyID, err := uuid.Parse(companyIDStr)
+				if err != nil {
+					_ = pubsub.RPCRespond(a.Context, a.BotManager.RedisClient, req.ReplyChannel, nil, "invalid company_id")
+					return
+				}
+
+				err = a.BotManager.DeactivateBot(companyID)
+				errStr := ""
+				if err != nil {
+					errStr = err.Error()
+				}
+				_ = pubsub.RPCRespond(a.Context, a.BotManager.RedisClient, req.ReplyChannel, nil, errStr)
+			})
+
+			// RPC Listener for Logout Bot
+			go pubsub.Subscribe(a.Context, a.BotManager.RedisClient, pubsub.ChannelRPCLogoutBot, func(payload string) {
+				var req pubsub.RPCRequestPayload
+				if err := json.Unmarshal([]byte(payload), &req); err != nil {
+					return
+				}
+				dataMap, ok := req.Data.(map[string]interface{})
+				if !ok {
+					_ = pubsub.RPCRespond(a.Context, a.BotManager.RedisClient, req.ReplyChannel, nil, "invalid data payload")
+					return
+				}
+				companyIDStr, _ := dataMap["company_id"].(string)
+				companyID, err := uuid.Parse(companyIDStr)
+				if err != nil {
+					_ = pubsub.RPCRespond(a.Context, a.BotManager.RedisClient, req.ReplyChannel, nil, "invalid company_id")
+					return
+				}
+
+				err = a.BotManager.LogoutBot(companyID)
+				errStr := ""
+				if err != nil {
+					errStr = err.Error()
+				}
+				_ = pubsub.RPCRespond(a.Context, a.BotManager.RedisClient, req.ReplyChannel, nil, errStr)
+			})
+
+			// RPC Listener for Purge Bot
+			go pubsub.Subscribe(a.Context, a.BotManager.RedisClient, pubsub.ChannelRPCPurgeBot, func(payload string) {
+				var req pubsub.RPCRequestPayload
+				if err := json.Unmarshal([]byte(payload), &req); err != nil {
+					return
+				}
+				dataMap, ok := req.Data.(map[string]interface{})
+				if !ok {
+					_ = pubsub.RPCRespond(a.Context, a.BotManager.RedisClient, req.ReplyChannel, nil, "invalid data payload")
+					return
+				}
+				companyIDStr, _ := dataMap["company_id"].(string)
+				companyID, err := uuid.Parse(companyIDStr)
+				if err != nil {
+					_ = pubsub.RPCRespond(a.Context, a.BotManager.RedisClient, req.ReplyChannel, nil, "invalid company_id")
+					return
+				}
+
+				err = a.BotManager.PurgeBot(companyID)
+				errStr := ""
+				if err != nil {
+					errStr = err.Error()
+				}
+				_ = pubsub.RPCRespond(a.Context, a.BotManager.RedisClient, req.ReplyChannel, nil, errStr)
 			})
 
 			// RPC Listener for QR Code

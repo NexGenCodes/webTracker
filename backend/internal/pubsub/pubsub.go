@@ -13,6 +13,10 @@ const (
 	ChannelCompanyActivated = "wt:company:activated"
 	ChannelRPCGetQR         = "wt:rpc:qr:req"
 	ChannelRPCPairBot       = "wt:rpc:pair:req"
+	ChannelRPCActivateBot   = "wt:rpc:activate:req"
+	ChannelRPCDeactivateBot = "wt:rpc:deactivate:req"
+	ChannelRPCLogoutBot     = "wt:rpc:logout:req"
+	ChannelRPCPurgeBot      = "wt:rpc:purge:req"
 )
 
 // PublishCompanyActivated sends a signal to the Redis channel to activate a bot instance
