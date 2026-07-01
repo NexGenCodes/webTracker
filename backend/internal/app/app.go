@@ -17,6 +17,7 @@ import (
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
 	"webtracker-bot/internal/notif"
+	"webtracker-bot/internal/pubsub"
 	"webtracker-bot/internal/receipt"
 	"webtracker-bot/internal/shipment"
 	"webtracker-bot/internal/tasks"
@@ -28,6 +29,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
+	"github.com/redis/go-redis/v9"
 	"go.mau.fi/whatsmeow/store/sqlstore"
 )
 
@@ -90,27 +92,6 @@ func (a *App) Init() error {
 
 	receipt.InitProcessor()
 
-	a.BotManager = whatsapp.NewManager(a.Context, a.Cfg, a.ShipmentUC, a.ConfigUC, a.WAStore, &a.WG, cache.AsynqClient)
-
-	companies, err := a.ConfigUC.GetAllActiveCompanies(context.Background())
-	if err != nil {
-		logger.Warn().Err(err).Msg("Failed to load active companies")
-	}
-
-	for _, c := range companies {
-		if err := a.BotManager.InitBotForCompany(c); err != nil {
-			logger.Error().Err(err).Str("company", c.Name.String).Msg("Failed to init bot")
-		}
-	}
-
-	if err := receipt.InitReceiptRenderer(a.Cfg.UseOptimizedReceipt); err != nil {
-		logger.Error().Err(err).Msg("Failed to init receipt renderer")
-	}
-
-	notif.InitMailer(a.Cfg)
-
-	a.HttpServer = transport_http.NewServer(a.Cfg, a.ShipmentUC, a.ConfigUC, a.SqlPool, a)
-
 	// Parse Redis connection options for Asynq Server/Scheduler (client reuses cache.AsynqClient)
 	opt, err := asynq.ParseRedisURI(a.Cfg.RedisURL)
 	if err != nil {
@@ -121,6 +102,37 @@ func (a *App) Init() error {
 		return fmt.Errorf("unexpected asynq redis option type: %T", opt)
 	}
 	redisConnOpt := asynq.RedisClientOpt{Addr: redisOpt.Addr, Password: redisOpt.Password, DB: redisOpt.DB}
+
+	// Create a standard redis client for pubsub
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     redisOpt.Addr,
+		Password: redisOpt.Password,
+		DB:       redisOpt.DB,
+	})
+
+	// Initialize the multi-tenant Bot Manager
+	a.BotManager = whatsapp.NewManager(a.Context, a.Cfg, a.ShipmentUC, a.ConfigUC, a.WAStore, &a.WG, cache.AsynqClient, redisClient)
+
+	companies, err := a.ConfigUC.GetAllActiveCompanies(context.Background())
+	if err != nil {
+		logger.Warn().Err(err).Msg("Failed to load active companies")
+	}
+
+	logger.Info().Int("count", len(companies)).Msg("Initializing active WhatsApp bots")
+	for _, company := range companies {
+		if err := a.BotManager.InitBotForCompany(company); err != nil {
+			logger.Error().Err(err).Str("company", company.Name.String).Msg("Failed to init bot")
+		}
+	}
+
+	if err := receipt.InitReceiptRenderer(a.Cfg.UseOptimizedReceipt); err != nil {
+		logger.Error().Err(err).Msg("Failed to init receipt renderer")
+	}
+
+	// Initialize Mailer
+	notif.InitMailer(a.Cfg)
+
+	a.HttpServer = transport_http.NewServer(a.Cfg, a.ShipmentUC, a.ConfigUC, a.SqlPool, a)
 
 	// Initialize the global Worker — reuse the shared Asynq client to avoid connection leak
 	a.Worker = &worker.Worker{
@@ -167,6 +179,7 @@ func (a *App) Run(mode string) error {
 	a.AsynqScheduler.Register("*/5 * * * *", asynq.NewTask(tasks.TypeCronPulse, nil))
 	a.AsynqScheduler.Register("0 8 * * *", asynq.NewTask(tasks.TypeCronDailyStats, nil))
 	a.AsynqScheduler.Register("0 0 * * *", asynq.NewTask(tasks.TypeCronPruning, nil))
+	a.AsynqScheduler.Register("0 9 * * *", asynq.NewTask(tasks.TypeCronExpiryNotifs, nil)) // Runs daily at 9am UTC
 	a.AsynqScheduler.Register("*/10 * * * *", asynq.NewTask(tasks.TypeCronHealthCheck, nil))
 	a.AsynqScheduler.Register("*/3 * * * *", asynq.NewTask(tasks.TypeCronBotLiveness, nil))
 	a.AsynqScheduler.Register("0 0 * * 0", asynq.NewTask(tasks.TypeCronStaleCleanup, nil))
@@ -189,6 +202,44 @@ func (a *App) Run(mode string) error {
 	}()
 
 	if runBot {
+		// Cross-process activation listener
+		if a.BotManager.RedisClient != nil {
+			go pubsub.Subscribe(a.Context, a.BotManager.RedisClient, pubsub.ChannelCompanyActivated, func(payload string) {
+				companyID, err := uuid.Parse(payload)
+				if err != nil {
+					logger.Warn().Str("payload", payload).Msg("Invalid company_id in activation signal")
+					return
+				}
+
+				// Guard: don't double-init if already loaded
+				if _, err := a.BotManager.GetBot(companyID); err == nil {
+					return
+				}
+
+				company, err := a.ConfigUC.GetCompanyByID(a.Context, companyID)
+				if err != nil {
+					logger.Error().Err(err).Str("company_id", companyID.String()).Msg("Failed to fetch company from activation signal")
+					return
+				}
+
+				// Validate subscription is still valid before loading (unless Super Admin)
+				isSuperAdmin := false
+				if a.Cfg.SuperAdminCompanyEmail != "" && company.AdminEmail == a.Cfg.SuperAdminCompanyEmail {
+					isSuperAdmin = true
+				}
+
+				if !isSuperAdmin && company.SubscriptionStatus.String != "active" && company.SubscriptionStatus.String != "trialing" {
+					logger.Warn().Str("company_id", companyID.String()).Msg("Ignoring activation signal: subscription not active")
+					return
+				}
+
+				logger.Info().Str("company_id", companyID.String()).Msg("Cross-process activation signal received — loading bot")
+				if err := a.BotManager.InitBotForCompany(company); err != nil {
+					logger.Error().Err(err).Str("company_id", companyID.String()).Msg("Failed to init bot from activation signal")
+				}
+			})
+		}
+
 		// Start Asynq scheduler (cron task enqueuer)
 		go func() {
 			if err := a.AsynqScheduler.Start(); err != nil {
@@ -237,6 +288,7 @@ func (a *App) Run(mode string) error {
 			mux.HandleFunc(tasks.TypeOutboundAlert, a.Worker.HandleOutboundAlert)
 			mux.HandleFunc(tasks.TypeCronCompanyPulse, a.Worker.HandleCronCompanyPulse)
 			mux.HandleFunc(tasks.TypeCronStaleCleanup, a.Worker.HandleCronStaleCleanup)
+			mux.HandleFunc(tasks.TypeCronExpiryNotifs, a.Worker.HandleCronExpiryNotifs)
 
 			if err := a.AsynqServer.Run(mux); err != nil {
 				logger.Error().Err(err).Msg("Asynq Server failed")

@@ -188,3 +188,58 @@ func PasswordResetEmail(to, otp string) Email {
 		FromName: companyName,
 	}
 }
+// ExpiryWarningEmail builds the subscription expiry warning email.
+func ExpiryWarningEmail(to, companyName string, daysLeft int) Email {
+	if companyName == "" {
+		companyName = "Your Company"
+	}
+	html := fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px;">
+    <div style="max-width: 600px; margin: auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+        <h1 style="color: #f59e0b; font-size: 24px; margin-bottom: 10px;">Action Required</h1>
+        <h2 style="color: #333; font-size: 18px; margin-bottom: 25px;">Subscription Expiring Soon</h2>
+        <p style="color: #555; line-height: 1.6;">Your WhatsApp Bot subscription for <strong>%s</strong> is expiring in <strong>%d days</strong>.</p>
+        <p style="color: #555; line-height: 1.6;">To avoid any interruption to your bot services, please renew your subscription via the dashboard.</p>
+        <p style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px; color: #888; font-size: 12px;">
+            &copy; 2026 CargoHive. All rights reserved.
+        </p>
+    </div>
+</body>
+</html>`, companyName, daysLeft)
+
+	return Email{
+		To:       to,
+		Subject:  "Action Required: Subscription Expiring Soon",
+		HTMLBody: html,
+		FromName: "CargoHive Bot",
+	}
+}
+
+// ExpiryEndedEmail builds the subscription ended email.
+func ExpiryEndedEmail(to, companyName string) Email {
+	if companyName == "" {
+		companyName = "Your Company"
+	}
+	html := fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px;">
+    <div style="max-width: 600px; margin: auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+        <h1 style="color: #dc3545; font-size: 24px; margin-bottom: 10px;">Subscription Ended</h1>
+        <h2 style="color: #333; font-size: 18px; margin-bottom: 25px;">WhatsApp Bot Paused</h2>
+        <p style="color: #555; line-height: 1.6;">Your WhatsApp Bot subscription for <strong>%s</strong> has ended today.</p>
+        <p style="color: #555; line-height: 1.6;">Your bot has been paused and will no longer respond to tracking requests. Please renew your subscription via the dashboard to reactivate it.</p>
+        <p style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px; color: #888; font-size: 12px;">
+            &copy; 2026 CargoHive. All rights reserved.
+        </p>
+    </div>
+</body>
+</html>`, companyName)
+
+	return Email{
+		To:       to,
+		Subject:  "Notice: Subscription Ended",
+		HTMLBody: html,
+		FromName: "CargoHive Bot",
+	}
+}

@@ -286,3 +286,52 @@ func (w *Worker) HandleOutboundAlert(ctx context.Context, t *asynq.Task) error {
 
 	return nil
 }
+
+// HandleCronExpiryNotifs processes daily subscription expiry notifications
+func (w *Worker) HandleCronExpiryNotifs(ctx context.Context, t *asynq.Task) error {
+	companies, err := w.Queries.GetExpiringCompanies(ctx)
+	if err != nil {
+		logger.Error().Err(err).Msg("ExpiryNotifs: Failed to get expiring companies")
+		return err
+	}
+
+	now := time.Now().UTC()
+
+	for _, c := range companies {
+		if !c.SubscriptionExpiry.Valid {
+			continue
+		}
+
+		// Calculate days left
+		expiry := c.SubscriptionExpiry.Time
+		daysLeft := int(expiry.Sub(now).Hours() / 24)
+
+		if daysLeft == 3 {
+			// 3 days warning
+			logger.Info().Str("company", c.Name.String).Msg("ExpiryNotifs: Sending 3-day warning")
+			notif.InitMailer(w.Cfg).SendAsync(notif.ExpiryWarningEmail(c.AdminEmail, c.Name.String, 3))
+
+			// Try to send WhatsApp if bot is active
+			bot, err := w.Bots.GetBot(c.ID)
+			if err == nil && bot != nil && bot.GetWAClient() != nil && bot.GetWAClient().Store != nil && bot.GetWAClient().Store.ID != nil {
+				ownJID := bot.GetWAClient().Store.ID.ToNonAD()
+				msg := fmt.Sprintf("⚠️ *Subscription Expiring Soon*\n\nYour CargoHive tracking bot subscription will expire in *3 days*.\n\nPlease renew via the dashboard to avoid any interruption to your bot services.")
+				bot.GetSender().Send(ownJID, msg)
+			}
+		} else if daysLeft <= 0 && daysLeft >= -1 {
+			// 0 days (ended today)
+			logger.Info().Str("company", c.Name.String).Msg("ExpiryNotifs: Sending expired notice")
+			notif.InitMailer(w.Cfg).SendAsync(notif.ExpiryEndedEmail(c.AdminEmail, c.Name.String))
+
+			// Try to send WhatsApp if bot is active
+			bot, err := w.Bots.GetBot(c.ID)
+			if err == nil && bot != nil && bot.GetWAClient() != nil && bot.GetWAClient().Store != nil && bot.GetWAClient().Store.ID != nil {
+				ownJID := bot.GetWAClient().Store.ID.ToNonAD()
+				msg := fmt.Sprintf("🛑 *Subscription Ended*\n\nYour CargoHive tracking bot subscription has expired today.\n\nThe bot is now paused. Please renew via the dashboard to reactivate it.")
+				bot.GetSender().Send(ownJID, msg)
+			}
+		}
+	}
+
+	return nil
+}

@@ -36,6 +36,7 @@ type Querier interface {
 	GetCompanyByEmail(ctx context.Context, adminEmail string) (Company, error)
 	GetCompanyByID(ctx context.Context, id uuid.UUID) (Company, error)
 	GetCompanyPayments(ctx context.Context, arg GetCompanyPaymentsParams) ([]Payment, error)
+	GetExpiringCompanies(ctx context.Context) ([]Company, error)
 	GetGroupAuthority(ctx context.Context, arg GetGroupAuthorityParams) (GetGroupAuthorityRow, error)
 	GetLastShipmentIDForUser(ctx context.Context, arg GetLastShipmentIDForUserParams) (string, error)
 	GetPlanByID(ctx context.Context, id string) (GetPlanByIDRow, error)

@@ -12,10 +12,12 @@ import (
 	"webtracker-bot/internal/database/db"
 	"webtracker-bot/internal/logger"
 	"webtracker-bot/internal/models"
+	"webtracker-bot/internal/pubsub"
 	"webtracker-bot/internal/utils"
 
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
+	"github.com/redis/go-redis/v9"
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/store"
 	"go.mau.fi/whatsmeow/store/sqlstore"
@@ -32,19 +34,20 @@ type Manager struct {
 	ShipmentUC  models.ShipmentUsecase
 	ConfigUC    models.ConfigUsecase
 	WAStore     *sqlstore.Container
-	Bots            map[uuid.UUID]*BotInstance
-	BotsMu          sync.RWMutex
-	PairLocks       map[uuid.UUID]*sync.Mutex
-	PairMu          sync.Mutex
-	WG              *sync.WaitGroup
-	Context         context.Context
-	AsynqClient     *asynq.Client
+	Bots        map[uuid.UUID]*BotInstance
+	BotsMu      sync.RWMutex
+	PairLocks   map[uuid.UUID]*sync.Mutex
+	PairMu      sync.Mutex
+	WG          *sync.WaitGroup
+	Context     context.Context
+	AsynqClient *asynq.Client
+	RedisClient *redis.Client
 	livenessWG      sync.WaitGroup
 	livenessRunning sync.Mutex
 }
 
 // NewManager creates a new multi-tenant WhatsApp manager.
-func NewManager(ctx context.Context, cfg *config.Config, shipUC models.ShipmentUsecase, configUC models.ConfigUsecase, store *sqlstore.Container, wg *sync.WaitGroup, asynqClient *asynq.Client) *Manager {
+func NewManager(ctx context.Context, cfg *config.Config, shipUC models.ShipmentUsecase, configUC models.ConfigUsecase, store *sqlstore.Container, wg *sync.WaitGroup, asynqClient *asynq.Client, redisClient *redis.Client) *Manager {
 	return &Manager{
 		Cfg:         cfg,
 		ShipmentUC:  shipUC,
@@ -55,6 +58,7 @@ func NewManager(ctx context.Context, cfg *config.Config, shipUC models.ShipmentU
 		WG:          wg,
 		Context:     ctx,
 		AsynqClient: asynqClient,
+		RedisClient: redisClient,
 	}
 }
 
@@ -365,6 +369,11 @@ func (m *Manager) HandleWAEvent(bot *BotInstance, evt interface{}) {
 			}
 		}
 		bot.ResetReconnectState()
+		if m.RedisClient != nil {
+			if err := pubsub.PublishCompanyActivated(m.Context, m.RedisClient, bot.CompanyID); err != nil {
+				logger.Warn().Err(err).Str("company_id", bot.CompanyID.String()).Msg("Failed to publish activation signal on connect")
+			}
+		}
 
 	case *events.PairSuccess:
 		if err := m.ConfigUC.UpdateCompanyAuthStatus(m.Context, bot.CompanyID, "active"); err != nil {
@@ -384,6 +393,11 @@ func (m *Manager) HandleWAEvent(bot *BotInstance, evt interface{}) {
 			bot.Sender.Send(ownJID, welcomeMsg)
 		}
 		bot.ResetReconnectState()
+		if m.RedisClient != nil {
+			if err := pubsub.PublishCompanyActivated(m.Context, m.RedisClient, bot.CompanyID); err != nil {
+				logger.Warn().Err(err).Str("company_id", bot.CompanyID.String()).Msg("Failed to publish activation signal on pair")
+			}
+		}
 
 	case *events.LoggedOut:
 		// 1. Reset auth status

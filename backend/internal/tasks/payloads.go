@@ -23,6 +23,7 @@ const (
 	TypeOutboundAlert   = "whatsapp:outbound_alert"
 	TypeCronCompanyPulse = "cron:company_pulse"
 	TypeCronStaleCleanup = "cron:stale_cleanup"
+	TypeCronExpiryNotifs = "cron:expiry_notifs"
 )
 
 // CronCompanyPulsePayload defines the payload for processing a single company's status pulse.

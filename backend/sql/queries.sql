@@ -14,6 +14,15 @@ WHERE auth_status = 'active'
 -- name: GetCompanyByID :one
 SELECT * FROM companies WHERE id = $1;
 
+-- name: GetExpiringCompanies :many
+SELECT * FROM companies 
+WHERE subscription_status IN ('active', 'trialing')
+  AND subscription_expiry IS NOT NULL
+  AND (
+      CAST(subscription_expiry AS DATE) = CAST(CURRENT_TIMESTAMP + INTERVAL '3 days' AS DATE)
+   OR CAST(subscription_expiry AS DATE) = CAST(CURRENT_TIMESTAMP AS DATE)
+  );
+
 
 
 -- name: UpdateCompanySettings :exec
