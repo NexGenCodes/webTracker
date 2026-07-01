@@ -502,7 +502,7 @@ func (m *Manager) GeneratePairingCode(ctx context.Context, companyID uuid.UUID, 
 		displayName = "AIRWAYBILL"
 	}
 
-	return waClient.PairPhone(pairCtx, phone, true, whatsmeow.PairClientChrome, "Chrome (Windows)")
+	return waClient.PairPhone(pairCtx, phone, true, whatsmeow.PairClientChrome, fmt.Sprintf("Chrome (%s)", displayName))
 }
 
 // GetQR retrieves the current pairing QR code for the bot.
