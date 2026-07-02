@@ -62,34 +62,7 @@ func (h *EditHandler) Execute(ctx context.Context, shipUC models.ShipmentUsecase
 		field := args[startIdx]
 		value := strings.Join(args[startIdx+1:], " ")
 		// Reuse canonical mapping logic
-		normField := strings.ToLower(field)
-		dbField := ""
-		switch normField {
-		case "receiver", "name", "recipient", "reciever":
-			dbField = "recipient_name"
-		case "phone", "mobile", "number", "contact":
-			dbField = "recipient_phone"
-		case "address", "addr":
-			dbField = "recipient_address"
-		case "destination", "country", "to":
-			dbField = "destination"
-		case "origin", "from", "source":
-			dbField = "origin"
-		case "id", "passport", "identification":
-			dbField = "recipient_id"
-		case "email", "mail":
-			dbField = "recipient_email"
-		case "departure", "transit":
-			dbField = "scheduled_transit_time"
-		case "arrival", "delivery":
-			dbField = "expected_delivery_time"
-		case "outfordelivery", "out_for_delivery":
-			dbField = "outfordelivery_time"
-		case "cargo", "type", "content":
-			dbField = "cargo_type"
-		case "weight":
-			dbField = "weight"
-		}
+		dbField := parser.ResolveAlias(field)
 		if dbField != "" {
 			updates[dbField] = value
 		}

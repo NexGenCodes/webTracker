@@ -151,6 +151,10 @@ func (m *MockQuerier) GetAllActiveCompanies(ctx context.Context) ([]db.Company, 
 	return nil, nil
 }
 
+func (m *MockQuerier) GetExpiringCompanies(ctx context.Context) ([]db.Company, error) {
+	return nil, nil
+}
+
 func (m *MockQuerier) GetActivePlans(ctx context.Context) ([]db.GetActivePlansRow, error) {
 	return nil, nil
 }
@@ -224,7 +228,7 @@ var testCompanyID = uuid.MustParse("00000000-0000-0000-0000-000000000001")
 func TestShipmentUsecase_Deep(t *testing.T) {
 	ctx := context.Background()
 	repo := new(MockQuerier)
-	uc := shipment.NewUsecase(repo, nil)
+	uc := shipment.NewUsecase(repo, nil, nil)
 
 	t.Run("Track_Success", func(t *testing.T) {
 		getParams := db.GetShipmentParams{

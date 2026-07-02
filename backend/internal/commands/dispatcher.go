@@ -89,7 +89,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, companyID uuid.UUID, text str
 
 		isOwner := senderPhone == d.BotPhone
 
-		if !isOwner {
+		if !isOwner && !isAdmin {
 			allowed, retryIn := utils.Allow(senderPhone, d.Tier)
 			if !allowed {
 				return &Result{Message: fmt.Sprintf("⏳ *RATE LIMIT REACHED*\n\n_Please wait %d seconds before sending another command._", int(retryIn.Seconds()))}, true

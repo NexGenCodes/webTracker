@@ -25,9 +25,15 @@ func GenerateWaybill(s shipment.Shipment, companyName string) string {
 
 	b.WriteString(fmt.Sprintf("🆔 [TRACKING ID]: %s\n", s.TrackingID))
 	b.WriteString(fmt.Sprintf("📍 [STATUS]: %s\n", strings.ToUpper(s.Status)))
-	b.WriteString(fmt.Sprintf("📅 [DATE]:   %s\n\n", s.CreatedAt.Format("02 Jan 2006, 15:04")))
+	b.WriteString(fmt.Sprintf("📅 [DATE]:   %s\n", s.CreatedAt.Format("02 Jan 2006, 15:04")))
 
-	b.WriteString("👤 [SENDER INFORMATION]\n")
+	if s.ScheduledTransitTime != nil {
+		b.WriteString(fmt.Sprintf("🛫 [DEPART]: %s\n", s.ScheduledTransitTime.Format("02 Jan 2006")))
+	}
+	if s.ExpectedDeliveryTime != nil {
+		b.WriteString(fmt.Sprintf("🛬 [ARRIVE]: %s\n", s.ExpectedDeliveryTime.Format("02 Jan 2006")))
+	}
+	b.WriteString("\n👤 [SENDER INFORMATION]\n")
 	b.WriteString(fmt.Sprintf("   • Name:    %s\n", s.SenderName))
 	b.WriteString(fmt.Sprintf("   • Origin:  %s\n\n", s.Origin))
 

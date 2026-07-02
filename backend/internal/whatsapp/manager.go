@@ -160,9 +160,8 @@ func (m *Manager) DeactivateBot(companyID uuid.UUID) error {
 	m.BotsMu.Unlock()
 
 	// Clean up pairing lock to prevent memory leaks over time
-	m.PairMu.Lock()
-	delete(m.PairLocks, companyID)
-	m.PairMu.Unlock()
+	// REMOVED: Deleting the mutex here creates a severe race condition for incoming requests.
+	// We deliberately leave the mutex in the map.
 
 	logger.Info().Str("company_id", companyID.String()).Msg("Bot dynamically deactivated")
 	return nil
@@ -525,7 +524,7 @@ func (m *Manager) GeneratePairingCode(ctx context.Context, companyID uuid.UUID, 
 			if resp.Error == ErrAlreadyPaired.Error() {
 				return "", ErrAlreadyPaired
 			}
-			return "", fmt.Errorf(resp.Error)
+			return "", fmt.Errorf("%s", resp.Error)
 		}
 		if code, ok := resp.Data.(string); ok {
 			return code, nil
@@ -589,7 +588,7 @@ func (m *Manager) GetQR(ctx context.Context, companyID uuid.UUID) (string, error
 			if resp.Error == ErrAlreadyPaired.Error() {
 				return "", ErrAlreadyPaired
 			}
-			return "", fmt.Errorf(resp.Error)
+			return "", fmt.Errorf("%s", resp.Error)
 		}
 		if code, ok := resp.Data.(string); ok {
 			return code, nil

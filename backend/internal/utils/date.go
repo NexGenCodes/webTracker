@@ -37,6 +37,8 @@ func ParseNaturalDate(input string, now time.Time, loc *time.Location) (time.Tim
 
 	// 1. Natural language keywords
 	switch lower {
+	case "now":
+		return now.In(loc), true
 	case "today":
 		return time.Date(now.Year(), now.Month(), now.Day(), 9, 0, 0, 0, loc), true
 	case "tomorrow":

@@ -247,6 +247,44 @@ func ParseEditPairs(text string) map[string]string {
 	return final
 }
 
+// ResolveAlias maps a single raw field alias (e.g., "name", "departure") to the canonical database field
+// using the exact same NLP regex rules as the document parser.
+func ResolveAlias(field string) string {
+	dbMap := map[string]string{
+		"ReceiverName":           "recipient_name",
+		"ReceiverPhone":          "recipient_phone",
+		"ReceiverAddress":        "recipient_address",
+		"ReceiverCountry":        "destination",
+		"ReceiverEmail":          "recipient_email",
+		"SenderName":             "sender_name",
+		"SenderCountry":          "origin",
+		"CargoType":              "cargo_type",
+		"Weight":                 "weight",
+		"scheduled_transit_time": "scheduled_transit_time",
+		"expected_delivery_time": "expected_delivery_time",
+	}
+
+	testStr := field + ":"
+	for _, lm := range compiledMaps {
+		if lm.pattern.MatchString(testStr) {
+			if dbField, ok := dbMap[lm.field]; ok {
+				return dbField
+			}
+		}
+	}
+	
+	// Fallback for some hardcoded aliases that might miss the colon logic or are too short
+	if strings.EqualFold(field, "status") {
+		return "status"
+	}
+	if strings.EqualFold(field, "outfordelivery") || strings.EqualFold(field, "out_for_delivery") {
+		return "outfordelivery_time"
+	}
+	
+	return ""
+}
+
+
 func findAnchors(text string, mappings []labelMap) []anchor {
 	var anchors []anchor
 	for _, lm := range mappings {
